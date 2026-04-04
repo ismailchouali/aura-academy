@@ -1,0 +1,160 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Setting {
+  id    String @id @default("1")
+  key   String @unique
+  value String
+}
+
+model Service {
+  id          String   @id @default(cuid())
+  name        String
+  nameAr      String
+  nameFr      String
+  description String?
+  icon        String?
+  order       Int      @default(0)
+  subjects    Subject[]
+  createdAt   DateTime @default(now())
+}
+
+model Subject {
+  id         String    @id @default(cuid())
+  name       String
+  nameAr     String
+  nameFr     String
+  serviceId  String
+  service    Service   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  levels     Level[]
+  teachers   TeacherSubject[]
+  schedules  Schedule[]
+  order      Int       @default(0)
+  createdAt  DateTime  @default(now())
+}
+
+model Level {
+  id        String  @id @default(cuid())
+  name      String
+  nameAr    String
+  nameFr    String
+  subjectId String
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  order     Int     @default(0)
+  students  Student[]
+  schedules Schedule[]
+}
+
+model Teacher {
+  id            String           @id @default(cuid())
+  fullName      String
+  phone         String?
+  email         String?
+  address       String?
+  salary        Float            @default(0)
+  percentage    Float            @default(0)
+  notes         String?
+  status        String           @default("active")
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  subjects      TeacherSubject[]
+  schedules     Schedule[]
+  payments      TeacherPayment[]
+  students      Student[]
+}
+
+model TeacherSubject {
+  id        String  @id @default(cuid())
+  teacherId String
+  teacher   Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  subjectId String
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  levelIds  String  @default("")
+}
+
+model Classroom {
+  id        String    @id @default(cuid())
+  name      String
+  nameAr    String
+  capacity  Int       @default(20)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  schedules Schedule[]
+}
+
+model Student {
+  id            String   @id @default(cuid())
+  fullName      String
+  phone         String?
+  email         String?
+  address       String?
+  levelId       String?
+  level         Level?   @relation(fields: [levelId], references: [id])
+  teacherId     String?
+  teacher       Teacher? @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  parentName    String?
+  parentPhone   String?
+  status        String   @default("active")
+  enrollmentDate DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  payments      Payment[]
+}
+
+model Payment {
+  id             String   @id @default(cuid())
+  studentId      String
+  student        Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  amount         Float
+  paidAmount     Float    @default(0)
+  remainingAmount Float
+  month          String
+  year           Int
+  paymentDate    DateTime?
+  discount       Float    @default(0)
+  method         String?
+  notes          String?
+  status         String   @default("pending")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model TeacherPayment {
+  id             String   @id @default(cuid())
+  teacherId      String
+  teacher        Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  amount         Float
+  month          String
+  year           Int
+  paymentDate    DateTime?
+  notes          String?
+  status         String   @default("pending")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Schedule {
+  id          String   @id @default(cuid())
+  subjectId   String
+  subject     Subject  @relation(fields: [subjectId], references: [id])
+  teacherId   String?
+  teacher     Teacher? @relation(fields: [teacherId], references: [id])
+  classroomId String?
+  classroom   Classroom? @relation(fields: [classroomId], references: [id])
+  levelId     String?
+  level       Level?   @relation(fields: [levelId], references: [id])
+  dayOfWeek   String
+  startTime   String
+  endTime     String
+  group       String?
+  sessionType String   @default("fixed")
+  isRecurring Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
