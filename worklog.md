@@ -462,3 +462,22 @@ Stage Summary:
 - Fixed the focus loss bug by converting inner component JSX calls to regular function calls
 - No compilation errors, lint passes clean
 - User can now type in any input field without losing focus after each character
+---
+Task ID: 2
+Agent: Main Agent
+Task: Fix database error when adding students - "Unknown argument levelId"
+
+Work Log:
+- Checked dev server logs and found Prisma error: "Unknown argument `levelId`. Did you mean `level`?"
+- The Prisma client was out of sync with the schema - `levelId` field wasn't in the generated client
+- Ran `npx prisma generate` to regenerate the Prisma client
+- Ran `bun run db:push` to confirm database is in sync
+- Verified the Prisma client now has the `levelId` field
+- Restarted the dev server (the Prisma client is cached in globalThis)
+- Tested the POST /api/students endpoint - returns 201 (Created) successfully
+- Cleaned up test student data
+
+Stage Summary:
+- Root cause: Prisma client was generated with an older schema that didn't include `levelId`
+- Fix: Regenerated Prisma client with `npx prisma generate` and restarted dev server
+- Student creation now works correctly (POST returns 201)
