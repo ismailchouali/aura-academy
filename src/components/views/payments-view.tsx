@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -489,9 +488,9 @@ export function PaymentsView() {
   const [studentSearchResults, setStudentSearchResults] = useState<StudentSearchResult[]>([]);
   const [allStudents, setAllStudents] = useState<StudentSearchResult[]>([]);
   const [studentSearching, setStudentSearching] = useState(false);
+  const studentsLoaded = useRef(false);
   const [selectedStudent, setSelectedStudent] = useState<StudentSearchResult | null>(null);
   const [yearlyPaid, setYearlyPaid] = useState(0);
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Filters
   const [filterMonth, setFilterMonth] = useState('all');
@@ -548,6 +547,7 @@ export function PaymentsView() {
       setAllStudents(json);
       setStudentSearchResults(json);
     } catch {
+      console.error('Failed to load students for payment dialog');
       setAllStudents([]);
       setStudentSearchResults([]);
     } finally {
@@ -555,38 +555,20 @@ export function PaymentsView() {
     }
   }, []);
 
-  // ── Student search ────────────────────────────────────────────────────
+  // ── Student search (local filtering – no API calls) ────────────────
 
-  const handleStudentSearch = useCallback(async (query: string) => {
-    if (!query || query.length < 1) {
-      // When search is cleared, show all students again
-      setStudentSearchResults(allStudents);
-      setStudentSearching(false);
-      return;
+  const filteredStudents = useMemo(() => {
+    if (!studentSearchQuery || studentSearchQuery.length < 1) {
+      return allStudents;
     }
-    setStudentSearching(true);
-    try {
-      const params = new URLSearchParams({ search: query });
-      const res = await fetch(`/api/students?${params.toString()}`);
-      if (!res.ok) throw new Error();
-      const json = await res.json();
-      setStudentSearchResults(json);
-    } catch {
-      setStudentSearchResults([]);
-    } finally {
-      setStudentSearching(false);
-    }
-  }, [allStudents]);
-
-  useEffect(() => {
-    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-    searchTimerRef.current = setTimeout(() => {
-      handleStudentSearch(studentSearchQuery);
-    }, 300);
-    return () => {
-      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-    };
-  }, [studentSearchQuery, handleStudentSearch]);
+    const q = studentSearchQuery.toLowerCase();
+    return allStudents.filter((s) => {
+      const name = (s.fullName || '').toLowerCase();
+      const phone = (s.phone || '').toLowerCase();
+      const parentPhone = (s.parentPhone || '').toLowerCase();
+      return name.includes(q) || phone.includes(q) || parentPhone.includes(q);
+    });
+  }, [studentSearchQuery, allStudents]);
 
   // Fetch yearly paid amount when student is selected
   useEffect(() => {
@@ -666,8 +648,14 @@ export function PaymentsView() {
       setStudentSearchQuery('');
       setStudentSearchResults([]);
       setFormData(defaultFormData);
-      // Auto-load all students when opening add dialog
-      loadAllStudents();
+      // Load all students once when opening add dialog
+      if (!studentsLoaded.current) {
+        studentsLoaded.current = true;
+        loadAllStudents();
+      } else {
+        // Already loaded, just show them
+        setStudentSearchResults(allStudents);
+      }
     }
     setDialogOpen(true);
   };
@@ -675,7 +663,6 @@ export function PaymentsView() {
   const handleSelectStudent = (student: StudentSearchResult) => {
     setSelectedStudent(student);
     setStudentSearchQuery('');
-    setStudentSearchResults(allStudents);
     setFormData((prev) => ({
       ...prev,
       studentId: student.id,
@@ -686,7 +673,6 @@ export function PaymentsView() {
   const handleClearStudent = () => {
     setSelectedStudent(null);
     setStudentSearchQuery('');
-    setStudentSearchResults(allStudents);
     setFormData((prev) => ({ ...prev, studentId: '', amount: '' }));
   };
 
@@ -1089,10 +1075,10 @@ export function PaymentsView() {
                   )}
 
                   {!studentSearching &&
-                    studentSearchResults.length > 0 &&
+                    filteredStudents.length > 0 &&
                     !selectedStudent && (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto">
-                        {studentSearchResults.map((s) => (
+                        {filteredStudents.map((s) => (
                           <button
                             key={s.id}
                             type="button"
@@ -1134,8 +1120,8 @@ export function PaymentsView() {
                     )}
 
                   {!studentSearching &&
-                    studentSearchQuery.length >= 1 &&
-                    studentSearchResults.length === 0 &&
+                    allStudents.length > 0 &&
+                    filteredStudents.length === 0 &&
                     !selectedStudent && (
                       <div className="text-center py-6 text-muted-foreground text-sm">
                         {t.payments.noStudentFound}

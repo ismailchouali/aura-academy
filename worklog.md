@@ -535,3 +535,30 @@ Stage Summary:
 - Added ThemeProvider to layout.tsx forcing light mode always
 - App now renders correctly regardless of device dark mode settings
 
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix payments section - students not showing when adding payment, search not working
+
+Work Log:
+- Read and analyzed payments-view.tsx (1596 lines)
+- Analyzed dev server logs - found persistent `mode: "insensitive"` Prisma error in Turbopack cache
+- Verified all API endpoints work correctly via curl (students, search, payments)
+- Confirmed translation keys all exist in both Arabic and French
+- Cleaned .next cache and restarted dev server multiple times
+- Identified root cause: student search was making API calls for every keystroke, and the API was returning 500 due to stale Turbopack cache of the `mode: "insensitive"` error
+- Fixed by rewriting student search to use LOCAL client-side filtering instead of API calls
+- Added `useMemo`-based `filteredStudents` that filters `allStudents` by name, phone, and parent phone
+- Students are loaded ONCE from `/api/students` when "Add Payment" dialog first opens (using `studentsLoaded` ref)
+- Removed debounced API search (searchTimerRef, handleStudentSearch, useEffect)
+- Removed unused `cn` import
+- All APIs verified working: /api/students (3 students), /api/students?search=hamza (1 result), /api/payments?year=2026 (2 payments)
+- Linter passes with no errors
+
+Stage Summary:
+- Key change: Student search is now 100% client-side using useMemo filtering
+- No more API calls for search = no more `mode: "insensitive" crashes
+- Students appear instantly in the Add Payment dialog
+- Search by name or phone number works instantly with no network latency
+- File modified: src/components/views/payments-view.tsx
+
