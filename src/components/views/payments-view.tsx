@@ -487,6 +487,7 @@ export function PaymentsView() {
   // Student search state
   const [studentSearchQuery, setStudentSearchQuery] = useState('');
   const [studentSearchResults, setStudentSearchResults] = useState<StudentSearchResult[]>([]);
+  const [allStudents, setAllStudents] = useState<StudentSearchResult[]>([]);
   const [studentSearching, setStudentSearching] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<StudentSearchResult | null>(null);
   const [yearlyPaid, setYearlyPaid] = useState(0);
@@ -536,11 +537,30 @@ export function PaymentsView() {
     fetchPayments();
   }, [fetchPayments]);
 
+  // ── Load all students (for payment dialog) ─────────────────────────
+
+  const loadAllStudents = useCallback(async () => {
+    setStudentSearching(true);
+    try {
+      const res = await fetch('/api/students');
+      if (!res.ok) throw new Error();
+      const json = await res.json();
+      setAllStudents(json);
+      setStudentSearchResults(json);
+    } catch {
+      setAllStudents([]);
+      setStudentSearchResults([]);
+    } finally {
+      setStudentSearching(false);
+    }
+  }, []);
+
   // ── Student search ────────────────────────────────────────────────────
 
   const handleStudentSearch = useCallback(async (query: string) => {
     if (!query || query.length < 1) {
-      setStudentSearchResults([]);
+      // When search is cleared, show all students again
+      setStudentSearchResults(allStudents);
       setStudentSearching(false);
       return;
     }
@@ -556,7 +576,7 @@ export function PaymentsView() {
     } finally {
       setStudentSearching(false);
     }
-  }, []);
+  }, [allStudents]);
 
   useEffect(() => {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
@@ -646,6 +666,8 @@ export function PaymentsView() {
       setStudentSearchQuery('');
       setStudentSearchResults([]);
       setFormData(defaultFormData);
+      // Auto-load all students when opening add dialog
+      loadAllStudents();
     }
     setDialogOpen(true);
   };
@@ -653,7 +675,7 @@ export function PaymentsView() {
   const handleSelectStudent = (student: StudentSearchResult) => {
     setSelectedStudent(student);
     setStudentSearchQuery('');
-    setStudentSearchResults([]);
+    setStudentSearchResults(allStudents);
     setFormData((prev) => ({
       ...prev,
       studentId: student.id,
@@ -663,6 +685,8 @@ export function PaymentsView() {
 
   const handleClearStudent = () => {
     setSelectedStudent(null);
+    setStudentSearchQuery('');
+    setStudentSearchResults(allStudents);
     setFormData((prev) => ({ ...prev, studentId: '', amount: '' }));
   };
 
@@ -937,7 +961,7 @@ export function PaymentsView() {
                             {payment.student.fullName}
                           </p>
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            {payment.student.level && (
+                            {payment.student.level && payment.student.level.subject && (
                               <span>
                                 {payment.student.level.subject.nameAr} -{' '}
                                 {payment.student.level.nameAr}
@@ -1091,7 +1115,7 @@ export function PaymentsView() {
                                 </p>
                               )}
                               <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                {s.level && (
+                                {s.level && s.level.subject && (
                                   <span className="text-[10px] bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded">
                                     {s.level.subject.nameAr} -{' '}
                                     {s.level.nameAr}
@@ -1194,7 +1218,7 @@ export function PaymentsView() {
                             {t.common.dh}
                           </span>
                         </div>
-                        {selectedStudent.level && (
+                        {selectedStudent.level && selectedStudent.level.subject && (
                           <div>
                             <span className="text-muted-foreground">
                               {t.students.level}:{' '}
