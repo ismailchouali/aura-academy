@@ -1248,11 +1248,11 @@ export function StudentsView() {
           </DialogHeader>
 
           {/* Step indicator */}
-          {editingStudent ? null : <StepIndicator />}
+          {editingStudent ? null : StepIndicator()}
 
           {/* Body - scrollable */}
           <div className="flex-1 overflow-y-auto px-6 pb-4 min-h-0">
-            <StepContent />
+            {StepContent()}
           </div>
 
           {/* Footer - sticky */}

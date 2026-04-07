@@ -444,3 +444,21 @@ Stage Summary:
 - Database error FIXED: Regenerated Prisma client (was stale)
 - Student wizard flow VERIFIED: Code shows correct 5-step flow (Service→Subject→Level→Teacher→Personal info)
 - Language switcher VERIFIED: Complete French translations exist, toggle mechanism is correct
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix input focus loss bug in student registration wizard
+
+Work Log:
+- Analyzed the uploaded screenshot showing the registration form with focus issue
+- Read students-view.tsx (1350 lines) to find root cause
+- Identified the bug: `StepContent` and `StepIndicator` were defined as inner functions inside the `StudentsView` component and used as JSX components (`<StepContent />`, `<StepIndicator />`)
+- This is a well-known React anti-pattern: each re-render creates a new function reference, React treats it as a different component type, unmounts the old tree and remounts a new one
+- This causes the input DOM element to be destroyed and recreated on every keystroke → focus lost
+- Fix: Changed `<StepContent />` to `{StepContent()}` and `<StepIndicator />` to `{StepIndicator()}` — calling them as regular render functions instead of JSX components
+- This preserves the DOM elements across re-renders since there's no component boundary
+
+Stage Summary:
+- Fixed the focus loss bug by converting inner component JSX calls to regular function calls
+- No compilation errors, lint passes clean
+- User can now type in any input field without losing focus after each character
