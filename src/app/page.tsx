@@ -18,10 +18,9 @@ import {
   DoorOpen,
   Settings,
   Menu,
-  X,
-  ChevronLeft,
   Phone,
   MapPin,
+  Globe,
 } from 'lucide-react';
 import { DashboardView } from '@/components/views/dashboard-view';
 import { StudentsView } from '@/components/views/students-view';
@@ -105,6 +104,22 @@ function SidebarContent({ currentView, onNavigate, onMobileClose }: { currentVie
   );
 }
 
+function LanguageToggle() {
+  const { lang, toggleLang } = useAppStore();
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={toggleLang}
+      className="gap-1.5 h-8 px-3 text-xs font-medium"
+    >
+      <Globe className="h-3.5 w-3.5" />
+      {lang === 'ar' ? 'عربي' : 'Français'}
+    </Button>
+  );
+}
+
 export default function Home() {
   const { currentView, setCurrentView } = useAppStore();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -167,6 +182,7 @@ export default function Home() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <LanguageToggle />
             <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
               م
             </div>

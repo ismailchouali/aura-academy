@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
 import {
   Table,
   TableBody,
@@ -43,16 +44,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Plus,
   Search,
   Pencil,
   Trash2,
   Receipt,
-  Printer,
   Wallet,
   Filter,
   FileText,
+  AlertTriangle,
+  User,
+  Phone,
+  UserCheck,
+  CalendarDays,
+  X,
+  ChevronDown,
 } from 'lucide-react';
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -88,11 +96,15 @@ interface Payment {
   id: string;
   studentId: string;
   student: {
+    id: string;
     fullName: string;
     phone: string | null;
+    parentName: string | null;
+    parentPhone: string | null;
+    monthlyFee: number;
     level: {
       nameAr: string;
-      subject: { nameAr: string };
+      subject: { nameAr: string; service?: { nameAr: string } | null } | null;
     } | null;
     teacher: { id: string; fullName: string } | null;
   };
@@ -109,10 +121,18 @@ interface Payment {
   createdAt: string;
 }
 
-interface StudentOption {
+interface StudentSearchResult {
   id: string;
   fullName: string;
   phone: string | null;
+  parentName: string | null;
+  parentPhone: string | null;
+  monthlyFee: number;
+  level: {
+    nameAr: string;
+    subject: { nameAr: string; service?: { nameAr: string } | null } | null;
+  } | null;
+  teacher: { id: string; fullName: string } | null;
 }
 
 interface PaymentFormData {
@@ -126,6 +146,40 @@ interface PaymentFormData {
   method: string;
   notes: string;
   status: string;
+}
+
+interface OverdueService {
+  service: string;
+  totalOverdue: number;
+  studentCount: number;
+  levels: OverdueLevel[];
+}
+
+interface OverdueLevel {
+  level: string;
+  totalOverdue: number;
+  studentCount: number;
+  students: OverdueStudent[];
+}
+
+interface OverdueStudent {
+  studentId: string;
+  studentName: string;
+  phone: string | null;
+  parentPhone: string | null;
+  parentName: string | null;
+  monthlyFee: number;
+  totalOverdue: number;
+  monthsOverdue: number;
+  paymentCount: number;
+  overduePayments: {
+    id: string;
+    month: string;
+    monthLabel: string;
+    year: number;
+    remainingAmount: number;
+    monthsOverdue: number;
+  }[];
 }
 
 const defaultFormData: PaymentFormData = {
@@ -146,11 +200,23 @@ const defaultFormData: PaymentFormData = {
 function getStatusBadge(status: string) {
   switch (status) {
     case 'paid':
-      return <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100">مدفوع</Badge>;
+      return (
+        <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100">
+          مدفوع
+        </Badge>
+      );
     case 'partial':
-      return <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100">جزئي</Badge>;
+      return (
+        <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100">
+          جزئي
+        </Badge>
+      );
     case 'pending':
-      return <Badge className="bg-red-100 text-red-700 border-red-200 hover:bg-red-100">غير مدفوع</Badge>;
+      return (
+        <Badge className="bg-red-100 text-red-700 border-red-200 hover:bg-red-100">
+          غير مدفوع
+        </Badge>
+      );
     default:
       return <Badge variant="outline">{status}</Badge>;
   }
@@ -158,20 +224,24 @@ function getStatusBadge(status: string) {
 
 function getMethodLabel(method: string | null) {
   switch (method) {
-    case 'cash': return 'نقدي';
-    case 'transfer': return 'تحويل';
-    case 'check': return 'شيك';
-    default: return method || '—';
+    case 'cash':
+      return 'نقدي';
+    case 'transfer':
+      return 'تحويل';
+    case 'check':
+      return 'شيك';
+    default:
+      return method || '—';
   }
 }
 
-function getStatusLabel(status: string) {
-  switch (status) {
-    case 'paid': return 'مدفوع';
-    case 'partial': return 'جزئي';
-    case 'pending': return 'غير مدفوع';
-    default: return status;
-  }
+function formatDate(dayMonthYear: string): string {
+  if (!dayMonthYear) return '—';
+  const d = new Date(dayMonthYear);
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day} / ${month} / ${year}`;
 }
 
 function TableSkeleton() {
@@ -184,276 +254,134 @@ function TableSkeleton() {
   );
 }
 
-// ── Bon de Paiement Generator ─────────────────────────────────────────────
+// ── Bon (Receipt) Generator ────────────────────────────────────────────────
 
 function generateBon(payment: Payment) {
   const student = payment.student;
-  const subjectName = student.level?.subject?.nameAr || '—';
-  const levelName = student.level?.nameAr || '—';
-  const teacherName = student.teacher?.fullName || '—';
   const monthLabel = MONTH_NAMES[payment.month] || payment.month;
-  const paymentDate = payment.paymentDate
-    ? new Date(payment.paymentDate).toLocaleDateString('ar-MA')
-    : '—';
-
-  const bonNumber = payment.id.slice(-6).toUpperCase();
+  const paymentDate = payment.paymentDate ? formatDate(payment.paymentDate) : '—';
   const netAmount = payment.amount - payment.discount;
 
   const html = `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>بون دفع - ${bonNumber}</title>
+  <title>بون دفع</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap');
-    
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: 'Tajawal', 'Segoe UI', Tahoma, sans-serif;
-      background: #f0f0f0;
-      padding: 20px;
+      background: white;
+      padding: 0;
       color: #1a1a2e;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
-    
     @media print {
-      body { background: white; padding: 0; }
       .no-print { display: none !important; }
+      @page { margin: 10mm; size: A4; }
     }
-    
-    .bon-container {
-      max-width: 800px;
+    .bon {
+      max-width: 700px;
       margin: 0 auto;
-      background: white;
-      border: 3px solid #0d9488;
-      border-radius: 12px;
-      overflow: hidden;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      border: 2px solid #0d9488;
+      padding: 32px;
     }
-    
-    .bon-header {
-      background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
-      color: white;
-      padding: 28px 32px;
+    .header {
       text-align: center;
+      margin-bottom: 20px;
     }
-    
-    .bon-header h1 {
-      font-size: 28px;
+    .header h1 {
+      font-size: 20px;
       font-weight: 800;
-      letter-spacing: 2px;
-      margin-bottom: 4px;
+      color: #0d9488;
+      margin-bottom: 8px;
     }
-    
-    .bon-header p {
-      font-size: 14px;
-      opacity: 0.9;
-    }
-    
-    .bon-header .divider {
-      width: 80px;
-      height: 3px;
-      background: #fbbf24;
-      margin: 12px auto;
-      border-radius: 2px;
-    }
-    
-    .bon-address {
-      background: #f0fdfa;
-      padding: 12px 32px;
-      text-align: center;
-      border-bottom: 2px solid #0d9488;
-      font-size: 13px;
-      color: #334155;
-    }
-    
-    .bon-address p {
+    .header .address {
+      font-size: 12px;
+      color: #475569;
       line-height: 1.8;
     }
-    
-    .bon-address .phone {
-      font-weight: 700;
+    .header .phone-line {
+      font-weight: 600;
       direction: ltr;
-      unicode-bidi: bidi-override;
-    }
-    
-    .bon-title-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 16px 32px;
-      background: linear-gradient(90deg, #fbbf24 0%, #f59e0b 100%);
-      font-weight: 700;
-      font-size: 16px;
-    }
-    
-    .bon-title-row .receipt-title {
-      font-size: 18px;
-    }
-    
-    .bon-section {
-      padding: 20px 32px;
-      border-bottom: 1px solid #e2e8f0;
-    }
-    
-    .bon-section:last-child {
-      border-bottom: none;
-    }
-    
-    .section-title {
-      font-size: 13px;
-      font-weight: 700;
-      color: #0d9488;
-      margin-bottom: 12px;
-      padding-bottom: 6px;
-      border-bottom: 2px solid #fbbf24;
       display: inline-block;
     }
-    
-    .info-grid {
+    .divider {
+      height: 2px;
+      background: #0d9488;
+      margin: 16px 0;
+    }
+    .info-section {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 10px;
+      gap: 12px;
+      margin-bottom: 20px;
     }
-    
-    .info-row {
-      display: flex;
-      align-items: baseline;
-      gap: 8px;
+    .info-item {
       font-size: 14px;
     }
-    
-    .info-row .label {
+    .info-item .label {
       color: #64748b;
       font-weight: 500;
-      white-space: nowrap;
-      min-width: 90px;
     }
-    
-    .info-row .value {
-      font-weight: 600;
+    .info-item .value {
+      font-weight: 700;
       color: #1e293b;
     }
-    
-    .amounts-table {
+    .details-table {
       width: 100%;
       border-collapse: collapse;
       font-size: 14px;
+      margin-bottom: 20px;
     }
-    
-    .amounts-table th,
-    .amounts-table td {
-      padding: 10px 14px;
+    .details-table th,
+    .details-table td {
+      padding: 8px 12px;
       text-align: right;
       border-bottom: 1px solid #e2e8f0;
     }
-    
-    .amounts-table th {
-      background: #f8fafc;
+    .details-table th {
+      background: #f0fdfa;
       font-weight: 600;
-      color: #475569;
+      color: #0d9488;
       font-size: 13px;
     }
-    
-    .amounts-table .amount-col {
+    .details-table .amount {
       font-weight: 700;
       text-align: left;
       direction: ltr;
-      unicode-bidi: bidi-override;
     }
-    
-    .amounts-table .paid {
-      color: #059669;
-    }
-    
-    .amounts-table .remaining {
-      color: #dc2626;
-    }
-    
-    .amounts-table .discount {
-      color: #d97706;
-    }
-    
-    .amounts-table .net {
-      color: #0d9488;
-      font-size: 15px;
-    }
-    
-    .amounts-table tr:last-child td {
-      border-bottom: 2px solid #0d9488;
-      font-weight: 800;
-      background: #f0fdfa;
-    }
-    
-    .status-badge {
-      display: inline-block;
-      padding: 4px 16px;
-      border-radius: 20px;
-      font-weight: 700;
-      font-size: 14px;
-    }
-    
-    .status-paid { background: #dcfce7; color: #059669; }
-    .status-partial { background: #fef3c7; color: #d97706; }
-    .status-pending { background: #fee2e2; color: #dc2626; }
-    
-    .notes-section {
-      min-height: 40px;
-      background: #f8fafc;
-      border-radius: 6px;
-      padding: 12px;
-      font-size: 13px;
-      color: #475569;
-      border: 1px dashed #cbd5e1;
-    }
-    
+    .details-table .green { color: #059669; }
+    .details-table .red { color: #dc2626; }
+    .details-table .amber { color: #d97706; }
     .signatures {
       display: flex;
       justify-content: space-between;
-      padding-top: 24px;
-      margin-top: 16px;
+      margin-top: 60px;
+      padding-top: 20px;
     }
-    
-    .signature-box {
+    .sig-box {
       text-align: center;
       flex: 1;
     }
-    
-    .signature-box .sig-label {
+    .sig-box .sig-label {
       font-size: 13px;
-      color: #64748b;
-      font-weight: 500;
+      color: #475569;
+      font-weight: 600;
       margin-bottom: 40px;
     }
-    
-    .signature-box .sig-line {
-      width: 140px;
+    .sig-box .sig-line {
+      width: 160px;
       height: 1px;
-      background: #94a3b8;
+      background: #334155;
       margin: 0 auto;
     }
-    
-    .bon-footer {
-      text-align: center;
-      padding: 12px 32px;
-      background: #f8fafc;
-      font-size: 11px;
-      color: #94a3b8;
-      border-top: 1px solid #e2e8f0;
-    }
-    
     .no-print {
       text-align: center;
       margin-bottom: 16px;
     }
-    
     .no-print button {
       background: #0d9488;
       color: white;
@@ -464,155 +392,80 @@ function generateBon(payment: Payment) {
       font-family: 'Tajawal', sans-serif;
       font-weight: 600;
       cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
     }
-    
-    .no-print button:hover {
-      background: #0f766e;
-    }
-    
-    @media print {
-      .bon-container {
-        box-shadow: none;
-        border-width: 3px;
-      }
-    }
+    .no-print button:hover { background: #0f766e; }
   </style>
 </head>
 <body>
   <div class="no-print">
-    <button onclick="window.print()">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <polyline points="6 9 6 2 18 2 18 9"></polyline>
-        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-        <rect x="6" y="14" width="12" height="8"></rect>
-      </svg>
-      طباعة البون
-    </button>
+    <button onclick="window.print()">طباعة البون</button>
   </div>
-  
-  <div class="bon-container">
-    <!-- Header -->
-    <div class="bon-header">
-      <h1>AURA ACADEMY</h1>
-      <div class="divider"></div>
-      <p>نظام إدارة المركز التربوي</p>
-    </div>
-    
-    <!-- Address -->
-    <div class="bon-address">
-      <p>بني ملال، شارع محمد الخامس</p>
-      <p>فوق مكتبة وورك بيرو، الطابق الثالث</p>
-      <p class="phone">الهاتف: 0606030356</p>
-    </div>
-    
-    <!-- Title Row -->
-    <div class="bon-title-row">
-      <span>بون دفع / سند دفع</span>
-      <span class="receipt-title">#PAY-${bonNumber}</span>
-    </div>
-    
-    <!-- Student Info -->
-    <div class="bon-section">
-      <div class="section-title">معلومات الطالب</div>
-      <div class="info-grid">
-        <div class="info-row">
-          <span class="label">اسم الطالب:</span>
-          <span class="value">${student.fullName}</span>
-        </div>
-        <div class="info-row">
-          <span class="label">الهاتف:</span>
-          <span class="value" dir="ltr">${student.phone || '—'}</span>
-        </div>
-        <div class="info-row">
-          <span class="label">المادة:</span>
-          <span class="value">${subjectName} - ${levelName}</span>
-        </div>
-        <div class="info-row">
-          <span class="label">الأستاذ:</span>
-          <span class="value">${teacherName}</span>
-        </div>
+  <div class="bon">
+    <div class="header">
+      <h1>نظام إدارة المركز التربوي</h1>
+      <div class="address">
+        <div class="phone-line">الهاتف: 0606030356</div>
+        <div>Bd med V, N°407 Route de Marrakech, Béni Mellal</div>
       </div>
     </div>
-    
-    <!-- Payment Details -->
-    <div class="bon-section">
-      <div class="section-title">تفاصيل الدفع</div>
-      <table class="amounts-table">
-        <thead>
-          <tr>
-            <th>البيان</th>
-            <th class="amount-col">المبلغ (درهم)</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>المبلغ المطلوب</td>
-            <td class="amount-col">${payment.amount.toLocaleString('ar-MA', { minimumFractionDigits: 2 })}</td>
-          </tr>
-          ${payment.discount > 0 ? `
-          <tr>
-            <td>الخصم</td>
-            <td class="amount-col discount">- ${payment.discount.toLocaleString('ar-MA', { minimumFractionDigits: 2 })}</td>
-          </tr>
-          <tr>
-            <td>المبلغ بعد الخصم</td>
-            <td class="amount-col net">${netAmount.toLocaleString('ar-MA', { minimumFractionDigits: 2 })}</td>
-          </tr>
-          ` : ''}
-          <tr>
-            <td>المبلغ المدفوع</td>
-            <td class="amount-col paid">${payment.paidAmount.toLocaleString('ar-MA', { minimumFractionDigits: 2 })}</td>
-          </tr>
-          <tr>
-            <td>المبلغ المتبقي</td>
-            <td class="amount-col remaining">${payment.remainingAmount.toLocaleString('ar-MA', { minimumFractionDigits: 2 })}</td>
-          </tr>
-          <tr>
-            <td>طريقة الدفع</td>
-            <td>${getMethodLabel(payment.method)}</td>
-          </tr>
-          <tr>
-            <td>الشهر</td>
-            <td>${monthLabel} ${payment.year}</td>
-          </tr>
-          <tr>
-            <td>تاريخ الدفع</td>
-            <td dir="ltr" style="text-align:right">${paymentDate}</td>
-          </tr>
-          <tr>
-            <td>الحالة</td>
-            <td><span class="status-badge status-${payment.status}">${getStatusLabel(payment.status)}</span></td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-    
-    <!-- Notes -->
-    <div class="bon-section">
-      <div class="section-title">ملاحظات</div>
-      <div class="notes-section">${payment.notes || 'لا توجد ملاحظات'}</div>
-    </div>
-    
-    <!-- Signatures -->
-    <div class="bon-section">
-      <div class="signatures">
-        <div class="signature-box">
-          <div class="sig-label">توقيع المستلم</div>
-          <div class="sig-line"></div>
-        </div>
-        <div class="signature-box">
-          <div class="sig-label">توقيع المركز</div>
-          <div class="sig-line"></div>
-        </div>
+    <div class="divider"></div>
+    <div class="info-section">
+      <div class="info-item">
+        <span class="label">اسم التلميذ: </span>
+        <span class="value">${student.fullName}</span>
+      </div>
+      <div class="info-item">
+        <span class="label">الهاتف: </span>
+        <span class="value" dir="ltr">${student.phone || '—'}</span>
       </div>
     </div>
-    
-    <!-- Footer -->
-    <div class="bon-footer">
-      AURA ACADEMY &copy; ${new Date().getFullYear()} — بني ملال، شارع محمد الخامس
+    <table class="details-table">
+      <thead>
+        <tr>
+          <th>البيان</th>
+          <th class="amount">المبلغ (درهم)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>المبلغ المطلوب</td>
+          <td class="amount">${payment.amount.toLocaleString('ar-MA', { minimumFractionDigits: 2 })}</td>
+        </tr>
+        ${payment.discount > 0 ? `<tr>
+          <td>الخصم</td>
+          <td class="amount amber">- ${payment.discount.toLocaleString('ar-MA', { minimumFractionDigits: 2 })}</td>
+        </tr>
+        <tr>
+          <td>المبلغ بعد الخصم</td>
+          <td class="amount">${netAmount.toLocaleString('ar-MA', { minimumFractionDigits: 2 })}</td>
+        </tr>` : ''}
+        <tr>
+          <td>المدفوع</td>
+          <td class="amount green">${payment.paidAmount.toLocaleString('ar-MA', { minimumFractionDigits: 2 })}</td>
+        </tr>
+        <tr>
+          <td>المتبقي</td>
+          <td class="amount red">${payment.remainingAmount.toLocaleString('ar-MA', { minimumFractionDigits: 2 })}</td>
+        </tr>
+        <tr>
+          <td>الشهر / السنة</td>
+          <td>${monthLabel} ${payment.year}</td>
+        </tr>
+        <tr>
+          <td>تاريخ الدفع</td>
+          <td dir="ltr" style="text-align:right">${paymentDate}</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="signatures">
+      <div class="sig-box">
+        <div class="sig-label">توقيع ولي الأمر</div>
+        <div class="sig-line"></div>
+      </div>
+      <div class="sig-box">
+        <div class="sig-label">توقيع المركز</div>
+        <div class="sig-line"></div>
+      </div>
     </div>
   </div>
 </body>
@@ -622,7 +475,6 @@ function generateBon(payment: Payment) {
   if (newWindow) {
     newWindow.document.write(html);
     newWindow.document.close();
-    // Auto-trigger print after a short delay for fonts to load
     setTimeout(() => {
       newWindow.print();
     }, 500);
@@ -634,8 +486,14 @@ function generateBon(payment: Payment) {
 export function PaymentsView() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [students, setStudents] = useState<StudentOption[]>([]);
-  const [studentSearch, setStudentSearch] = useState('');
+
+  // Student search state
+  const [studentSearchQuery, setStudentSearchQuery] = useState('');
+  const [studentSearchResults, setStudentSearchResults] = useState<StudentSearchResult[]>([]);
+  const [studentSearching, setStudentSearching] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState<StudentSearchResult | null>(null);
+  const [yearlyPaid, setYearlyPaid] = useState(0);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Filters
   const [filterMonth, setFilterMonth] = useState('all');
@@ -651,6 +509,11 @@ export function PaymentsView() {
   // Delete state
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletingPayment, setDeletingPayment] = useState<Payment | null>(null);
+
+  // Overdue dialog state
+  const [overdueOpen, setOverdueOpen] = useState(false);
+  const [overdueData, setOverdueData] = useState<OverdueService[]>([]);
+  const [overdueLoading, setOverdueLoading] = useState(false);
 
   // ── Data fetching ──────────────────────────────────────────────────────
 
@@ -672,39 +535,100 @@ export function PaymentsView() {
     }
   }, [filterMonth, filterYear, filterStatus]);
 
-  const fetchStudents = useCallback(async (query?: string) => {
-    try {
-      const params = new URLSearchParams();
-      if (query) params.set('search', query);
-      const res = await fetch(`/api/students?${params.toString()}`);
-      if (!res.ok) return;
-      const json = await res.json();
-      setStudents(json);
-    } catch {
-      console.error('Failed to fetch students');
-    }
-  }, []);
-
   useEffect(() => {
     fetchPayments();
   }, [fetchPayments]);
 
-  useEffect(() => {
-    fetchStudents();
-  }, [fetchStudents]);
+  // ── Student search ────────────────────────────────────────────────────
+
+  const handleStudentSearch = useCallback(async (query: string) => {
+    if (!query || query.length < 1) {
+      setStudentSearchResults([]);
+      setStudentSearching(false);
+      return;
+    }
+    setStudentSearching(true);
+    try {
+      const params = new URLSearchParams({ search: query });
+      const res = await fetch(`/api/students?${params.toString()}`);
+      if (!res.ok) throw new Error();
+      const json = await res.json();
+      setStudentSearchResults(json);
+    } catch {
+      setStudentSearchResults([]);
+    } finally {
+      setStudentSearching(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchStudents(studentSearch);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      handleStudentSearch(studentSearchQuery);
     }, 300);
-    return () => clearTimeout(timer);
-  }, [studentSearch, fetchStudents]);
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, [studentSearchQuery, handleStudentSearch]);
+
+  // Fetch yearly paid amount when student is selected
+  useEffect(() => {
+    if (!selectedStudent) {
+      setYearlyPaid(0);
+      return;
+    }
+    const currentYear = new Date().getFullYear();
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/payments?studentId=${selectedStudent.id}&year=${currentYear}`
+        );
+        if (!res.ok) return;
+        const yearPayments: Payment[] = await res.json();
+        const total = yearPayments.reduce((s, p) => s + p.paidAmount, 0);
+        setYearlyPaid(total);
+      } catch {
+        setYearlyPaid(0);
+      }
+    })();
+  }, [selectedStudent]);
+
+  // ── Overdue fetching ──────────────────────────────────────────────────
+
+  const fetchOverdue = useCallback(async () => {
+    setOverdueLoading(true);
+    try {
+      const res = await fetch('/api/payments/overdue');
+      if (!res.ok) throw new Error();
+      const json = await res.json();
+      setOverdueData(json);
+    } catch {
+      toast.error('فشل في تحميل المدفوعات المستحقة');
+    } finally {
+      setOverdueLoading(false);
+    }
+  }, []);
+
+  const handleOpenOverdue = () => {
+    setOverdueOpen(true);
+    fetchOverdue();
+  };
 
   // ── Form handling ──────────────────────────────────────────────────────
 
   const handleOpenDialog = (payment?: Payment) => {
     if (payment) {
       setEditingPayment(payment);
+      setSelectedStudent({
+        id: payment.student.id,
+        fullName: payment.student.fullName,
+        phone: payment.student.phone,
+        parentName: payment.student.parentName,
+        parentPhone: payment.student.parentPhone,
+        monthlyFee: payment.student.monthlyFee,
+        level: payment.student.level,
+        teacher: payment.student.teacher,
+      });
       setFormData({
         studentId: payment.studentId,
         amount: payment.amount,
@@ -712,21 +636,44 @@ export function PaymentsView() {
         discount: payment.discount || 0,
         month: payment.month,
         year: payment.year,
-        paymentDate: payment.paymentDate?.split('T')[0] || new Date().toISOString().split('T')[0],
+        paymentDate:
+          payment.paymentDate?.split('T')[0] ||
+          new Date().toISOString().split('T')[0],
         method: payment.method || 'cash',
         notes: payment.notes || '',
         status: payment.status,
       });
     } else {
       setEditingPayment(null);
+      setSelectedStudent(null);
+      setStudentSearchQuery('');
+      setStudentSearchResults([]);
       setFormData(defaultFormData);
     }
     setDialogOpen(true);
   };
 
+  const handleSelectStudent = (student: StudentSearchResult) => {
+    setSelectedStudent(student);
+    setStudentSearchQuery('');
+    setStudentSearchResults([]);
+    setFormData((prev) => ({
+      ...prev,
+      studentId: student.id,
+      amount: student.monthlyFee || '',
+    }));
+  };
+
+  const handleClearStudent = () => {
+    setSelectedStudent(null);
+    setFormData((prev) => ({ ...prev, studentId: '', amount: '' }));
+  };
+
   // Computed amounts
-  const discountValue = typeof formData.discount === 'number' ? formData.discount : 0;
-  const netAmount = (typeof formData.amount === 'number' ? formData.amount : 0) - discountValue;
+  const discountValue =
+    typeof formData.discount === 'number' ? formData.discount : 0;
+  const netAmount =
+    (typeof formData.amount === 'number' ? formData.amount : 0) - discountValue;
   const remainingAmount =
     typeof formData.amount === 'number' && typeof formData.paidAmount === 'number'
       ? netAmount - formData.paidAmount
@@ -764,11 +711,14 @@ export function PaymentsView() {
         paidAmount: Number(formData.paidAmount) || 0,
         discount: Number(formData.discount) || 0,
         year: Number(formData.year),
-        remainingAmount: netAmount - (Number(formData.paidAmount) || 0),
+        remainingAmount:
+          netAmount - (Number(formData.paidAmount) || 0),
         status: autoStatus,
       };
 
-      const url = editingPayment ? `/api/payments/${editingPayment.id}` : '/api/payments';
+      const url = editingPayment
+        ? `/api/payments/${editingPayment.id}`
+        : '/api/payments';
       const method = editingPayment ? 'PUT' : 'POST';
       const res = await fetch(url, {
         method,
@@ -776,14 +726,15 @@ export function PaymentsView() {
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error();
-      toast.success(editingPayment ? 'تم تحديث القسط بنجاح' : 'تم إضافة القسط بنجاح');
+      toast.success(
+        editingPayment ? 'تم تحديث القسط بنجاح' : 'تم إضافة القسط بنجاح'
+      );
 
-      // After saving, offer to print bon
-      if (!editingPayment && res.ok) {
+      // Offer to print bon for new payments
+      if (!editingPayment) {
         const savedPayment = await res.json();
         setDialogOpen(false);
         fetchPayments();
-        // Offer to print bon
         setTimeout(() => {
           if (confirm('هل تريد طباعة بون الدفع؟')) {
             generateBon(savedPayment);
@@ -804,7 +755,9 @@ export function PaymentsView() {
   const handleDelete = async () => {
     if (!deletingPayment) return;
     try {
-      const res = await fetch(`/api/payments/${deletingPayment.id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/payments/${deletingPayment.id}`, {
+        method: 'DELETE',
+      });
       if (!res.ok) throw new Error();
       toast.success('تم حذف القسط بنجاح');
       setDeleteOpen(false);
@@ -820,7 +773,15 @@ export function PaymentsView() {
   const totalAmount = payments.reduce((s, p) => s + p.amount, 0);
   const totalDiscount = payments.reduce((s, p) => s + (p.discount || 0), 0);
   const totalPaid = payments.reduce((s, p) => s + p.paidAmount, 0);
-  const totalRemaining = payments.reduce((s, p) => s + p.remainingAmount, 0);
+  const totalRemaining = payments.reduce(
+    (s, p) => s + p.remainingAmount,
+    0
+  );
+
+  const grandTotalOverdue = overdueData.reduce(
+    (s, svc) => s + svc.totalOverdue,
+    0
+  );
 
   // ── Render ─────────────────────────────────────────────────────────────
 
@@ -832,10 +793,20 @@ export function PaymentsView() {
           <Wallet className="h-5 w-5" />
           <span className="text-sm">{payments.length} قسط</span>
         </div>
-        <Button onClick={() => handleOpenDialog()} className="gap-2">
-          <Plus className="h-4 w-4" />
-          إضافة قسط
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={handleOpenOverdue}
+            className="gap-2 border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+          >
+            <AlertTriangle className="h-4 w-4" />
+            المدفوعات المستحقة
+          </Button>
+          <Button onClick={() => handleOpenDialog()} className="gap-2">
+            <Plus className="h-4 w-4" />
+            إضافة قسط
+          </Button>
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -844,7 +815,8 @@ export function PaymentsView() {
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground">المطلوب</p>
             <p className="text-lg font-bold mt-1">
-              {totalAmount.toLocaleString()} <span className="text-xs font-normal">درهم</span>
+              {totalAmount.toLocaleString()}{' '}
+              <span className="text-xs font-normal">درهم</span>
             </p>
           </CardContent>
         </Card>
@@ -852,7 +824,8 @@ export function PaymentsView() {
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground">الخصم</p>
             <p className="text-lg font-bold text-amber-600 mt-1">
-              {totalDiscount.toLocaleString()} <span className="text-xs font-normal">درهم</span>
+              {totalDiscount.toLocaleString()}{' '}
+              <span className="text-xs font-normal">درهم</span>
             </p>
           </CardContent>
         </Card>
@@ -860,7 +833,8 @@ export function PaymentsView() {
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground">المدفوع</p>
             <p className="text-lg font-bold text-emerald-600 mt-1">
-              {totalPaid.toLocaleString()} <span className="text-xs font-normal">درهم</span>
+              {totalPaid.toLocaleString()}{' '}
+              <span className="text-xs font-normal">درهم</span>
             </p>
           </CardContent>
         </Card>
@@ -868,7 +842,8 @@ export function PaymentsView() {
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground">المتبقي</p>
             <p className="text-lg font-bold text-red-600 mt-1">
-              {totalRemaining.toLocaleString()} <span className="text-xs font-normal">درهم</span>
+              {totalRemaining.toLocaleString()}{' '}
+              <span className="text-xs font-normal">درهم</span>
             </p>
           </CardContent>
         </Card>
@@ -887,7 +862,9 @@ export function PaymentsView() {
                 <SelectContent>
                   <SelectItem value="all">كل الأشهر</SelectItem>
                   {MONTHS.map((m) => (
-                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                    <SelectItem key={m.value} value={m.value}>
+                      {m.label}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -924,19 +901,32 @@ export function PaymentsView() {
             <div className="text-center py-12 text-muted-foreground">
               <Receipt className="h-12 w-12 mx-auto mb-3 opacity-30" />
               <p className="font-medium">لا توجد مدفوعات</p>
-              <p className="text-sm mt-1">اضغط على &quot;إضافة قسط&quot; لإضافة قسط جديد</p>
+              <p className="text-sm mt-1">
+                اضغط على &quot;إضافة قسط&quot; لإضافة قسط جديد
+              </p>
             </div>
           ) : (
-            <div className="max-h-[500px] overflow-y-auto">
+            <div className="overflow-x-auto max-h-[500px]">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-right">التلميذ</TableHead>
-                    <TableHead className="text-right">المبلغ</TableHead>
-                    <TableHead className="text-right hidden md:table-cell">الخصم</TableHead>
-                    <TableHead className="text-right hidden md:table-cell">المدفوع</TableHead>
-                    <TableHead className="text-right hidden lg:table-cell">المتبقي</TableHead>
-                    <TableHead className="text-right hidden lg:table-cell">الشهر</TableHead>
+                    <TableHead className="text-right">الشهر/السنة</TableHead>
+                    <TableHead className="text-right hidden md:table-cell">
+                      المبلغ
+                    </TableHead>
+                    <TableHead className="text-right hidden md:table-cell">
+                      المدفوع
+                    </TableHead>
+                    <TableHead className="text-right hidden lg:table-cell">
+                      المتبقي
+                    </TableHead>
+                    <TableHead className="text-right hidden lg:table-cell">
+                      الخصم
+                    </TableHead>
+                    <TableHead className="text-right hidden lg:table-cell">
+                      التاريخ
+                    </TableHead>
                     <TableHead className="text-right">الحالة</TableHead>
                     <TableHead className="text-right">الإجراءات</TableHead>
                   </TableRow>
@@ -946,35 +936,49 @@ export function PaymentsView() {
                     <TableRow key={payment.id}>
                       <TableCell className="text-right">
                         <div>
-                          <p className="font-medium text-sm">{payment.student.fullName}</p>
+                          <p className="font-medium text-sm">
+                            {payment.student.fullName}
+                          </p>
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             {payment.student.level && (
-                              <span>{payment.student.level.subject.nameAr} - {payment.student.level.nameAr}</span>
-                            )}
-                            {payment.student.teacher && (
-                              <span className="text-teal-600">• {payment.student.teacher.fullName}</span>
+                              <span>
+                                {payment.student.level.subject.nameAr} -{' '}
+                                {payment.student.level.nameAr}
+                              </span>
                             )}
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className="text-right font-medium">
-                        {payment.amount.toLocaleString()} <span className="text-xs font-normal">درهم</span>
+                      <TableCell className="text-right text-sm">
+                        {MONTH_NAMES[payment.month] || payment.month}{' '}
+                        {payment.year}
                       </TableCell>
-                      <TableCell className="text-right hidden md:table-cell text-amber-600">
+                      <TableCell className="text-right hidden md:table-cell font-medium">
+                        {payment.amount.toLocaleString()}{' '}
+                        <span className="text-xs font-normal">درهم</span>
+                      </TableCell>
+                      <TableCell className="text-right hidden md:table-cell text-emerald-600">
+                        {payment.paidAmount.toLocaleString()}{' '}
+                        <span className="text-xs font-normal">درهم</span>
+                      </TableCell>
+                      <TableCell className="text-right hidden lg:table-cell text-red-600">
+                        {payment.remainingAmount.toLocaleString()}{' '}
+                        <span className="text-xs font-normal">درهم</span>
+                      </TableCell>
+                      <TableCell className="text-right hidden lg:table-cell text-amber-600">
                         {payment.discount > 0 ? (
-                          <span>{payment.discount.toLocaleString()} <span className="text-xs font-normal">درهم</span></span>
+                          <span>
+                            {payment.discount.toLocaleString()}{' '}
+                            <span className="text-xs font-normal">درهم</span>
+                          </span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-right hidden md:table-cell text-emerald-600">
-                        {payment.paidAmount.toLocaleString()} <span className="text-xs font-normal">درهم</span>
-                      </TableCell>
-                      <TableCell className="text-right hidden lg:table-cell text-red-600">
-                        {payment.remainingAmount.toLocaleString()} <span className="text-xs font-normal">درهم</span>
-                      </TableCell>
-                      <TableCell className="text-right hidden lg:table-cell">
-                        {MONTH_NAMES[payment.month] || payment.month} {payment.year}
+                      <TableCell className="text-right hidden lg:table-cell text-sm text-muted-foreground">
+                        {payment.paymentDate
+                          ? formatDate(payment.paymentDate)
+                          : '—'}
                       </TableCell>
                       <TableCell className="text-right">
                         {getStatusBadge(payment.status)}
@@ -986,7 +990,7 @@ export function PaymentsView() {
                             size="icon"
                             className="h-8 w-8"
                             onClick={() => generateBon(payment)}
-                            title="طباعة بون الدفع"
+                            title="طباعة بون"
                           >
                             <FileText className="h-3.5 w-3.5" />
                           </Button>
@@ -1021,228 +1025,532 @@ export function PaymentsView() {
       </Card>
 
       {/* ═══════════════════════════════════════════════════════════════════
-          ADD / EDIT DIALOG
+          ADD / EDIT PAYMENT DIALOG
           ═══════════════════════════════════════════════════════════════════ */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-2xl flex flex-col p-0 gap-0 overflow-hidden max-h-[90vh]">
+          <DialogHeader className="px-6 pt-6 pb-2">
             <DialogTitle>
               {editingPayment ? 'تعديل القسط' : 'إضافة قسط جديد'}
             </DialogTitle>
             <DialogDescription>
-              {editingPayment ? 'قم بتعديل بيانات القسط أدناه' : 'أدخل بيانات القسط الجديد'}
+              {editingPayment
+                ? 'قم بتعديل بيانات القسط أدناه'
+                : 'ابحث عن التلميذ ثم أدخل بيانات القسط'}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 py-2">
-            {/* Student Selection */}
-            <div className="space-y-1.5">
-              <Label>التلميذ *</Label>
-              <Select
-                value={formData.studentId}
-                onValueChange={(val) => setFormData({ ...formData, studentId: val })}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="اختر التلميذ" />
-                </SelectTrigger>
-                <SelectContent>
-                  <div className="p-2">
-                    <div className="relative">
-                      <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                      <Input
-                        placeholder="بحث عن تلميذ..."
-                        value={studentSearch}
-                        onChange={(e) => setStudentSearch(e.target.value)}
-                        className="pl-3 pr-8 h-8 text-sm"
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    </div>
+          <ScrollArea className="flex-1 px-6">
+            <div className="grid gap-4 pb-6 pt-2">
+              {/* ── Student Search ─────────────────────────────────────── */}
+              {!editingPayment && !selectedStudent && (
+                <div className="space-y-3">
+                  <Label className="text-sm font-semibold">
+                    البحث عن التلميذ
+                  </Label>
+                  <div className="relative">
+                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="اكتب اسم أو رقم هاتف التلميذ..."
+                      value={studentSearchQuery}
+                      onChange={(e) =>
+                        setStudentSearchQuery(e.target.value)
+                      }
+                      className="pr-10"
+                    />
                   </div>
-                  <div className="max-h-48 overflow-y-auto">
-                    {students.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        <span className="flex items-center gap-2">
-                          <span>{s.fullName}</span>
-                          {s.phone && (
-                            <span className="text-xs text-muted-foreground" dir="ltr">{s.phone}</span>
-                          )}
-                        </span>
-                      </SelectItem>
-                    ))}
-                    {students.length === 0 && (
-                      <div className="px-4 py-2 text-sm text-muted-foreground text-center">
-                        لا توجد نتائج
+
+                  {/* Search results as profile cards */}
+                  {studentSearching && (
+                    <div className="flex items-center justify-center py-4">
+                      <Skeleton className="h-12 w-full" />
+                    </div>
+                  )}
+
+                  {!studentSearching &&
+                    studentSearchResults.length > 0 &&
+                    !selectedStudent && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto">
+                        {studentSearchResults.map((s) => (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => handleSelectStudent(s)}
+                            className="flex items-start gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 hover:border-primary/40 transition-colors text-right w-full"
+                          >
+                            <div className="h-9 w-9 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center shrink-0 mt-0.5">
+                              <User className="h-4 w-4" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-sm truncate">
+                                {s.fullName}
+                              </p>
+                              {s.phone && (
+                                <p
+                                  className="text-xs text-muted-foreground truncate"
+                                  dir="ltr"
+                                >
+                                  {s.phone}
+                                </p>
+                              )}
+                              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                {s.level && (
+                                  <span className="text-[10px] bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded">
+                                    {s.level.subject.nameAr} -{' '}
+                                    {s.level.nameAr}
+                                  </span>
+                                )}
+                                {s.monthlyFee > 0 && (
+                                  <span className="text-[10px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded">
+                                    {s.monthlyFee.toLocaleString()} درهم/شهر
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                        ))}
                       </div>
                     )}
-                  </div>
-                </SelectContent>
-              </Select>
-            </div>
 
-            {/* Amounts */}
-            <div className="space-y-2">
-              <h4 className="text-sm font-semibold flex items-center gap-2">
-                <Wallet className="h-4 w-4 text-primary" />
-                تفاصيل المبلغ
-              </h4>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="amount">المبلغ (درهم) *</Label>
-                  <Input
-                    id="amount"
-                    type="number"
-                    min="0"
-                    value={formData.amount}
-                    onChange={(e) => setFormData({ ...formData, amount: Number(e.target.value) || '' })}
-                    placeholder="0"
-                    dir="ltr"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="discount">الخصم (درهم)</Label>
-                  <Input
-                    id="discount"
-                    type="number"
-                    min="0"
-                    value={formData.discount}
-                    onChange={(e) => setFormData({ ...formData, discount: Number(e.target.value) || 0 })}
-                    placeholder="0"
-                    dir="ltr"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="paidAmount">المدفوع (درهم)</Label>
-                  <Input
-                    id="paidAmount"
-                    type="number"
-                    min="0"
-                    value={formData.paidAmount}
-                    onChange={(e) => setFormData({ ...formData, paidAmount: Number(e.target.value) || '' })}
-                    placeholder="0"
-                    dir="ltr"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>المتبقي</Label>
-                  <div className="flex items-center h-9 px-3 rounded-md border bg-muted text-sm">
-                    <span dir="ltr">{Math.max(0, remainingAmount).toLocaleString()}</span>
-                    <span className="mr-1 text-muted-foreground text-xs">درهم</span>
-                  </div>
-                </div>
-              </div>
-              {discountValue > 0 && (
-                <div className="text-xs text-amber-600 bg-amber-50 rounded-md p-2">
-                  المبلغ بعد الخصم: <strong>{netAmount.toLocaleString()} درهم</strong>
+                  {!studentSearching &&
+                    studentSearchQuery.length >= 1 &&
+                    studentSearchResults.length === 0 &&
+                    !selectedStudent && (
+                      <div className="text-center py-6 text-muted-foreground text-sm">
+                        لم يتم العثور على تلاميذ
+                      </div>
+                    )}
                 </div>
               )}
-            </div>
 
-            {/* Month / Year */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>الشهر *</Label>
-                <Select
-                  value={formData.month}
-                  onValueChange={(val) => setFormData({ ...formData, month: val })}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="اختر الشهر" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MONTHS.map((m) => (
-                      <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              {/* ── Selected Student Profile Card ──────────────────────── */}
+              {selectedStudent && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-semibold">
+                      التلميذ المختار
+                    </Label>
+                    {!editingPayment && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleClearStudent}
+                        className="h-7 text-xs text-muted-foreground"
+                      >
+                        <X className="h-3 w-3 ml-1" />
+                        تغيير
+                      </Button>
+                    )}
+                  </div>
+
+                  <div className="rounded-lg border bg-gradient-to-br from-teal-50/50 to-white p-4">
+                    <div className="flex items-start gap-4">
+                      <div className="h-12 w-12 rounded-full bg-teal-600 text-white flex items-center justify-center shrink-0">
+                        <User className="h-5 w-5" />
+                      </div>
+                      <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                        <div>
+                          <span className="text-muted-foreground">
+                            الاسم:{' '}
+                          </span>
+                          <span className="font-bold">
+                            {selectedStudent.fullName}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">
+                            الهاتف:{' '}
+                          </span>
+                          <span className="font-medium" dir="ltr">
+                            {selectedStudent.phone || '—'}
+                          </span>
+                        </div>
+                        {selectedStudent.parentName && (
+                          <div>
+                            <span className="text-muted-foreground">
+                              ولي الأمر:{' '}
+                            </span>
+                            <span className="font-medium">
+                              {selectedStudent.parentName}
+                            </span>
+                          </div>
+                        )}
+                        {selectedStudent.parentPhone && (
+                          <div>
+                            <span className="text-muted-foreground">
+                              هاتف ولي الأمر:{' '}
+                            </span>
+                            <span
+                              className="font-medium"
+                              dir="ltr"
+                            >
+                              {selectedStudent.parentPhone}
+                            </span>
+                          </div>
+                        )}
+                        <div>
+                          <span className="text-muted-foreground">
+                            القسط الشهري:{' '}
+                          </span>
+                          <span className="font-bold text-teal-700">
+                            {selectedStudent.monthlyFee.toLocaleString()}{' '}
+                            درهم
+                          </span>
+                        </div>
+                        {selectedStudent.level && (
+                          <div>
+                            <span className="text-muted-foreground">
+                              المستوى:{' '}
+                            </span>
+                            <span className="font-medium">
+                              {selectedStudent.level.subject.nameAr} -{' '}
+                              {selectedStudent.level.nameAr}
+                            </span>
+                          </div>
+                        )}
+                        <div className="sm:col-span-2">
+                          <span className="text-muted-foreground">
+                            المدفوع هذا العام ({new Date().getFullYear()}):{' '}
+                          </span>
+                          <span className="font-bold text-emerald-600">
+                            {yearlyPaid.toLocaleString()} درهم
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <Separator />
+
+              {/* ── Payment Details ────────────────────────────────────── */}
+              <div className="space-y-3">
+                <h4 className="text-sm font-semibold flex items-center gap-2">
+                  <Wallet className="h-4 w-4 text-primary" />
+                  تفاصيل المبلغ
+                </h4>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="amount">المبلغ (درهم) *</Label>
+                    <Input
+                      id="amount"
+                      type="number"
+                      min="0"
+                      value={formData.amount}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          amount: Number(e.target.value) || '',
+                        })
+                      }
+                      placeholder="0"
+                      dir="ltr"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="discount">الخصم (درهم)</Label>
+                    <Input
+                      id="discount"
+                      type="number"
+                      min="0"
+                      value={formData.discount}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          discount: Number(e.target.value) || 0,
+                        })
+                      }
+                      placeholder="0"
+                      dir="ltr"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="paidAmount">المدفوع (درهم)</Label>
+                    <Input
+                      id="paidAmount"
+                      type="number"
+                      min="0"
+                      value={formData.paidAmount}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          paidAmount: Number(e.target.value) || '',
+                        })
+                      }
+                      placeholder="0"
+                      dir="ltr"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>المتبقي</Label>
+                    <div className="flex items-center h-9 px-3 rounded-md border bg-muted text-sm">
+                      <span dir="ltr">
+                        {Math.max(0, remainingAmount).toLocaleString()}
+                      </span>
+                      <span className="mr-1 text-muted-foreground text-xs">
+                        درهم
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                {discountValue > 0 && (
+                  <div className="text-xs text-amber-600 bg-amber-50 rounded-md p-2">
+                    المبلغ بعد الخصم:{' '}
+                    <strong>{netAmount.toLocaleString()} درهم</strong>
+                  </div>
+                )}
               </div>
+
+              {/* ── Month / Year / Method ──────────────────────────────── */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <Label>الشهر *</Label>
+                  <Select
+                    value={formData.month}
+                    onValueChange={(val) =>
+                      setFormData({ ...formData, month: val })
+                    }
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="اختر الشهر" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MONTHS.map((m) => (
+                        <SelectItem key={m.value} value={m.value}>
+                          {m.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>السنة *</Label>
+                  <Input
+                    type="number"
+                    min="2020"
+                    max="2040"
+                    value={formData.year}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        year: Number(e.target.value) || '',
+                      })
+                    }
+                    dir="ltr"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>طريقة الدفع</Label>
+                  <Select
+                    value={formData.method}
+                    onValueChange={(val) =>
+                      setFormData({ ...formData, method: val })
+                    }
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PAYMENT_METHODS.map((m) => (
+                        <SelectItem key={m.value} value={m.value}>
+                          {m.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* ── Notes ──────────────────────────────────────────────── */}
               <div className="space-y-1.5">
-                <Label htmlFor="year">السنة</Label>
-                <Input
-                  id="year"
-                  type="number"
-                  value={formData.year}
-                  onChange={(e) => setFormData({ ...formData, year: Number(e.target.value) || '' })}
-                  dir="ltr"
+                <Label htmlFor="notes">ملاحظات</Label>
+                <Textarea
+                  id="notes"
+                  value={formData.notes}
+                  onChange={(e) =>
+                    setFormData({ ...formData, notes: e.target.value })
+                  }
+                  placeholder="ملاحظات إضافية (اختياري)"
+                  rows={2}
                 />
               </div>
             </div>
+          </ScrollArea>
 
-            {/* Method & Date */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>طريقة الدفع</Label>
-                <Select
-                  value={formData.method}
-                  onValueChange={(val) => setFormData({ ...formData, method: val })}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PAYMENT_METHODS.map((m) => (
-                      <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+          <DialogFooter className="px-6 pb-6 pt-2 border-t bg-muted/30">
+            <div className="flex items-center justify-between w-full">
+              <div className="text-xs text-muted-foreground">
+                الحالة:{' '}
+                {autoStatus === 'paid'
+                  ? 'مدفوع'
+                  : autoStatus === 'partial'
+                    ? 'جزئي'
+                    : 'غير مدفوع'}
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="paymentDate">تاريخ الدفع</Label>
-                <Input
-                  id="paymentDate"
-                  type="date"
-                  value={formData.paymentDate}
-                  onChange={(e) => setFormData({ ...formData, paymentDate: e.target.value })}
-                />
-              </div>
-            </div>
-
-            {/* Notes */}
-            <div className="space-y-1.5">
-              <Label htmlFor="notes">ملاحظات</Label>
-              <Textarea
-                id="notes"
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                placeholder="ملاحظات إضافية..."
-                rows={2}
-              />
-            </div>
-
-            {/* Auto-detected status */}
-            <div className="space-y-1.5">
-              <Label>الحالة</Label>
               <div className="flex items-center gap-2">
-                {getStatusBadge(autoStatus)}
-                <span className="text-xs text-muted-foreground">(تلقائية حسب المبلغ)</span>
+                <Button
+                  variant="outline"
+                  onClick={() => setDialogOpen(false)}
+                >
+                  إلغاء
+                </Button>
+                <Button
+                  onClick={handleSubmit}
+                  disabled={submitting}
+                  className="gap-2"
+                >
+                  {submitting ? (
+                    <span className="animate-spin">⏳</span>
+                  ) : null}
+                  {editingPayment ? 'تحديث' : 'حفظ القسط'}
+                </Button>
               </div>
-            </div>
-          </div>
-
-          <DialogFooter className="flex-row gap-2 sm:justify-between">
-            {editingPayment && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1"
-                onClick={() => generateBon(editingPayment)}
-              >
-                <FileText className="h-4 w-4" />
-                طباعة البون
-              </Button>
-            )}
-            <div className="flex gap-2 mr-auto">
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>
-                إلغاء
-              </Button>
-              <Button onClick={handleSubmit} disabled={submitting}>
-                {submitting ? 'جاري الحفظ...' : editingPayment ? 'تحديث' : 'إضافة'}
-              </Button>
             </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
+      {/* ═══════════════════════════════════════════════════════════════════
+          OVERDUE PAYMENTS DIALOG
+          ═══════════════════════════════════════════════════════════════════ */}
+      <Dialog open={overdueOpen} onOpenChange={setOverdueOpen}>
+        <DialogContent className="sm:max-w-3xl flex flex-col p-0 gap-0 overflow-hidden max-h-[90vh]">
+          <DialogHeader className="px-6 pt-6 pb-2">
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              المدفوعات المستحقة
+            </DialogTitle>
+            <DialogDescription>
+              قائمة التلاميذ الذين لديهم أقساط متأخرة عن الدفع
+            </DialogDescription>
+          </DialogHeader>
+
+          {overdueLoading ? (
+            <div className="px-6 py-8">
+              <div className="space-y-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Skeleton key={i} className="h-16 w-full" />
+                ))}
+              </div>
+            </div>
+          ) : overdueData.length === 0 ? (
+            <div className="px-6 py-12 text-center text-muted-foreground">
+              <AlertTriangle className="h-12 w-12 mx-auto mb-3 text-emerald-400 opacity-50" />
+              <p className="font-medium">لا توجد مدفوعات مستحقة</p>
+              <p className="text-sm mt-1">جميع الأقسط مسددة في وقتها</p>
+            </div>
+          ) : (
+            <>
+              {/* Grand total bar */}
+              <div className="mx-6 mt-2 mb-3 p-3 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-between">
+                <span className="text-sm font-semibold text-amber-800">
+                  إجمالي المستحقات
+                </span>
+                <span className="text-lg font-bold text-amber-700">
+                  {grandTotalOverdue.toLocaleString()}{' '}
+                  <span className="text-sm font-normal">درهم</span>
+                </span>
+              </div>
+
+              <ScrollArea className="flex-1 px-6 pb-6 max-h-[65vh]">
+                <div className="space-y-6">
+                  {overdueData.map((service) => (
+                    <div key={service.service}>
+                      {/* Service header */}
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="h-1 w-4 rounded bg-amber-400" />
+                        <h3 className="font-bold text-base">
+                          {service.service}
+                        </h3>
+                        <Badge
+                          variant="outline"
+                          className="text-xs border-amber-300 text-amber-700"
+                        >
+                          {service.studentCount} تلميذ —{' '}
+                          {service.totalOverdue.toLocaleString()} درهم
+                        </Badge>
+                      </div>
+
+                      {/* Levels */}
+                      {service.levels.map((level) => (
+                        <div
+                          key={level.level}
+                          className="mb-4 mr-4"
+                        >
+                          <h4 className="text-sm font-semibold text-muted-foreground mb-2">
+                            {level.level}
+                          </h4>
+                          <div className="space-y-2">
+                            {level.students.map((student) => (
+                              <div
+                                key={student.studentId}
+                                className="flex items-center gap-3 p-3 rounded-lg border hover:bg-accent/30 transition-colors"
+                              >
+                                <div className="h-9 w-9 rounded-full bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+                                  <AlertTriangle className="h-4 w-4" />
+                                </div>
+                                <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-3 gap-1 text-sm">
+                                  <div>
+                                    <span className="font-semibold">
+                                      {student.studentName}
+                                    </span>
+                                    {student.parentName && (
+                                      <span className="text-xs text-muted-foreground block">
+                                        ولي الأمر: {student.parentName}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                                    {student.phone && (
+                                      <span
+                                        className="flex items-center gap-1"
+                                        dir="ltr"
+                                      >
+                                        <Phone className="h-3 w-3" />
+                                        {student.phone}
+                                      </span>
+                                    )}
+                                    {student.parentPhone && (
+                                      <span
+                                        className="flex items-center gap-1"
+                                        dir="ltr"
+                                      >
+                                        <UserCheck className="h-3 w-3" />
+                                        {student.parentPhone}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-red-600">
+                                      {student.totalOverdue.toLocaleString()}{' '}
+                                      درهم
+                                    </span>
+                                    <Badge
+                                      variant="outline"
+                                      className="text-[10px] border-red-200 text-red-600"
+                                    >
+                                      {student.paymentCount} شهر متأخر
+                                    </Badge>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          DELETE CONFIRMATION
+          ═══════════════════════════════════════════════════════════════════ */}
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1255,7 +1563,7 @@ export function PaymentsView() {
             <AlertDialogCancel>إلغاء</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
-              className="bg-destructive text-white hover:bg-destructive/90"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               حذف
             </AlertDialogAction>

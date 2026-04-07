@@ -100,6 +100,7 @@ model Student {
   teacher       Teacher? @relation(fields: [teacherId], references: [id], onDelete: SetNull)
   parentName    String?
   parentPhone   String?
+  monthlyFee     Float    @default(0)
   status        String   @default("active")
   enrollmentDate DateTime @default(now())
   createdAt     DateTime @default(now())

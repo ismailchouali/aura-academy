@@ -1,6 +1,97 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
+// Helper functions
+function timeToMinutes(time: string): number {
+  const [h, m] = time.split(':').map(Number);
+  return h * 60 + m;
+}
+
+function timesOverlap(start1: string, end1: string, start2: string, end2: string): boolean {
+  const s1 = timeToMinutes(start1);
+  const e1 = timeToMinutes(end1);
+  const s2 = timeToMinutes(start2);
+  const e2 = timeToMinutes(end2);
+  return s1 < e2 && s2 < e1;
+}
+
+const dayNamesAr: Record<string, string> = {
+  '1': 'الأحد',
+  '2': 'الإثنين',
+  '3': 'الثلاثاء',
+  '4': 'الأربعاء',
+  '5': 'الخميس',
+  '6': 'الجمعة',
+  '7': 'السبت',
+};
+
+interface ConflictInfo {
+  type: 'classroom' | 'teacher';
+  day: string;
+  dayLabel: string;
+  startTime: string;
+  endTime: string;
+  classroomName?: string;
+  teacherName?: string;
+  subjectName?: string;
+  message: string;
+}
+
+async function checkConflicts(
+  dayOfWeek: string,
+  startTime: string,
+  endTime: string,
+  classroomId: string | null,
+  teacherId: string | null,
+  excludeScheduleId?: string
+): Promise<ConflictInfo[]> {
+  const conflicts: ConflictInfo[] = [];
+
+  const existingSchedules = await db.schedule.findMany({
+    where: {
+      dayOfWeek,
+      ...(excludeScheduleId ? { id: { not: excludeScheduleId } } : {}),
+    },
+    include: {
+      classroom: true,
+      teacher: true,
+      subject: true,
+    },
+  });
+
+  for (const existing of existingSchedules) {
+    if (!timesOverlap(startTime, endTime, existing.startTime, existing.endTime)) continue;
+
+    if (classroomId && existing.classroomId === classroomId) {
+      conflicts.push({
+        type: 'classroom',
+        day: dayOfWeek,
+        dayLabel: dayNamesAr[dayOfWeek] || dayOfWeek,
+        startTime: existing.startTime,
+        endTime: existing.endTime,
+        classroomName: existing.classroom?.nameAr || existing.classroom?.name,
+        subjectName: existing.subject?.nameAr || existing.subject?.name,
+        message: `هذه القاعة مشغولة في ${dayNamesAr[dayOfWeek] || dayOfWeek} من ${existing.startTime} إلى ${existing.endTime} (${existing.subject?.nameAr || existing.subject?.name})`,
+      });
+    }
+
+    if (teacherId && existing.teacherId === teacherId) {
+      conflicts.push({
+        type: 'teacher',
+        day: dayOfWeek,
+        dayLabel: dayNamesAr[dayOfWeek] || dayOfWeek,
+        startTime: existing.startTime,
+        endTime: existing.endTime,
+        teacherName: existing.teacher?.fullName,
+        subjectName: existing.subject?.nameAr || existing.subject?.name,
+        message: `هذا الأستاذ لديه حصة في ${dayNamesAr[dayOfWeek] || dayOfWeek} من ${existing.startTime} إلى ${existing.endTime} (${existing.subject?.nameAr || existing.subject?.name})`,
+      });
+    }
+  }
+
+  return conflicts;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -53,12 +144,63 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
+    const {
+      dayOfWeek,
+      startTime,
+      endTime,
+      classroomId,
+      teacherId,
+      sessionType,
+      isRecurring,
+      daysOfWeek,
+    } = body;
+
+    // Determine which days to check/create
+    const daysToCreate: string[] = [];
+    if (isRecurring && daysOfWeek && Array.isArray(daysOfWeek) && daysOfWeek.length > 0) {
+      daysToCreate.push(...daysOfWeek);
+    } else if (dayOfWeek) {
+      daysToCreate.push(dayOfWeek);
+    }
+
+    if (daysToCreate.length === 0) {
+      return NextResponse.json(
+        { error: 'يرجى تحديد يوم واحد على الأقل' },
+        { status: 400 }
+      );
+    }
+
+    // Check conflicts for all days
+    const allConflicts: ConflictInfo[] = [];
+    for (const day of daysToCreate) {
+      const dayConflicts = await checkConflicts(
+        day,
+        startTime,
+        endTime,
+        classroomId || null,
+        teacherId || null
+      );
+      allConflicts.push(...dayConflicts);
+    }
+
+    if (allConflicts.length > 0) {
+      return NextResponse.json(
+        {
+          error: 'conflict',
+          message: 'يوجد تعارض في الجدول',
+          conflicts: allConflicts,
+        },
+        { status: 409 }
+      );
+    }
+
+    // Create schedules
     const scheduleData = {
       subjectId: body.subjectId,
       teacherId: body.teacherId || null,
       classroomId: body.classroomId || null,
       levelId: body.levelId || null,
-      dayOfWeek: body.dayOfWeek,
+      dayOfWeek: daysToCreate[0],
       startTime: body.startTime,
       endTime: body.endTime,
       group: body.group || null,
@@ -77,7 +219,7 @@ export async function POST(request: NextRequest) {
     });
 
     // If recurring, create copies for all other days of the week
-    let createdSchedules = [schedule];
+    const createdSchedules = [schedule];
     if (body.isRecurring && body.daysOfWeek && Array.isArray(body.daysOfWeek)) {
       for (const day of body.daysOfWeek) {
         if (day !== body.dayOfWeek) {

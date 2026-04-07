@@ -12,7 +12,10 @@ export async function GET(request: NextRequest) {
     const where: Record<string, unknown> = {};
 
     if (search) {
-      where.fullName = { contains: search, mode: 'insensitive' };
+      where.OR = [
+        { fullName: { contains: search, mode: 'insensitive' } },
+        { phone: { contains: search } },
+      ];
     }
     if (status) {
       where.status = status;
@@ -57,6 +60,7 @@ export async function POST(request: NextRequest) {
         teacherId: body.teacherId || null,
         parentName: body.parentName,
         parentPhone: body.parentPhone,
+        monthlyFee: body.monthlyFee ?? 0,
         status: body.status || 'active',
         enrollmentDate: body.enrollmentDate ? new Date(body.enrollmentDate) : new Date(),
       },

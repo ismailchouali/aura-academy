@@ -262,3 +262,96 @@ Task: Rewrite students-view.tsx with stepped wizard and payments-view.tsx with p
 - ESLint passes with zero errors
 - Dev server compiles successfully (GET / 200)
 - Database schema pushed with `db:push`
+
+---
+Task ID: 1
+Agent: Main
+Task: Schema update + Student registration simplification
+
+Work Log:
+- Added `monthlyFee` field to Student model in prisma/schema.prisma
+- Ran `prisma db push` and `prisma generate` to apply changes
+- Agent rewrote students-view.tsx to remove wizard, keep only: name, phone, parent info, monthlyFee
+- Updated students API to support monthlyFee field
+- Added search by name and phone number
+
+Stage Summary:
+- Student registration now shows a simple form (no wizard)
+- Table shows monthly fee column
+- All lint passes
+
+---
+Task ID: 2
+Agent: Sub-agent (full-stack-developer)
+Task: Student payments complete rewrite
+
+Work Log:
+- Rewrote payments-view.tsx with smart student search (by name or phone)
+- Student profile cards instead of big dropdown
+- Auto-fill payment amount from student.monthlyFee
+- Added overdue payments API endpoint (/api/payments/overdue/route.ts)
+- Overdue payments dialog grouped by service → level → student
+- Bon (receipt) redesigned: simple, single page, Day/Month/Year format
+- Center header info on bon
+
+Stage Summary:
+- Payments view now has smart search, overdue tracking, printable bon
+- Overdue API groups students by service and group
+- Bon prints on single page with proper formatting
+
+---
+Task ID: 3
+Agent: Sub-agent (full-stack-developer)
+Task: Teacher income auto-calculate and bon
+
+Work Log:
+- Rewrote teacher-payments-view.tsx
+- Added auto-calculation: count students, sum collected, apply percentage
+- Shows groups breakdown (level/subject with student counts)
+- Bon shows groups table with student counts, fits on single page
+- Updated teacher-payments API with ?calculate=true param
+- Added dashboard stats cards (monthly, yearly, teachers paid)
+
+Stage Summary:
+- Teacher income auto-calculates from student payments × percentage
+- Bon shows detailed group breakdown
+- Admin can adjust calculated amount before saving
+
+---
+Task ID: 4
+Agent: Sub-agent (full-stack-developer)
+Task: Schedule color by service, grid, conflict detection
+
+Work Log:
+- Rewrote schedule-view.tsx with service-based colors
+- Cours de Soutiens=teal, Langues=amber, Informatique=purple, Prép.Concours=rose
+- Trial sessions=dashed borders, Fixed=solid
+- Single table grid with time slots × classrooms
+- Sessions span full duration (11:00-12:30 fills all rows)
+- Added conflict detection: classroom + teacher time overlap
+- Server returns 409 on conflict
+- Added print schedule button
+
+Stage Summary:
+- Schedule is now a proper timetable grid
+- Sessions visually span their full duration
+- Conflict detection prevents double-booking rooms and teachers
+- Service-based color coding for easy identification
+
+---
+Task ID: 5
+Agent: Sub-agent (full-stack-developer)
+Task: Dashboard rewrite + language toggle
+
+Work Log:
+- Rewrote dashboard-view.tsx with monthly income chart (CSS bars)
+- Added new registrations section (last 5 students)
+- Added recent payments table (last 10)
+- Updated dashboard API with recentStudents, monthlyStats by month number
+- Added language toggle (AR/FR) to store and page header
+- 4 stats cards: students, monthly income, yearly income, teacher expenses
+
+Stage Summary:
+- Dashboard shows income analysis per month
+- New registrations and recent payments visible
+- Language toggle button added in header

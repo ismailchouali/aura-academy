@@ -52,6 +52,7 @@ export async function PUT(
         teacherId: body.teacherId,
         parentName: body.parentName,
         parentPhone: body.parentPhone,
+        monthlyFee: body.monthlyFee ?? 0,
         status: body.status,
         enrollmentDate: body.enrollmentDate ? new Date(body.enrollmentDate) : undefined,
       },
