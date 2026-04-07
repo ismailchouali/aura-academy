@@ -520,3 +520,18 @@ Stage Summary:
 - Null safety added for `level.subject` access in 3 places in payments-view.tsx
 - Turbopack cache cleared, server recompiled successfully
 
+---
+Task ID: 2
+Agent: Main Agent
+Task: Fix dark mode rendering issue
+
+Work Log:
+- Analyzed user screenshots: 0% white pixels, very dark rendering
+- Root cause: No ThemeProvider - system dark mode was making app appear dark/broken
+- Added ThemeProvider from next-themes with defaultTheme=light, enableSystem=false
+- Verified desktop rendering shows 82% white (correct light mode)
+
+Stage Summary:
+- Added ThemeProvider to layout.tsx forcing light mode always
+- App now renders correctly regardless of device dark mode settings
+
