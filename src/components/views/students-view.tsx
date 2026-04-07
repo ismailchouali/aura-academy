@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 import { useT } from '@/hooks/use-translation';
 import { Button } from '@/components/ui/button';
@@ -190,6 +190,18 @@ export function StudentsView() {
   const [noTeacher, setNoTeacher] = useState(false);
   const [form, setForm] = useState<FormState>(initialForm);
   const [submitting, setSubmitting] = useState(false);
+
+  // ── Ref for fullName input (auto-focus only once on step 5) ─────────────
+  const fullNameInputRef = useRef<HTMLInputElement>(null);
+  const prevStepRef = useRef<WizardStep>(1);
+
+  useEffect(() => {
+    if (wizardStep === 5 && prevStepRef.current !== 5) {
+      // Only focus when transitioning TO step 5, not on re-renders
+      setTimeout(() => fullNameInputRef.current?.focus(), 100);
+    }
+    prevStepRef.current = wizardStep;
+  }, [wizardStep]);
 
   // ── Delete state ────────────────────────────────────────────────────────
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -951,7 +963,7 @@ export function StudentsView() {
                     value={form.fullName}
                     onChange={(e) => setForm((prev) => ({ ...prev, fullName: e.target.value }))}
                     placeholder={t.students.fullNamePlaceholder}
-                    autoFocus
+                    ref={fullNameInputRef}
                   />
                 </div>
                 <div className="space-y-1.5 sm:col-span-2">

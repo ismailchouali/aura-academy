@@ -422,3 +422,25 @@ Complete rewrite of `/src/components/views/students-view.tsx` restoring the 5-st
 - ~650 lines of clean TypeScript code
 - All shadcn/ui components used (no custom implementations)
 - Proper typing for all interfaces (Student, Service, Subject, Level, Teacher, FormState)
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix auto-focus glitch and database errors
+
+Work Log:
+- Read and analyzed all project files (page.tsx, students-view.tsx, teachers-view.tsx, schema.prisma, translations.ts, API routes)
+- Found dev log showing Prisma error: "Unknown argument `levelId`" when creating students
+- Regenerated Prisma client with `npx prisma generate` - the client was stale
+- Ran `bun run db:push` to verify database schema is in sync
+- Found the auto-focus glitch: `autoFocus` attribute on fullName Input (step 5) was causing focus to jump back when typing in other fields
+- Replaced `autoFocus` with a `useRef`-based approach using `prevStepRef` to only focus when transitioning TO step 5
+- Verified no other `autoFocus` attributes exist in the codebase
+- Verified translations file is complete for both Arabic and French
+- Verified language switcher implementation is correct (store toggleLang, useT hook, complete translations)
+- Ran lint - no errors
+
+Stage Summary:
+- Auto-focus glitch FIXED: Replaced autoFocus with useRef + useEffect that only triggers on step transition
+- Database error FIXED: Regenerated Prisma client (was stale)
+- Student wizard flow VERIFIED: Code shows correct 5-step flow (Service→Subject→Level→Teacher→Personal info)
+- Language switcher VERIFIED: Complete French translations exist, toggle mechanism is correct
