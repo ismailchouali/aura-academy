@@ -60,6 +60,8 @@ import {
   Calculator,
   School,
 } from 'lucide-react';
+import { useT } from '@/hooks/use-translation';
+import type { Translations } from '@/lib/translations';
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -129,10 +131,7 @@ interface PaymentFormData {
 
 // ─── Constants ───────────────────────────────────────────────────────
 
-const monthNames = [
-  'يناير', 'فبراير', 'مارس', 'أبريل', 'ماي', 'يونيو',
-  'يوليوز', 'غشت', 'شتنبر', 'أكتوبر', 'نونبر', 'دجنبر',
-];
+const MONTH_KEYS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'] as const;
 
 const emptyForm: PaymentFormData = {
   teacherId: '',
@@ -144,30 +143,14 @@ const emptyForm: PaymentFormData = {
   status: 'paid',
 };
 
-// ─── Helpers ─────────────────────────────────────────────────────────
-
-function getMonthName(month: string) {
-  const idx = parseInt(month) - 1;
-  return idx >= 0 && idx < 12 ? monthNames[idx] : month;
-}
-
-function getStatusBadge(status: string) {
-  switch (status) {
-    case 'paid':
-      return <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100">مدفوع</Badge>;
-    case 'pending':
-      return <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100">معلق</Badge>;
-    default:
-      return <Badge variant="outline">{status}</Badge>;
-  }
-}
-
 // ─── Bon (Receipt) Printer ───────────────────────────────────────────
 
 function printTeacherBon(
   payment: TeacherPayment,
   teacher: Teacher | undefined,
-  calcData: CalculationData | undefined
+  calcData: CalculationData | undefined,
+  t: Translations,
+  getMonthName: (month: string) => string
 ) {
   const teacherName = payment.teacher?.fullName || teacher?.fullName || '—';
   const teacherPhone = payment.teacher?.phone || teacher?.phone || '—';
@@ -190,7 +173,6 @@ function printTeacherBon(
   const monthStr = getMonthName(payment.month);
   const yearStr = payment.year;
 
-  // Build groups table rows
   const groups = calcData?.groups || [];
   const totalStudents = calcData?.totalStudents || groups.reduce((s, g) => s + g.studentCount, 0);
 
@@ -201,8 +183,8 @@ function printTeacherBon(
         <thead>
           <tr style="background:#f0fdfa;">
             <th style="border:1px solid #d1d5db; padding:6px 10px; text-align:right; font-weight:600;">#</th>
-            <th style="border:1px solid #d1d5db; padding:6px 10px; text-align:right; font-weight:600;">المادة / المستوى</th>
-            <th style="border:1px solid #d1d5db; padding:6px 10px; text-align:center; font-weight:600;">عدد التلاميذ</th>
+            <th style="border:1px solid #d1d5db; padding:6px 10px; text-align:right; font-weight:600;">${t.teacherPayments.bonSubjectLevel}</th>
+            <th style="border:1px solid #d1d5db; padding:6px 10px; text-align:center; font-weight:600;">${t.teacherPayments.bonStudentCountCol}</th>
           </tr>
         </thead>
         <tbody>
@@ -214,7 +196,7 @@ function printTeacherBon(
             </tr>
           `).join('')}
           <tr style="background:#f0fdfa; font-weight:700;">
-            <td colspan="2" style="border:1px solid #d1d5db; padding:6px 10px; text-align:right;">المجموع</td>
+            <td colspan="2" style="border:1px solid #d1d5db; padding:6px 10px; text-align:right;">${t.teacherPayments.bonTotalRow}</td>
             <td style="border:1px solid #d1d5db; padding:6px 10px; text-align:center;">${totalStudents}</td>
           </tr>
         </tbody>
@@ -225,7 +207,7 @@ function printTeacherBon(
 <html dir="rtl" lang="ar">
 <head>
 <meta charset="UTF-8">
-<title>بون دفع أستاذ - ${teacherName}</title>
+<title>${t.teacherPayments.bonTitle} - ${teacherName}</title>
 <style>
   @page { size: A4; margin: 10mm; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -360,78 +342,78 @@ function printTeacherBon(
 <body>
   <div class="bon-container">
     <div class="bon-header">
-      <h1>نظام إدارة المركز التربوي</h1>
+      <h1>${t.teacherPayments.bonCenter}</h1>
       <div class="bon-sub">
-        <span>الهاتف: 0606030356</span>
-        <span>Bd med V, N°407 Route de Marrakech, Béni Mellal</span>
+        <span>${t.payments.bonPhone}</span>
+        <span>${t.payments.bonAddress}</span>
       </div>
     </div>
 
     <div class="bon-title-bar">
-      <h2>بون دفع أستاذ / سند دفع</h2>
+      <h2>${t.teacherPayments.bonTitle}</h2>
     </div>
 
     <div class="bon-info">
       <div class="info-row">
-        <span class="info-label">اسم الأستاذ</span>
+        <span class="info-label">${t.teacherPayments.bonTeacherName}</span>
         <span class="info-value">${teacherName}</span>
       </div>
       <div class="info-row">
-        <span class="info-label">الهاتف</span>
+        <span class="info-label">${t.teacherPayments.bonPhone}</span>
         <span class="info-value" dir="ltr">${teacherPhone}</span>
       </div>
       <div class="info-row">
-        <span class="info-label">المواد</span>
+        <span class="info-label">${t.teacherPayments.bonSubjects}</span>
         <span class="info-value" style="font-size:11px;">${subjects}</span>
       </div>
       <div class="info-row">
-        <span class="info-label">التاريخ</span>
+        <span class="info-label">${t.teacherPayments.bonDate}</span>
         <span class="info-value" dir="ltr">${day} / ${month} / ${year}</span>
       </div>
     </div>
 
     ${groups.length > 0 ? `
     <div class="bon-groups">
-      <h3>توزيع التلاميذ حسب المجموعات</h3>
+      <h3>${t.teacherPayments.bonGroupsTitle}</h3>
       ${groupsTableHTML}
     </div>` : ''}
 
     <div class="amount-box">
-      <div class="amount-label">المبلغ المستحق</div>
-      <div class="amount-value">${amountStr} <span class="amount-currency">درهم</span></div>
+      <div class="amount-label">${t.teacherPayments.bonAmountDue}</div>
+      <div class="amount-value">${amountStr} <span class="amount-currency">${t.common.dh}</span></div>
     </div>
 
     <div class="bon-details">
-      <h3>تفاصيل الدفع</h3>
+      <h3>${t.teacherPayments.bonDetails}</h3>
       <div class="info-row">
-        <span class="info-label">الشهر</span>
+        <span class="info-label">${t.teacherPayments.bonMonth}</span>
         <span class="info-value">${monthStr} ${yearStr}</span>
       </div>
       <div class="info-row">
-        <span class="info-label">تاريخ الدفع</span>
+        <span class="info-label">${t.teacherPayments.bonPaymentDate}</span>
         <span class="info-value" dir="ltr">${day} / ${month} / ${year}</span>
       </div>
       ${payment.notes ? `
       <div class="info-row">
-        <span class="info-label">ملاحظات</span>
+        <span class="info-label">${t.common.notes}</span>
         <span class="info-value">${payment.notes}</span>
       </div>` : ''}
     </div>
 
     <div class="bon-footer">
       <div class="signature-box">
-        <div class="signature-label">توقيع المركز</div>
+        <div class="signature-label">${t.teacherPayments.bonCenterSig}</div>
         <div class="signature-line"></div>
       </div>
       <div class="signature-box">
-        <div class="signature-label">توقيع الأستاذ</div>
+        <div class="signature-label">${t.teacherPayments.bonTeacherSig}</div>
         <div class="signature-line"></div>
       </div>
     </div>
   </div>
 
   <div class="no-print" style="text-align:center; margin-top:12px;">
-    <button onclick="window.print()" style="padding:8px 24px; background:#0d9488; color:white; border:none; border-radius:6px; cursor:pointer; font-family:inherit; font-size:14px;">طباعة</button>
+    <button onclick="window.print()" style="padding:8px 24px; background:#0d9488; color:white; border:none; border-radius:6px; cursor:pointer; font-family:inherit; font-size:14px;">${t.teacherPayments.bonPrint}</button>
   </div>
 
   <script>
@@ -447,13 +429,15 @@ function printTeacherBon(
     win.document.write(html);
     win.document.close();
   } else {
-    toast.error('يرجى السماح بالنوافذ المنبثقة لطباعة البون');
+    toast.error(t.common.noInternet);
   }
 }
 
 // ─── Main Component ──────────────────────────────────────────────────
 
 export function TeacherPaymentsView() {
+  const t = useT();
+
   const [payments, setPayments] = useState<TeacherPayment[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [calcData, setCalcData] = useState<CalculationData[]>([]);
@@ -476,6 +460,26 @@ export function TeacherPaymentsView() {
   const [form, setForm] = useState<PaymentFormData>(emptyForm);
   const [submitting, setSubmitting] = useState(false);
 
+  // ─── Helpers (inside component for t access) ────────────────────────
+
+  const monthNames = useMemo(() => MONTH_KEYS.map((k) => t.months[k]), [t]);
+
+  const getMonthName = useCallback((month: string) => {
+    const idx = parseInt(month) - 1;
+    return idx >= 0 && idx < 12 ? monthNames[idx] : month;
+  }, [monthNames]);
+
+  function getStatusBadge(status: string) {
+    switch (status) {
+      case 'paid':
+        return <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100">{t.teacherPayments.statusPaid}</Badge>;
+      case 'pending':
+        return <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100">{t.teacherPayments.statusPending}</Badge>;
+      default:
+        return <Badge variant="outline">{status}</Badge>;
+    }
+  }
+
   // ─── Data Fetching ─────────────────────────────────────────────────
 
   const fetchPayments = useCallback(async () => {
@@ -488,11 +492,11 @@ export function TeacherPaymentsView() {
 
       const query = params.toString();
       const res = await fetch(`/api/teacher-payments${query ? `?${query}` : ''}`);
-      if (!res.ok) throw new Error('فشل في تحميل البيانات');
+      if (!res.ok) throw new Error('Failed');
       const data = await res.json();
       setPayments(data);
     } catch {
-      toast.error('فشل في تحميل المدفوعات');
+      toast.error(t.teacherPayments.fetchError);
     } finally {
       setLoading(false);
     }
@@ -501,11 +505,11 @@ export function TeacherPaymentsView() {
   const fetchTeachers = useCallback(async () => {
     try {
       const res = await fetch('/api/teachers');
-      if (!res.ok) throw new Error('فشل في تحميل البيانات');
+      if (!res.ok) throw new Error('Failed');
       const data = await res.json();
       setTeachers(data);
     } catch {
-      toast.error('فشل في تحميل قائمة الأساتذة');
+      toast.error(t.teacherPayments.fetchTeachersError);
     }
   }, []);
 
@@ -515,11 +519,11 @@ export function TeacherPaymentsView() {
       const params = new URLSearchParams({ calculate: 'true' });
       if (teacherId) params.set('teacherId', teacherId);
       const res = await fetch(`/api/teacher-payments?${params.toString()}`);
-      if (!res.ok) throw new Error('فشل');
+      if (!res.ok) throw new Error('Failed');
       const data = await res.json();
       setCalcData(data);
     } catch {
-      toast.error('فشل في تحميل بيانات الحساب');
+      toast.error(t.teacherPayments.calcFetchError);
     } finally {
       setCalcLoading(false);
     }
@@ -560,13 +564,11 @@ export function TeacherPaymentsView() {
     return ids.size;
   }, [payments]);
 
-  // Selected teacher calculation
   const selectedCalc = useMemo(() => {
     if (!form.teacherId) return null;
     return calcData.find((c) => c.teacherId === form.teacherId) || null;
   }, [form.teacherId, calcData]);
 
-  // Years for filter
   const years = Array.from({ length: 5 }, (_, i) => String(now.getFullYear() - 2 + i));
 
   // ─── Form Handlers ────────────────────────────────────────────────
@@ -594,7 +596,6 @@ export function TeacherPaymentsView() {
       notes: payment.notes || '',
       status: payment.status,
     });
-    // Fetch calc for the teacher to show in bon
     fetchCalcData(payment.teacherId);
     setFormOpen(true);
   };
@@ -603,7 +604,7 @@ export function TeacherPaymentsView() {
     setForm((prev) => ({
       ...prev,
       teacherId,
-      amount: '', // clear amount so user sees auto-calculated value
+      amount: '',
     }));
   };
 
@@ -613,21 +614,21 @@ export function TeacherPaymentsView() {
         ...prev,
         amount: String(Math.round(selectedCalc.teacherShare * 100) / 100),
       }));
-      toast.success('تم تطبيق الحساب التلقائي');
+      toast.success(t.teacherPayments.calcApplied);
     }
   };
 
   const handleSubmit = async () => {
     if (!form.teacherId) {
-      toast.error('يرجى اختيار الأستاذ');
+      toast.error(t.teacherPayments.teacherRequired);
       return;
     }
     if (!form.amount || parseFloat(form.amount) <= 0) {
-      toast.error('يرجى إدخال المبلغ');
+      toast.error(t.teacherPayments.amountRequired);
       return;
     }
     if (!form.month) {
-      toast.error('يرجى اختيار الشهر');
+      toast.error(t.teacherPayments.monthRequired);
       return;
     }
 
@@ -654,13 +655,13 @@ export function TeacherPaymentsView() {
         body: JSON.stringify(body),
       });
 
-      if (!res.ok) throw new Error('فشل في حفظ البيانات');
+      if (!res.ok) throw new Error('Failed');
 
-      toast.success(editingPayment ? 'تم تحديث الدفعة بنجاح' : 'تم إضافة الدفعة بنجاح');
+      toast.success(editingPayment ? t.teacherPayments.updateSuccess : t.teacherPayments.addSuccess);
       setFormOpen(false);
       fetchPayments();
     } catch {
-      toast.error('حدث خطأ أثناء الحفظ');
+      toast.error(t.common.saveError);
     } finally {
       setSubmitting(false);
     }
@@ -672,22 +673,20 @@ export function TeacherPaymentsView() {
       const res = await fetch(`/api/teacher-payments/${deletingPayment.id}`, {
         method: 'DELETE',
       });
-      if (!res.ok) throw new Error('فشل في الحذف');
-      toast.success('تم حذف الدفعة بنجاح');
+      if (!res.ok) throw new Error('Failed');
+      toast.success(t.teacherPayments.deleteSuccess);
       setDeleteOpen(false);
       setDeletingPayment(null);
       fetchPayments();
     } catch {
-      toast.error('حدث خطأ أثناء الحذف');
+      toast.error(t.common.deleteError);
     }
   };
 
   const handlePrintBon = (payment: TeacherPayment) => {
     const teacher = teachers.find((t) => t.id === payment.teacherId);
-    // Find calc data for this teacher
     const teacherCalc = calcData.find((c) => c.teacherId === payment.teacherId);
-
-    printTeacherBon(payment, teacher, teacherCalc);
+    printTeacherBon(payment, teacher, teacherCalc, t, getMonthName);
   };
 
   const getTeacherName = (teacherId: string) =>
@@ -700,14 +699,14 @@ export function TeacherPaymentsView() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-foreground">مداخيل الأساتذة</h2>
+          <h2 className="text-2xl font-bold text-foreground">{t.teacherPayments.title}</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            إدارة ومتابعة مدفوعات الأساتذة مع الحساب التلقائي
+            {t.teacherPayments.subtitle}
           </p>
         </div>
         <Button onClick={openCreateDialog} className="gap-2">
           <Plus className="h-4 w-4" />
-          إضافة دفعة
+          {t.teacherPayments.addPayment}
         </Button>
       </div>
 
@@ -720,10 +719,10 @@ export function TeacherPaymentsView() {
                 <TrendingUp className="h-5 w-5 text-teal-600" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">إجمالي مدفوعات هذا الشهر</p>
+                <p className="text-xs text-muted-foreground">{t.teacherPayments.thisMonthTotal}</p>
                 <p className="text-xl font-bold text-teal-600">
                   {totalThisMonth.toLocaleString()}{' '}
-                  <span className="text-xs font-normal text-muted-foreground">درهم</span>
+                  <span className="text-xs font-normal text-muted-foreground">{t.common.dh}</span>
                 </p>
               </div>
             </div>
@@ -736,10 +735,10 @@ export function TeacherPaymentsView() {
                 <CircleDollarSign className="h-5 w-5 text-amber-600" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">إجمالي مدفوعات هذه السنة</p>
+                <p className="text-xs text-muted-foreground">{t.teacherPayments.thisYearTotal}</p>
                 <p className="text-xl font-bold text-amber-600">
                   {totalThisYear.toLocaleString()}{' '}
-                  <span className="text-xs font-normal text-muted-foreground">درهم</span>
+                  <span className="text-xs font-normal text-muted-foreground">{t.common.dh}</span>
                 </p>
               </div>
             </div>
@@ -752,7 +751,7 @@ export function TeacherPaymentsView() {
                 <Users className="h-5 w-5 text-sky-600" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">عدد الأساتذة المدفوع لهم</p>
+                <p className="text-xs text-muted-foreground">{t.teacherPayments.paidTeachersCount}</p>
                 <p className="text-xl font-bold text-sky-600">{uniqueTeachersPaid}</p>
               </div>
             </div>
@@ -765,18 +764,18 @@ export function TeacherPaymentsView() {
         <CardContent className="p-4">
           <div className="flex items-center gap-2 mb-3">
             <Filter className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-medium">تصفية</span>
+            <span className="text-sm font-medium">{t.teacherPayments.filter}</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <Select value={filterTeacherId} onValueChange={setFilterTeacherId}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="جميع الأساتذة" />
+                <SelectValue placeholder={t.teacherPayments.allTeachers} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">جميع الأساتذة</SelectItem>
-                {teachers.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    {t.fullName}
+                <SelectItem value="all">{t.teacherPayments.allTeachers}</SelectItem>
+                {teachers.map((teacher) => (
+                  <SelectItem key={teacher.id} value={teacher.id}>
+                    {teacher.fullName}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -784,10 +783,10 @@ export function TeacherPaymentsView() {
 
             <Select value={filterMonth} onValueChange={setFilterMonth}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="جميع الأشهر" />
+                <SelectValue placeholder={t.teacherPayments.allMonths} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">جميع الأشهر</SelectItem>
+                <SelectItem value="all">{t.teacherPayments.allMonths}</SelectItem>
                 {monthNames.map((m, i) => (
                   <SelectItem key={i} value={String(i + 1)}>
                     {m}
@@ -798,10 +797,10 @@ export function TeacherPaymentsView() {
 
             <Select value={filterYear} onValueChange={setFilterYear}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="جميع السنوات" />
+                <SelectValue placeholder={t.teacherPayments.allYears} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">جميع السنوات</SelectItem>
+                <SelectItem value="all">{t.teacherPayments.allYears}</SelectItem>
                 {years.map((y) => (
                   <SelectItem key={y} value={y}>
                     {y}
@@ -812,12 +811,12 @@ export function TeacherPaymentsView() {
 
             <Select value={filterStatus} onValueChange={setFilterStatus}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="جميع الحالات" />
+                <SelectValue placeholder={t.teacherPayments.allStatuses} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">جميع الحالات</SelectItem>
-                <SelectItem value="paid">مدفوع</SelectItem>
-                <SelectItem value="pending">معلق</SelectItem>
+                <SelectItem value="all">{t.teacherPayments.allStatuses}</SelectItem>
+                <SelectItem value="paid">{t.teacherPayments.statusPaid}</SelectItem>
+                <SelectItem value="pending">{t.teacherPayments.statusPending}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -836,11 +835,11 @@ export function TeacherPaymentsView() {
           ) : payments.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <Wallet className="h-16 w-16 text-muted-foreground/30 mb-4" />
-              <p className="text-lg font-medium text-muted-foreground">لا توجد مدفوعات</p>
+              <p className="text-lg font-medium text-muted-foreground">{t.teacherPayments.noPayments}</p>
               <p className="text-sm text-muted-foreground mt-1">
                 {filterTeacherId !== 'all' || filterMonth !== 'all' || filterYear !== 'all' || filterStatus !== 'all'
-                  ? 'لا توجد نتائج مطابقة لمعايير التصفية'
-                  : 'ابدأ بإضافة دفعة جديدة'}
+                  ? t.common.noResults
+                  : t.teacherPayments.startAdding}
               </p>
             </div>
           ) : (
@@ -848,12 +847,12 @@ export function TeacherPaymentsView() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-right">الأستاذ</TableHead>
-                    <TableHead className="text-right">المبلغ (درهم)</TableHead>
-                    <TableHead className="text-right hidden md:table-cell">الشهر</TableHead>
-                    <TableHead className="text-right hidden md:table-cell">تاريخ الدفع</TableHead>
-                    <TableHead className="text-right">الحالة</TableHead>
-                    <TableHead className="text-right">الإجراءات</TableHead>
+                    <TableHead className="text-right">{t.teacherPayments.teacherCol}</TableHead>
+                    <TableHead className="text-right">{t.teacherPayments.amountCol}</TableHead>
+                    <TableHead className="text-right hidden md:table-cell">{t.teacherPayments.monthCol}</TableHead>
+                    <TableHead className="text-right hidden md:table-cell">{t.teacherPayments.dateCol}</TableHead>
+                    <TableHead className="text-right">{t.teacherPayments.statusCol}</TableHead>
+                    <TableHead className="text-right">{t.common.actions}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -897,7 +896,7 @@ export function TeacherPaymentsView() {
                             size="icon"
                             className="h-8 w-8"
                             onClick={() => handlePrintBon(payment)}
-                            title="طباعة البون"
+                            title={t.teacherPayments.printBon}
                           >
                             <Printer className="h-3.5 w-3.5" />
                           </Button>
@@ -906,7 +905,7 @@ export function TeacherPaymentsView() {
                             size="icon"
                             className="h-8 w-8"
                             onClick={() => openEditDialog(payment)}
-                            title="تعديل"
+                            title={t.common.edit}
                           >
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
@@ -918,7 +917,7 @@ export function TeacherPaymentsView() {
                               setDeletingPayment(payment);
                               setDeleteOpen(true);
                             }}
-                            title="حذف"
+                            title={t.common.delete}
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
@@ -938,37 +937,37 @@ export function TeacherPaymentsView() {
         <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle>
-              {editingPayment ? 'تعديل الدفعة' : 'إضافة دفعة جديدة'}
+              {editingPayment ? t.teacherPayments.editPayment : t.teacherPayments.addNew}
             </DialogTitle>
             <DialogDescription>
               {editingPayment
-                ? 'قم بتعديل بيانات الدفعة'
-                : 'أدخل بيانات الدفعة الجديدة - يتم الحساب تلقائياً'}
+                ? t.teacherPayments.editDesc
+                : t.teacherPayments.addDesc}
             </DialogDescription>
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto -mx-6 px-6 space-y-4">
             {/* Teacher selection */}
             <div>
-              <Label>الأستاذ *</Label>
+              <Label>{t.teacherPayments.selectTeacher}</Label>
               <Select
                 value={form.teacherId}
                 onValueChange={handleTeacherSelect}
                 disabled={!!editingPayment}
               >
                 <SelectTrigger className="w-full mt-1.5">
-                  <SelectValue placeholder="اختر الأستاذ" />
+                  <SelectValue placeholder={t.teacherPayments.chooseTeacher} />
                 </SelectTrigger>
                 <SelectContent>
                   {teachers
-                    .filter((t) => t.status === 'active')
-                    .map((t) => (
-                      <SelectItem key={t.id} value={t.id}>
+                    .filter((teacher) => teacher.status === 'active')
+                    .map((teacher) => (
+                      <SelectItem key={teacher.id} value={teacher.id}>
                         <span className="flex items-center gap-2">
-                          <span>{t.fullName}</span>
-                          {t.phone && (
+                          <span>{teacher.fullName}</span>
+                          {teacher.phone && (
                             <span className="text-xs text-muted-foreground" dir="ltr">
-                              {t.phone}
+                              {teacher.phone}
                             </span>
                           )}
                         </span>
@@ -984,32 +983,31 @@ export function TeacherPaymentsView() {
                 <div className="flex items-center gap-2 mb-2">
                   <Calculator className="h-4 w-4 text-teal-600" />
                   <span className="text-sm font-semibold text-teal-700">
-                    الحساب التلقائي
+                    {t.teacherPayments.autoCalc}
                   </span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">عدد التلاميذ</span>
+                    <span className="text-muted-foreground">{t.teacherPayments.studentCountLabel}</span>
                     <span className="font-bold text-foreground">{selectedCalc.totalStudents}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">نسبة الأستاذ</span>
+                    <span className="text-muted-foreground">{t.teacherPayments.teacherPercentage}</span>
                     <span className="font-bold text-foreground">{selectedCalc.teacherPercentage}%</span>
                   </div>
                   <div className="flex justify-between items-center col-span-2">
-                    <span className="text-muted-foreground">إجمالي المحصل من التلاميذ</span>
+                    <span className="text-muted-foreground">{t.teacherPayments.totalCollected}</span>
                     <span className="font-bold text-foreground">
-                      {selectedCalc.totalCollected.toLocaleString()} درهم
+                      {selectedCalc.totalCollected.toLocaleString()} {t.common.dh}
                     </span>
                   </div>
                 </div>
 
-                {/* Groups breakdown */}
                 {selectedCalc.groups.length > 0 && (
                   <div className="mt-2">
                     <p className="text-xs text-muted-foreground mb-1.5 font-medium">
-                      توزيع حسب المجموعات:
+                      {t.teacherPayments.groupsBreakdown}
                     </p>
                     <div className="max-h-36 overflow-y-auto space-y-1">
                       {selectedCalc.groups.map((g, i) => (
@@ -1024,7 +1022,7 @@ export function TeacherPaymentsView() {
                             variant="secondary"
                             className="text-xs bg-teal-100 text-teal-700 hover:bg-teal-100"
                           >
-                            {g.studentCount} تلميذ
+                            {g.studentCount} {t.teacherPayments.studentUnit}
                           </Badge>
                         </div>
                       ))}
@@ -1035,9 +1033,9 @@ export function TeacherPaymentsView() {
                 <Separator className="bg-teal-200" />
 
                 <div className="flex justify-between items-center">
-                  <span className="font-semibold text-teal-700">حصة الأستاذ</span>
+                  <span className="font-semibold text-teal-700">{t.teacherPayments.teacherShare}</span>
                   <span className="text-lg font-extrabold text-teal-700">
-                    {selectedCalc.teacherShare.toLocaleString()} درهم
+                    {selectedCalc.teacherShare.toLocaleString()} {t.common.dh}
                   </span>
                 </div>
 
@@ -1048,14 +1046,14 @@ export function TeacherPaymentsView() {
                   onClick={handleApplyCalculation}
                 >
                   <Calculator className="h-4 w-4" />
-                  تطبيق الحصة كالمبلغ ({selectedCalc.teacherShare.toLocaleString()} درهم)
+                  {t.teacherPayments.applyCalc} ({selectedCalc.teacherShare.toLocaleString()} {t.common.dh})
                 </Button>
               </div>
             )}
 
             {/* Amount */}
             <div>
-              <Label htmlFor="amount">المبلغ (درهم) *</Label>
+              <Label htmlFor="amount">{t.teacherPayments.amountLabel}</Label>
               <Input
                 id="amount"
                 type="number"
@@ -1072,13 +1070,13 @@ export function TeacherPaymentsView() {
             {/* Month / Year */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>الشهر *</Label>
+                <Label>{t.teacherPayments.monthLabel}</Label>
                 <Select
                   value={form.month}
                   onValueChange={(val) => setForm({ ...form, month: val })}
                 >
                   <SelectTrigger className="w-full mt-1.5">
-                    <SelectValue placeholder="اختر الشهر" />
+                    <SelectValue placeholder={t.teacherPayments.chooseMonth} />
                   </SelectTrigger>
                   <SelectContent>
                     {monthNames.map((m, i) => (
@@ -1091,7 +1089,7 @@ export function TeacherPaymentsView() {
               </div>
 
               <div>
-                <Label>السنة</Label>
+                <Label>{t.teacherPayments.yearLabel}</Label>
                 <Select
                   value={form.year}
                   onValueChange={(val) => setForm({ ...form, year: val })}
@@ -1112,100 +1110,75 @@ export function TeacherPaymentsView() {
 
             {/* Payment Date */}
             <div>
-              <Label htmlFor="paymentDate">تاريخ الدفع</Label>
+              <Label htmlFor="paymentDate">{t.teacherPayments.paymentDateLabel}</Label>
               <Input
                 id="paymentDate"
                 type="date"
                 value={form.paymentDate}
                 onChange={(e) => setForm({ ...form, paymentDate: e.target.value })}
-                dir="ltr"
-                className="text-left mt-1.5"
+                className="mt-1.5"
+              />
+            </div>
+
+            {/* Notes */}
+            <div>
+              <Label htmlFor="notes">{t.teacherPayments.notesLabel}</Label>
+              <Textarea
+                id="notes"
+                value={form.notes}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                className="mt-1.5"
+                placeholder={t.teacherPayments.notesLabel}
+                rows={3}
               />
             </div>
 
             {/* Status */}
             <div>
-              <Label>الحالة</Label>
+              <Label>{t.teacherPayments.statusCol}</Label>
               <Select
                 value={form.status}
                 onValueChange={(val) => setForm({ ...form, status: val })}
               >
                 <SelectTrigger className="w-full mt-1.5">
-                  <SelectValue />
+                  <SelectValue placeholder={t.teacherPayments.statusCol} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="paid">مدفوع</SelectItem>
-                  <SelectItem value="pending">معلق</SelectItem>
+                  <SelectItem value="paid">{t.teacherPayments.statusPaid}</SelectItem>
+                  <SelectItem value="pending">{t.teacherPayments.statusPending}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-
-            {/* Notes */}
-            <div>
-              <Label htmlFor="notes">ملاحظات</Label>
-              <Textarea
-                id="notes"
-                value={form.notes}
-                onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                placeholder="ملاحظات إضافية..."
-                rows={2}
-                className="mt-1.5"
-              />
-            </div>
           </div>
 
-          <DialogFooter className="flex-col sm:flex-row gap-2 pt-2 border-t mt-2">
-            {editingPayment && (
-              <Button
-                variant="destructive"
-                className="gap-2"
-                onClick={() => {
-                  setFormOpen(false);
-                  setDeletingPayment(editingPayment);
-                  setDeleteOpen(true);
-                }}
-              >
-                <Trash2 className="h-4 w-4" />
-                حذف
-              </Button>
-            )}
-            <div className="flex gap-2 w-full sm:w-auto sm:mr-auto">
-              <Button
-                variant="outline"
-                onClick={() => setFormOpen(false)}
-                disabled={submitting}
-                className="flex-1 sm:flex-none"
-              >
-                إلغاء
-              </Button>
-              <Button onClick={handleSubmit} disabled={submitting} className="flex-1 sm:flex-none">
-                {submitting
-                  ? 'جاري الحفظ...'
-                  : editingPayment
-                  ? 'تحديث الدفعة'
-                  : 'إضافة الدفعة'}
-              </Button>
-            </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFormOpen(false)} disabled={submitting}>
+              {t.common.cancel}
+            </Button>
+            <Button onClick={handleSubmit} disabled={submitting}>
+              {submitting ? t.common.saving : t.common.save}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* ─── Delete Confirmation ──────────────────────────────────── */}
+      {/* ─── Delete Confirmation ───────────────────────────────── */}
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>تأكيد الحذف</AlertDialogTitle>
+            <AlertDialogTitle>{t.common.deleteConfirm}</AlertDialogTitle>
             <AlertDialogDescription>
-              هل أنت متأكد من حذف هذه الدفعة؟ لا يمكن التراجع عن هذا الإجراء.
+              {t.common.cannotUndo}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogCancel disabled={submitting}>{t.common.cancel}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
+              disabled={submitting}
               className="bg-destructive text-white hover:bg-destructive/90"
             >
-              حذف
+              {submitting ? t.common.loading : t.common.delete}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

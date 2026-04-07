@@ -13,6 +13,7 @@ import {
   DoorOpenIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useT } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -114,16 +115,16 @@ function LoadingSkeleton() {
   );
 }
 
-function EmptyState() {
+function EmptyState({ t }: { t: ReturnType<typeof useT> }) {
   return (
     <Card className="border-0 shadow-sm">
       <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
         <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
           <DoorOpen className="w-8 h-8 text-muted-foreground" />
         </div>
-        <h3 className="text-lg font-semibold">لا توجد قاعات</h3>
+        <h3 className="text-lg font-semibold">{t.classrooms.noClassrooms}</h3>
         <p className="text-muted-foreground text-center max-w-sm">
-          لم يتم إضافة أي قاعات بعد. اضغط على زر إضافة قاعة لإنشاء واحدة.
+          {t.classrooms.noClassroomsDesc}
         </p>
       </CardContent>
     </Card>
@@ -131,6 +132,7 @@ function EmptyState() {
 }
 
 export function ClassroomsView() {
+  const t = useT();
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [loading, setLoading] = useState(true);
   const [editDialog, setEditDialog] = useState<{ open: boolean; classroom: Classroom | null }>({
@@ -156,7 +158,7 @@ export function ClassroomsView() {
       const data = await res.json();
       setClassrooms(data);
     } catch {
-      toast.error('فشل في تحميل القاعات');
+      toast.error(t.classrooms.fetchError);
     } finally {
       setLoading(false);
     }
@@ -186,7 +188,7 @@ export function ClassroomsView() {
 
   const handleSave = async () => {
     if (!formName.trim() || !formNameAr.trim()) {
-      toast.error('يرجى ملء جميع الحقول المطلوبة');
+      toast.error(t.classrooms.fieldsRequired);
       return;
     }
 
@@ -206,7 +208,7 @@ export function ClassroomsView() {
           body: JSON.stringify(body),
         });
         if (!res.ok) throw new Error('Failed to update');
-        toast.success('تم تحديث القاعة بنجاح');
+        toast.success(t.classrooms.updateSuccess);
         setEditDialog({ open: false, classroom: null });
       } else {
         // Create
@@ -216,14 +218,14 @@ export function ClassroomsView() {
           body: JSON.stringify(body),
         });
         if (!res.ok) throw new Error('Failed to create');
-        toast.success('تم إضافة القاعة بنجاح');
+        toast.success(t.classrooms.addSuccess);
         setAddDialog(false);
       }
 
       resetForm();
       await fetchClassrooms();
     } catch {
-      toast.error('حدث خطأ أثناء الحفظ');
+      toast.error(t.common.saveError);
     } finally {
       setSaving(false);
     }
@@ -237,11 +239,11 @@ export function ClassroomsView() {
         method: 'DELETE',
       });
       if (!res.ok) throw new Error('Failed to delete');
-      toast.success('تم حذف القاعة بنجاح');
+      toast.success(t.classrooms.deleteSuccess);
       setDeleteDialog({ open: false, classroom: null });
       await fetchClassrooms();
     } catch {
-      toast.error('حدث خطأ أثناء الحذف');
+      toast.error(t.common.deleteError);
     } finally {
       setSaving(false);
     }
@@ -260,17 +262,17 @@ export function ClassroomsView() {
             <DoorOpen className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold">القاعات الدراسية</h2>
-            <p className="text-sm text-muted-foreground">إدارة وتنظيم القاعات المتوفرة</p>
+            <h2 className="text-2xl font-bold">{t.classrooms.title}</h2>
+            <p className="text-sm text-muted-foreground">{t.classrooms.subtitle}</p>
           </div>
         </div>
         <Button onClick={openAdd} className="gap-2">
           <Plus className="w-4 h-4" />
-          إضافة قاعة
+          {t.classrooms.addClassroom}
         </Button>
       </div>
 
-      {classrooms.length === 0 && <EmptyState />}
+      {classrooms.length === 0 && <EmptyState t={t} />}
 
       {/* Classroom Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
@@ -328,12 +330,12 @@ export function ClassroomsView() {
                   <div className={cn('rounded-lg p-3 text-center', colorSet.bg)}>
                     <Users className={cn('w-5 h-5 mx-auto mb-1', colorSet.text)} />
                     <p className="text-lg font-bold">{classroom.capacity}</p>
-                    <p className="text-xs text-muted-foreground">السعة</p>
+                    <p className="text-xs text-muted-foreground">{t.classrooms.capacity}</p>
                   </div>
                   <div className={cn('rounded-lg p-3 text-center', colorSet.bg)}>
                     <Calendar className={cn('w-5 h-5 mx-auto mb-1', colorSet.text)} />
                     <p className="text-lg font-bold">{classroom.schedules.length}</p>
-                    <p className="text-xs text-muted-foreground">عدد الحصص</p>
+                    <p className="text-xs text-muted-foreground">{t.classrooms.sessionsCount}</p>
                   </div>
                 </div>
 
@@ -342,12 +344,12 @@ export function ClassroomsView() {
                   <div className="flex items-center gap-2 mb-2">
                     <Clock className="w-4 h-4 text-muted-foreground" />
                     <p className="text-sm font-medium">
-                      حصص اليوم ({DAY_MAP[todayStr]})
+                      {t.classrooms.todaySessions} ({t.days[todayStr as keyof typeof t.days]})
                     </p>
                   </div>
                   {todaySchedules.length === 0 ? (
                     <div className="rounded-lg bg-muted/50 p-3 text-center">
-                      <p className="text-xs text-muted-foreground">لا توجد حصص مجدولة اليوم</p>
+                      <p className="text-xs text-muted-foreground">{t.classrooms.noTodaySessions}</p>
                     </div>
                   ) : (
                     <ScrollArea className="max-h-48">
@@ -397,36 +399,36 @@ export function ClassroomsView() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {editDialog.classroom ? 'تعديل القاعة' : 'إضافة قاعة جديدة'}
+              {editDialog.classroom ? t.classrooms.editClassroom : t.classrooms.addNew}
             </DialogTitle>
             <DialogDescription>
               {editDialog.classroom
-                ? 'قم بتعديل معلومات القاعة الدراسية'
-                : 'أدخل معلومات القاعة الدراسية الجديدة'}
+                ? t.classrooms.editDesc
+                : t.classrooms.addDesc}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label htmlFor="classroom-name">الاسم (بالعربية)</Label>
+              <Label htmlFor="classroom-name">{t.classrooms.nameAr}</Label>
               <Input
                 id="classroom-name"
-                placeholder="مثال: القاعة A"
+                placeholder={t.classrooms.nameArPlaceholder}
                 value={formNameAr}
                 onChange={(e) => setFormNameAr(e.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="classroom-name-fr">الاسم (بالفرنسية)</Label>
+              <Label htmlFor="classroom-name-fr">{t.classrooms.nameFr}</Label>
               <Input
                 id="classroom-name-fr"
-                placeholder="Salle A"
+                placeholder={t.classrooms.nameFrPlaceholder}
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
                 dir="ltr"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="classroom-capacity">السعة</Label>
+              <Label htmlFor="classroom-capacity">{t.classrooms.capacityLabel}</Label>
               <Input
                 id="classroom-capacity"
                 type="number"
@@ -447,10 +449,10 @@ export function ClassroomsView() {
               }}
               disabled={saving}
             >
-              إلغاء
+              {t.common.cancel}
             </Button>
             <Button onClick={handleSave} disabled={saving}>
-              {saving ? 'جاري الحفظ...' : editDialog.classroom ? 'تحديث' : 'إضافة'}
+              {saving ? t.common.saving : t.common.add}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -465,7 +467,7 @@ export function ClassroomsView() {
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-destructive" />
-              تأكيد الحذف
+              {t.common.deleteConfirm}
             </AlertDialogTitle>
             <AlertDialogDescription>
               هل أنت متأكد من حذف القاعة &quot;{deleteDialog.classroom?.nameAr}&quot;؟
@@ -477,13 +479,13 @@ export function ClassroomsView() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={saving}>إلغاء</AlertDialogCancel>
+            <AlertDialogCancel disabled={saving}>{t.common.cancel}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
               disabled={saving}
               className="bg-destructive text-white hover:bg-destructive/90"
             >
-              {saving ? 'جاري الحذف...' : 'حذف'}
+              {saving ? t.common.loading : t.common.delete}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -145,15 +145,18 @@ interface ConflictError {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const days = [
-  { value: '1', label: 'الأحد', short: 'أحد' },
-  { value: '2', label: 'الإثنين', short: 'إثنين' },
-  { value: '3', label: 'الثلاثاء', short: 'ثلاثاء' },
-  { value: '4', label: 'الأربعاء', short: 'أربعاء' },
-  { value: '5', label: 'الخميس', short: 'خميس' },
-  { value: '6', label: 'الجمعة', short: 'جمعة' },
-  { value: '7', label: 'السبت', short: 'سبت' },
-];
+// Days array - populated inside component with translations
+function getDays(t: ReturnType<typeof useT>) {
+  return [
+    { value: '1', label: t.days['1'], short: t.days.short['1'] },
+    { value: '2', label: t.days['2'], short: t.days.short['2'] },
+    { value: '3', label: t.days['3'], short: t.days.short['3'] },
+    { value: '4', label: t.days['4'], short: t.days.short['4'] },
+    { value: '5', label: t.days['5'], short: t.days.short['5'] },
+    { value: '6', label: t.days['6'], short: t.days.short['6'] },
+    { value: '7', label: t.days['7'], short: t.days.short['7'] },
+  ];
+}
 
 const SLOT_HEIGHT = 48;
 const FIRST_SLOT_MINUTES = 11 * 60; // 11:00 = 660 min

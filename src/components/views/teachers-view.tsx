@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useAppStore } from '@/store/store';
+import { useT } from '@/hooks/use-translation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -153,16 +154,6 @@ const emptyForm: TeacherFormData = {
   status: 'active',
 };
 
-const dayNames: Record<string, string> = {
-  '1': 'الأحد',
-  '2': 'الإثنين',
-  '3': 'الثلاثاء',
-  '4': 'الأربعاء',
-  '5': 'الخميس',
-  '6': 'الجمعة',
-  '7': 'السبت',
-};
-
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
 function getAvatarColor(name: string): string {
@@ -187,6 +178,7 @@ function getAvatarColor(name: string): string {
 
 export function TeachersView() {
   const { setCurrentView } = useAppStore();
+  const t = useT();
 
   // ── Data states ──
   const [teachers, setTeachers] = useState<Teacher[]>([]);
@@ -236,11 +228,11 @@ export function TeachersView() {
       const data = await res.json();
       setTeachers(data);
     } catch {
-      toast.error('فشل في تحميل قائمة الأساتذة');
+      toast.error(t.teachers.fetchError);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const fetchStudents = useCallback(async () => {
     try {
@@ -260,9 +252,9 @@ export function TeachersView() {
       const data = await res.json();
       setServices(data);
     } catch {
-      toast.error('فشل في تحميل الخدمات');
+      toast.error(t.teachers.fetchServicesError);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     fetchTeachers();
@@ -364,7 +356,7 @@ export function TeachersView() {
 
   const handleSubmit = async () => {
     if (!form.fullName.trim()) {
-      toast.error('يرجى إدخال اسم الأستاذ');
+      toast.error(t.teachers.nameRequired);
       return;
     }
     setSubmitting(true);
@@ -391,12 +383,12 @@ export function TeachersView() {
         body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error('فشل');
-      toast.success(editingTeacher ? 'تم تحديث بيانات الأستاذ بنجاح' : 'تم إضافة الأستاذ بنجاح');
+      toast.success(editingTeacher ? t.teachers.updateSuccess : t.teachers.addSuccess);
       setFormOpen(false);
       fetchTeachers();
       fetchStudents();
     } catch {
-      toast.error('حدث خطأ أثناء الحفظ');
+      toast.error(t.common.saveError);
     } finally {
       setSubmitting(false);
     }
@@ -407,13 +399,13 @@ export function TeachersView() {
     try {
       const res = await fetch(`/api/teachers/${deletingTeacher.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('فشل');
-      toast.success('تم حذف الأستاذ بنجاح');
+      toast.success(t.teachers.deleteSuccess);
       setDeleteOpen(false);
       setDeletingTeacher(null);
       fetchTeachers();
       fetchStudents();
     } catch {
-      toast.error('حدث خطأ أثناء الحذف');
+      toast.error(t.common.deleteError);
     }
   };
 
@@ -424,14 +416,14 @@ export function TeachersView() {
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-foreground">إدارة الأساتذة</h2>
+          <h2 className="text-2xl font-bold text-foreground">{t.teachers.title}</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            عرض وإدارة بيانات الأساتذة وتعيينات المواد والتلاميذ
+            {t.teachers.subtitle}
           </p>
         </div>
         <Button onClick={openCreateDialog} className="gap-2">
           <Plus className="h-4 w-4" />
-          إضافة أستاذ
+          {t.teachers.addTeacher}
         </Button>
       </div>
 
@@ -444,7 +436,7 @@ export function TeachersView() {
             </div>
             <div>
               <p className="text-2xl font-bold text-foreground">{totalTeachers}</p>
-              <p className="text-xs text-muted-foreground">إجمالي الأساتذة</p>
+              <p className="text-xs text-muted-foreground">{t.teachers.totalTeachers}</p>
             </div>
           </CardContent>
         </Card>
@@ -455,7 +447,7 @@ export function TeachersView() {
             </div>
             <div>
               <p className="text-2xl font-bold text-foreground">{activeTeachers}</p>
-              <p className="text-xs text-muted-foreground">أساتذة نشطون</p>
+              <p className="text-xs text-muted-foreground">{t.teachers.activeTeachers}</p>
             </div>
           </CardContent>
         </Card>
@@ -466,7 +458,7 @@ export function TeachersView() {
             </div>
             <div>
               <p className="text-2xl font-bold text-foreground">{totalStudents}</p>
-              <p className="text-xs text-muted-foreground">إجمالي التلاميذ</p>
+              <p className="text-xs text-muted-foreground">{t.teachers.totalStudents}</p>
             </div>
           </CardContent>
         </Card>
@@ -479,7 +471,7 @@ export function TeachersView() {
             <div className="relative flex-1 w-full sm:max-w-sm">
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="البحث بالاسم..."
+                placeholder={t.teachers.searchPlaceholder}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pr-9"
@@ -487,9 +479,9 @@ export function TeachersView() {
             </div>
             <div className="flex gap-2">
               {([
-                { value: 'all' as StatusFilter, label: 'الكل' },
-                { value: 'active' as StatusFilter, label: 'نشط' },
-                { value: 'inactive' as StatusFilter, label: 'غير نشط' },
+                { value: 'all' as StatusFilter, label: t.common.all },
+                { value: 'active' as StatusFilter, label: t.common.active },
+                { value: 'inactive' as StatusFilter, label: t.common.inactive },
               ]).map((tab) => (
                 <Button
                   key={tab.value}
@@ -539,11 +531,11 @@ export function TeachersView() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <GraduationCap className="h-16 w-16 text-muted-foreground/30 mb-4" />
-            <p className="text-lg font-medium text-muted-foreground">لا يوجد أساتذة</p>
+            <p className="text-lg font-medium text-muted-foreground">{t.teachers.noTeachers}</p>
             <p className="text-sm text-muted-foreground mt-1">
               {search || statusFilter !== 'all'
-                ? 'لا توجد نتائج مطابقة لمعايير البحث'
-                : 'ابدأ بإضافة أستاذ جديد'}
+                ? t.common.noResults
+                : t.teachers.startAdding}
             </p>
           </CardContent>
         </Card>
@@ -583,7 +575,7 @@ export function TeachersView() {
                                 : 'bg-gray-100 text-gray-500 border-gray-200 hover:bg-gray-100'
                             )}
                           >
-                            {teacher.status === 'active' ? 'نشط' : 'غير نشط'}
+                            {teacher.status === 'active' ? t.common.active : t.common.inactive}
                           </Badge>
                         </div>
                       </div>
@@ -614,7 +606,7 @@ export function TeachersView() {
                     )}
                     <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
                       <BookOpen className="h-3 w-3 shrink-0 text-primary" />
-                      <span>{teacher.subjects.length} مادة</span>
+                      <span>{teacher.subjects.length} {t.teachers.subjectLabel}</span>
                     </div>
                   </div>
 
@@ -628,7 +620,7 @@ export function TeachersView() {
                     )}
                   >
                     <Users className="h-4 w-4" />
-                    <span>عدد التلاميذ: {studentCount}</span>
+                    <span>{t.teachers.studentCount}: {studentCount}</span>
                   </div>
 
                   {/* Subject Badges */}
@@ -665,7 +657,7 @@ export function TeachersView() {
                       }}
                     >
                       <Eye className="h-3.5 w-3.5" />
-                      التفاصيل
+                      {t.common.details}
                     </Button>
                     <Button
                       variant="ghost"
@@ -677,7 +669,7 @@ export function TeachersView() {
                       }}
                     >
                       <Pencil className="h-3.5 w-3.5" />
-                      تعديل
+                      {t.common.edit}
                     </Button>
                     <Button
                       variant="ghost"
@@ -706,12 +698,12 @@ export function TeachersView() {
         <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
           <DialogHeader className="px-6 pt-6 pb-2">
             <DialogTitle>
-              {editingTeacher ? 'تعديل بيانات الأستاذ' : 'إضافة أستاذ جديد'}
+              {editingTeacher ? t.teachers.editTeacher : t.teachers.addNew}
             </DialogTitle>
             <DialogDescription>
               {editingTeacher
-                ? 'قم بتعديل بيانات الأستاذ وتعيينات المواد'
-                : 'أدخل بيانات الأستاذ الجديد وقم بتعيين المواد'}
+                ? t.teachers.editDesc
+                : t.teachers.addDesc}
             </DialogDescription>
           </DialogHeader>
 
@@ -721,48 +713,48 @@ export function TeachersView() {
               <div>
                 <h4 className="text-sm font-semibold flex items-center gap-2 mb-3">
                   <UserCheck className="h-4 w-4 text-primary" />
-                  المعلومات الشخصية
+                  {t.teachers.personalInfo}
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="sm:col-span-2">
-                    <Label htmlFor="fullName">الاسم الكامل *</Label>
+                    <Label htmlFor="fullName">{t.teachers.fullName}</Label>
                     <Input
                       id="fullName"
                       value={form.fullName}
                       onChange={(e) => setForm({ ...form, fullName: e.target.value })}
-                      placeholder="أدخل الاسم الكامل"
+                      placeholder={t.teachers.fullNamePlaceholder}
                     />
                   </div>
                   <div>
-                    <Label htmlFor="phone">الهاتف</Label>
+                    <Label htmlFor="phone">{t.common.phone}</Label>
                     <Input
                       id="phone"
                       value={form.phone}
                       onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                      placeholder="رقم الهاتف"
+                      placeholder={t.students.phonePlaceholder}
                       dir="ltr"
                       className="text-left"
                     />
                   </div>
                   <div>
-                    <Label htmlFor="email">البريد الإلكتروني</Label>
+                    <Label htmlFor="email">{t.common.name}</Label>
                     <Input
                       id="email"
                       type="email"
                       value={form.email}
                       onChange={(e) => setForm({ ...form, email: e.target.value })}
-                      placeholder="البريد الإلكتروني"
+                      placeholder={t.common.name}
                       dir="ltr"
                       className="text-left"
                     />
                   </div>
                   <div className="sm:col-span-2">
-                    <Label htmlFor="address">العنوان</Label>
+                    <Label htmlFor="address">{t.common.address}</Label>
                     <Input
                       id="address"
                       value={form.address}
                       onChange={(e) => setForm({ ...form, address: e.target.value })}
-                      placeholder="العنوان"
+                      placeholder={t.common.address}
                     />
                   </div>
                 </div>
@@ -774,11 +766,11 @@ export function TeachersView() {
               <div>
                 <h4 className="text-sm font-semibold flex items-center gap-2 mb-3">
                   <Wallet className="h-4 w-4 text-amber-500" />
-                  المعلومات المالية
+                  {t.teachers.financialInfo}
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="salary">الراتب (درهم)</Label>
+                    <Label htmlFor="salary">{t.teachers.salary}</Label>
                     <Input
                       id="salary"
                       type="number"
@@ -790,7 +782,7 @@ export function TeachersView() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="percentage">النسبة المئوية %</Label>
+                    <Label htmlFor="percentage">{t.teachers.percentage}</Label>
                     <Input
                       id="percentage"
                       type="number"
@@ -812,7 +804,7 @@ export function TeachersView() {
               {/* Status & Notes */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <Label>الحالة</Label>
+                  <Label>{t.common.status}</Label>
                   <Select
                     value={form.status}
                     onValueChange={(val: 'active' | 'inactive') =>
@@ -823,18 +815,18 @@ export function TeachersView() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="active">نشط</SelectItem>
-                      <SelectItem value="inactive">غير نشط</SelectItem>
+                      <SelectItem value="active">{t.common.active}</SelectItem>
+                      <SelectItem value="inactive">{t.common.inactive}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor="notes">ملاحظات</Label>
+                  <Label htmlFor="notes">{t.common.notes}</Label>
                   <Textarea
                     id="notes"
                     value={form.notes}
                     onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                    placeholder="ملاحظات إضافية..."
+                    placeholder={t.teachers.notesPlaceholder}
                     rows={2}
                   />
                 </div>
@@ -846,15 +838,15 @@ export function TeachersView() {
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <BookOpen className="h-4 w-4 text-primary" />
-                  <Label className="text-base font-semibold">تعيين المواد</Label>
+                  <Label className="text-base font-semibold">{t.teachers.subjectAssignment}</Label>
                 </div>
                 <p className="text-sm text-muted-foreground mb-3">
-                  اختر المواد التي يدرسها هذا الأستاذ
+                  {t.teachers.assignDesc}
                 </p>
 
                 {services.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-4">
-                    لا توجد خدمات متاحة. قم بإضافة خدمات أولاً.
+                    {t.teachers.noServices}
                   </p>
                 ) : (
                   <div className="space-y-2 max-h-72 overflow-y-auto rounded-lg border p-3">
@@ -885,12 +877,12 @@ export function TeachersView() {
                               </span>
                               {serviceHasAssigned && (
                                 <Badge className="bg-primary text-primary-foreground text-[10px] px-1.5 py-0">
-                                  {assignedCount} مُعين
+                                  {assignedCount} {t.teachers.assigned}
                                 </Badge>
                               )}
                             </div>
                             <span className="text-xs text-muted-foreground">
-                              {service.subjects.length} مادة
+                              {service.subjects.length} {t.teachers.subjectLabel}
                             </span>
                           </button>
 
@@ -916,7 +908,7 @@ export function TeachersView() {
 
                                     {assigned && subject.levels.length > 0 && (
                                       <div className="mt-2 mr-6 space-y-1.5">
-                                        <p className="text-xs text-muted-foreground">المستويات:</p>
+                                        <p className="text-xs text-muted-foreground">{t.teachers.levelsLabel}</p>
                                         <div className="flex flex-wrap gap-1.5">
                                           {subject.levels.map((level) => {
                                             const isChecked = assignedLevels.includes(level.id);
@@ -960,14 +952,14 @@ export function TeachersView() {
 
           <DialogFooter className="px-6 py-4 border-t shrink-0">
             <Button variant="outline" onClick={() => setFormOpen(false)} disabled={submitting}>
-              إلغاء
+              {t.common.cancel}
             </Button>
             <Button onClick={handleSubmit} disabled={submitting}>
               {submitting
-                ? 'جاري الحفظ...'
+                ? t.common.saving
                 : editingTeacher
-                  ? 'تحديث البيانات'
-                  : 'إضافة الأستاذ'}
+                  ? t.common.saveChanges
+                  : t.teachers.addTeacher}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -979,19 +971,18 @@ export function TeachersView() {
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>تأكيد الحذف</AlertDialogTitle>
+            <AlertDialogTitle>{t.common.deleteConfirm}</AlertDialogTitle>
             <AlertDialogDescription>
-              هل أنت متأكد من حذف الأستاذ &quot;{deletingTeacher?.fullName}&quot;؟ لا يمكن
-              التراجع عن هذا الإجراء.
+              {t.teachers.deleteConfirmMsg} &quot;{deletingTeacher?.fullName}&quot;? {t.common.cannotUndo}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
               className="bg-destructive text-white hover:bg-destructive/90"
             >
-              حذف
+              {t.common.delete}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1017,7 +1008,7 @@ export function TeachersView() {
                       : 'bg-gray-100 text-gray-500 border-gray-200 hover:bg-gray-100'
                   )}
                 >
-                  {detailTeacher?.status === 'active' ? 'نشط' : 'غير نشط'}
+                  {detailTeacher?.status === 'active' ? t.common.active : t.common.inactive}
                 </Badge>
               </div>
             </DialogTitle>
@@ -1030,7 +1021,7 @@ export function TeachersView() {
                 <div className="space-y-2.5">
                   <h4 className="font-semibold text-sm flex items-center gap-2">
                     <UserCheck className="h-4 w-4 text-primary" />
-                    معلومات الاتصال
+                    {t.teachers.personalInfo}
                   </h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 rounded-lg border p-3 bg-muted/20">
                     {detailTeacher.phone && (
@@ -1060,18 +1051,18 @@ export function TeachersView() {
                 <div className="space-y-2.5">
                   <h4 className="font-semibold text-sm flex items-center gap-2">
                     <Wallet className="h-4 w-4 text-amber-500" />
-                    المعلومات المالية
+                    {t.teachers.financialInfo}
                   </h4>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="rounded-lg border p-3 text-center">
-                      <p className="text-xs text-muted-foreground mb-1">الراتب</p>
+                      <p className="text-xs text-muted-foreground mb-1">{t.teachers.salary.split(' (')[0]}</p>
                       <p className="font-bold text-lg">
                         {detailTeacher.salary || 0}{' '}
-                        <span className="text-xs font-normal text-muted-foreground">درهم</span>
+                        <span className="text-xs font-normal text-muted-foreground">{t.common.dh}</span>
                       </p>
                     </div>
                     <div className="rounded-lg border p-3 text-center">
-                      <p className="text-xs text-muted-foreground mb-1">النسبة المئوية</p>
+                      <p className="text-xs text-muted-foreground mb-1">{t.teachers.percentage.split(' %')[0]}</p>
                       <p className="font-bold text-lg text-primary">
                         {detailTeacher.percentage || 0}%
                       </p>
@@ -1085,7 +1076,7 @@ export function TeachersView() {
                 <div className="space-y-2.5">
                   <h4 className="font-semibold text-sm flex items-center gap-2">
                     <Users className="h-4 w-4 text-emerald-600" />
-                    التلاميذ المعينون (
+                    {t.teachers.studentCount} (
                     {studentCountsMap.get(detailTeacher.id) || 0})
                   </h4>
                   {(() => {
@@ -1093,7 +1084,7 @@ export function TeachersView() {
                     if (teacherStudents.length === 0) {
                       return (
                         <p className="text-sm text-muted-foreground text-center py-3 border rounded-lg">
-                          لا يوجد تلاميذ معينون لهذا الأستاذ
+                          {t.common.noData}
                         </p>
                       );
                     }
@@ -1143,11 +1134,11 @@ export function TeachersView() {
                 <div className="space-y-2.5">
                   <h4 className="font-semibold text-sm flex items-center gap-2">
                     <BookOpen className="h-4 w-4 text-primary" />
-                    المواد المعينة ({detailTeacher.subjects.length})
+                    {t.teachers.subjectAssignment} ({detailTeacher.subjects.length})
                   </h4>
                   {detailTeacher.subjects.length === 0 ? (
                     <p className="text-sm text-muted-foreground text-center py-3 border rounded-lg">
-                      لا توجد مواد معينة
+                      {t.teachers.noServicesAvailable}
                     </p>
                   ) : (
                     <div className="space-y-2">
@@ -1181,11 +1172,11 @@ export function TeachersView() {
                 <div className="space-y-2.5">
                   <h4 className="font-semibold text-sm flex items-center gap-2">
                     <CalendarDays className="h-4 w-4 text-primary" />
-                    جدول الحصص ({detailTeacher.schedules?.length || 0})
+                    {t.schedule.title} ({detailTeacher.schedules?.length || 0})
                   </h4>
                   {!detailTeacher.schedules || detailTeacher.schedules.length === 0 ? (
                     <p className="text-sm text-muted-foreground text-center py-3 border rounded-lg">
-                      لا توجد حصص مبرمجة
+                      {t.common.noData}
                     </p>
                   ) : (
                     <div className="space-y-2">
@@ -1197,7 +1188,7 @@ export function TeachersView() {
                           <div className="flex items-center gap-1.5 text-sm">
                             <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
                             <span className="font-medium">
-                              {dayNames[sched.dayOfWeek] || sched.dayOfWeek}
+                              {t.days[String(sched.dayOfWeek) as keyof typeof t.days] || sched.dayOfWeek}
                             </span>
                           </div>
                           <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -1233,11 +1224,11 @@ export function TeachersView() {
                 <div className="space-y-2.5">
                   <h4 className="font-semibold text-sm flex items-center gap-2">
                     <Wallet className="h-4 w-4 text-amber-500" />
-                    سجل المدفوعات ({detailTeacher.payments?.length || 0})
+                    {t.common.noData} ({detailTeacher.payments?.length || 0})
                   </h4>
                   {!detailTeacher.payments || detailTeacher.payments.length === 0 ? (
                     <p className="text-sm text-muted-foreground text-center py-3 border rounded-lg">
-                      لا توجد مدفوعات
+                      {t.common.noData}
                     </p>
                   ) : (
                     <div className="max-h-48 overflow-y-auto space-y-2">
@@ -1249,7 +1240,7 @@ export function TeachersView() {
                           <div className="flex items-center gap-2 text-sm">
                             <Wallet className="h-3.5 w-3.5 text-muted-foreground" />
                             <span className="font-medium">
-                              {pay.amount || 0} درهم
+                              {pay.amount || 0} {t.common.dh}
                             </span>
                           </div>
                           <div className="text-xs text-muted-foreground">
@@ -1273,7 +1264,7 @@ export function TeachersView() {
                   <>
                     <Separator />
                     <div className="space-y-2.5">
-                      <h4 className="font-semibold text-sm">ملاحظات</h4>
+                      <h4 className="font-semibold text-sm">{t.common.notes}</h4>
                       <p className="text-sm text-muted-foreground border rounded-lg p-3 whitespace-pre-wrap">
                         {detailTeacher.notes}
                       </p>

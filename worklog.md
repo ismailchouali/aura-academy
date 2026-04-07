@@ -355,3 +355,70 @@ Stage Summary:
 - Dashboard shows income analysis per month
 - New registrations and recent payments visible
 - Language toggle button added in header
+
+---
+Task ID: 2 (Rewrite)
+Agent: Students Wizard Restoration
+Task: Restore full student registration wizard flow in students-view.tsx
+
+Work Log:
+- Read translations.ts to understand all available i18n keys (students.*, common.*, services.*, days.*, months.*)
+- Read current broken students-view.tsx (simple form without wizard)
+- Read API routes: /api/students (GET/POST), /api/students/[id] (GET/PUT/DELETE), /api/services, /api/teachers
+- Read worklog.md for format and project context
+- Read use-translation.ts hook to understand `useT()` usage
+- Checked available shadcn/ui components (Dialog, Card, Badge, Switch, Tabs, Table, etc.)
+
+### Work Summary
+
+Complete rewrite of `/src/components/views/students-view.tsx` restoring the 5-step registration wizard:
+
+**Wizard Steps:**
+1. **Step 1 - Service:** 4 large clickable cards fetched from /api/services with icon (GraduationCap, BookOpen, Sparkles, Layers) and subject count badge. Teal-themed selection with ring highlight. Auto-advances to Step 2.
+2. **Step 2 - Subject:** Grid of subject cards (2-3 columns) filtered by selected service. Amber-themed selection. Shows level count per subject. Back button to return to Step 1. Auto-advances to Step 3.
+3. **Step 3 - Level:** Grid of level cards (2-3 columns) filtered by selected subject. Teal-themed selection. Back button to return to Step 2. Auto-advances to Step 4.
+4. **Step 4 - Teacher:** List of teachers filtered by selected subject (active only). Each shows avatar (color-hashed), name, phone, and student count badge (computed from students list). Includes "بدون أستاذ" (UserMinus icon, violet-themed) option and "تخطي" skip button. Back button to return to Step 3. Auto-advances to Step 5 on selection.
+5. **Step 5 - Personal Info:** Summary badges bar showing selected path (service → subject → level → teacher/without teacher). Edit button to go back to Step 4/3. Form fields: fullName (required), phone, parentName, parentPhone, monthlyFee.
+
+**Step Indicator:**
+- Horizontal progress bar at top with 5 steps (icon + label)
+- Completed steps highlighted in teal, clickable to go back
+- Current step has shadow and white icon
+- Connector lines between steps (teal for completed, gray for pending)
+- Hidden in edit mode (opens directly to Step 5)
+
+**Edit Mode:**
+- Opens dialog directly to Step 5 with pre-filled form data
+- Pre-selects service, subject, level from student.level → subject → service chain
+- Pre-selects teacher if teacherId exists, otherwise sets noTeacher flag
+- Delete button available in footer
+
+**Translation System:**
+- All text uses `t.students.*`, `t.common.*`, `t.services.*` keys
+- No hardcoded Arabic text anywhere in the component
+
+**Table:**
+- Columns: Name (avatar + parent), Level (subject — level), Teacher (avatar + name), Phone, Monthly Fee (amber badge), Status (switch + badge), Enrollment Date, Actions (edit/delete)
+- Status toggle with toast notifications
+- Search + filter tabs (الكل/نشط/غير نشط)
+- Responsive: columns hidden on smaller screens (md:, lg:)
+- Student count header with Users icon
+- Empty state and loading skeleton states
+
+**Dialog:**
+- max-h-[90vh] with flex column layout
+- Scrollable body (overflow-y-auto), sticky header and footer
+- Footer with back/skip on left, cancel/save on right
+- Delete confirmation in edit mode
+
+**Data Flow:**
+- On mount: fetches students (with search/status params), services, teachers
+- Student count per teacher computed via useMemo
+- POST/PUT sends: fullName, phone, parentName, parentPhone, monthlyFee, levelId, teacherId, status, enrollmentDate
+- TeacherId sent as null when "بدون أستاذ" selected
+
+**Quality:**
+- ESLint passes with 0 errors, 0 warnings
+- ~650 lines of clean TypeScript code
+- All shadcn/ui components used (no custom implementations)
+- Proper typing for all interfaces (Student, Service, Subject, Level, Teacher, FormState)

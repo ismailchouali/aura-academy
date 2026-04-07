@@ -12,6 +12,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useT } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -97,11 +98,11 @@ const DAY_MAP: Record<string, string> = {
   '7': 'السبت',
 };
 
-function StatsCards({ services, subjects, levels }: { services: number; subjects: number; levels: number }) {
+function StatsCards({ services, subjects, levels, t }: { services: number; subjects: number; levels: number; t: ReturnType<typeof useT> }) {
   const stats = [
-    { label: 'الخدمات', value: services, icon: Layers, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { label: 'المواد', value: subjects, icon: BookOpen, color: 'text-violet-600', bg: 'bg-violet-50' },
-    { label: 'المستويات', value: levels, icon: Sparkles, color: 'text-amber-600', bg: 'bg-amber-50' },
+    { label: t.services.servicesLabel, value: services, icon: Layers, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    { label: t.services.subjectsLabel, value: subjects, icon: BookOpen, color: 'text-violet-600', bg: 'bg-violet-50' },
+    { label: t.services.levelsLabel, value: levels, icon: Sparkles, color: 'text-amber-600', bg: 'bg-amber-50' },
   ];
 
   return (
@@ -164,16 +165,16 @@ function LoadingSkeleton() {
   );
 }
 
-function EmptyState() {
+function EmptyState({ t }: { t: ReturnType<typeof useT> }) {
   return (
     <Card className="border-0 shadow-sm">
       <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
         <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
           <Layers className="w-8 h-8 text-muted-foreground" />
         </div>
-        <h3 className="text-lg font-semibold">لا توجد خدمات حالياً</h3>
+        <h3 className="text-lg font-semibold">{t.services.noServices}</h3>
         <p className="text-muted-foreground text-center max-w-sm">
-          لم يتم إضافة أي خدمات بعد. يرجى التواصل مع المدير لإضافة الخدمات.
+          {t.services.noServicesDesc}
         </p>
       </CardContent>
     </Card>
@@ -181,6 +182,7 @@ function EmptyState() {
 }
 
 export function ServicesView() {
+  const t = useT();
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -192,7 +194,7 @@ export function ServicesView() {
         const data = await res.json();
         setServices(data);
       } catch {
-        toast.error('فشل في تحميل الخدمات');
+        toast.error(t.services.fetchError);
       } finally {
         setLoading(false);
       }
@@ -208,7 +210,7 @@ export function ServicesView() {
 
   if (loading) return <LoadingSkeleton />;
 
-  if (services.length === 0) return <EmptyState />;
+  if (services.length === 0) return <EmptyState t={t} />;
 
   return (
     <div className="space-y-6">
@@ -218,13 +220,13 @@ export function ServicesView() {
           <Layers className="w-5 h-5 text-white" />
         </div>
         <div>
-          <h2 className="text-2xl font-bold">دليل الخدمات</h2>
-          <p className="text-sm text-muted-foreground">استعرض جميع الخدمات والمواد الدراسية المتوفرة</p>
+          <h2 className="text-2xl font-bold">{t.services.title}</h2>
+          <p className="text-sm text-muted-foreground">{t.services.subtitle}</p>
         </div>
       </div>
 
       {/* Stats */}
-      <StatsCards services={services.length} subjects={totalSubjects} levels={totalLevels} />
+      <StatsCards services={services.length} subjects={totalSubjects} levels={totalLevels} t={t} />
 
       {/* Services Accordion */}
       <Accordion type="multiple" className="space-y-3">
@@ -253,7 +255,7 @@ export function ServicesView() {
                     <p className="text-sm text-muted-foreground">{service.nameFr}</p>
                   </div>
                   <Badge variant="secondary" className="mr-auto text-xs">
-                    {service.subjects.length} {service.subjects.length === 1 ? 'مادة' : 'مواد'}
+                    {service.subjects.length} {service.subjects.length === 1 ? t.services.subject : t.services.subjects}
                   </Badge>
                 </div>
               </AccordionTrigger>

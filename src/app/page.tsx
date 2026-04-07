@@ -3,6 +3,7 @@
 import { useAppStore, ViewType } from '@/store/store';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
+import { useT } from '@/hooks/use-translation';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
@@ -32,19 +33,46 @@ import { ServicesView } from '@/components/views/services-view';
 import { ClassroomsView } from '@/components/views/classrooms-view';
 import { SettingsView } from '@/components/views/settings-view';
 
-const navItems: { id: ViewType; label: string; icon: React.ReactNode }[] = [
-  { id: 'dashboard', label: 'لوحة التحكم', icon: <LayoutDashboard className="h-5 w-5" /> },
-  { id: 'students', label: 'التلاميذ', icon: <Users className="h-5 w-5" /> },
-  { id: 'teachers', label: 'الأساتذة', icon: <GraduationCap className="h-5 w-5" /> },
-  { id: 'payments', label: 'أقساط التلاميذ', icon: <Receipt className="h-5 w-5" /> },
-  { id: 'teacher-payments', label: 'مداخيل الأساتذة', icon: <Wallet className="h-5 w-5" /> },
-  { id: 'schedule', label: 'جدول الحصص', icon: <CalendarDays className="h-5 w-5" /> },
-  { id: 'services', label: 'الخدمات', icon: <BookOpen className="h-5 w-5" /> },
-  { id: 'classrooms', label: 'القاعات', icon: <DoorOpen className="h-5 w-5" /> },
-  { id: 'settings', label: 'الإعدادات', icon: <Settings className="h-5 w-5" /> },
+const navIcons: Record<ViewType, React.ReactNode> = {
+  dashboard: <LayoutDashboard className="h-5 w-5" />,
+  students: <Users className="h-5 w-5" />,
+  teachers: <GraduationCap className="h-5 w-5" />,
+  payments: <Receipt className="h-5 w-5" />,
+  'teacher-payments': <Wallet className="h-5 w-5" />,
+  schedule: <CalendarDays className="h-5 w-5" />,
+  services: <BookOpen className="h-5 w-5" />,
+  classrooms: <DoorOpen className="h-5 w-5" />,
+  settings: <Settings className="h-5 w-5" />,
+};
+
+const navKeys: ViewType[] = [
+  'dashboard', 'students', 'teachers', 'payments',
+  'teacher-payments', 'schedule', 'services', 'classrooms', 'settings',
 ];
 
+function getNavLabel(t: ReturnType<typeof useT>, id: ViewType): string {
+  const map: Record<ViewType, string> = {
+    dashboard: t.nav.dashboard,
+    students: t.nav.students,
+    teachers: t.nav.teachers,
+    payments: t.nav.payments,
+    'teacher-payments': t.nav.teacherPayments,
+    schedule: t.nav.schedule,
+    services: t.nav.services,
+    classrooms: t.nav.classrooms,
+    settings: t.nav.settings,
+  };
+  return map[id] || id;
+}
+
+function getNavDesc(t: ReturnType<typeof useT>, id: ViewType): string {
+  if (id === 'dashboard') return t.nav.dashboardDesc;
+  return `${t.nav.manageDashboard.replace(t.nav.dashboard, '')} ${getNavLabel(t, id)}`;
+}
+
 function SidebarContent({ currentView, onNavigate, onMobileClose }: { currentView: ViewType; onNavigate: (v: ViewType) => void; onMobileClose?: () => void }) {
+  const t = useT();
+
   return (
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground">
       {/* Logo */}
@@ -55,7 +83,7 @@ function SidebarContent({ currentView, onNavigate, onMobileClose }: { currentVie
           </div>
           <div>
             <h1 className="font-bold text-lg leading-tight">Aura Academy</h1>
-            <p className="text-xs text-sidebar-foreground/70">نظام إدارة المركز</p>
+            <p className="text-xs text-sidebar-foreground/70">{t.sidebar.systemName}</p>
           </div>
         </div>
       </div>
@@ -65,23 +93,23 @@ function SidebarContent({ currentView, onNavigate, onMobileClose }: { currentVie
       {/* Navigation */}
       <ScrollArea className="flex-1 py-3 px-2">
         <nav className="space-y-1">
-          {navItems.map((item) => (
+          {navKeys.map((id) => (
             <Button
-              key={item.id}
+              key={id}
               variant="ghost"
               onClick={() => {
-                onNavigate(item.id);
+                onNavigate(id);
                 onMobileClose?.();
               }}
               className={cn(
                 'w-full justify-start gap-3 h-11 px-3 font-medium transition-all duration-200',
-                currentView === item.id
+                currentView === id
                   ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-md hover:bg-sidebar-primary/90'
                   : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
               )}
             >
-              {item.icon}
-              <span>{item.label}</span>
+              {navIcons[id]}
+              <span>{getNavLabel(t, id)}</span>
             </Button>
           ))}
         </nav>
@@ -121,8 +149,9 @@ function LanguageToggle() {
 }
 
 export default function Home() {
-  const { currentView, setCurrentView } = useAppStore();
+  const { currentView, setCurrentView, lang } = useAppStore();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const t = useT();
 
   const renderView = () => {
     switch (currentView) {
@@ -139,8 +168,11 @@ export default function Home() {
     }
   };
 
+  // RTL/LTR direction based on language
+  const dir = lang === 'ar' ? 'rtl' : 'ltr';
+
   return (
-    <div className="flex h-screen overflow-hidden bg-bg-main">
+    <div className="flex h-screen overflow-hidden bg-bg-main" dir={dir}>
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex w-64 shrink-0 shadow-xl">
         <SidebarContent currentView={currentView} onNavigate={setCurrentView} />
@@ -156,8 +188,8 @@ export default function Home() {
                 <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-64 p-0">
-              <SheetTitle className="sr-only">القائمة الجانبية</SheetTitle>
+            <SheetContent side={lang === 'ar' ? 'right' : 'left'} className="w-64 p-0">
+              <SheetTitle className="sr-only">{t.sidebar.menuTitle}</SheetTitle>
               <SidebarContent
                 currentView={currentView}
                 onNavigate={setCurrentView}
@@ -175,10 +207,10 @@ export default function Home() {
         <header className="hidden lg:flex items-center justify-between px-6 py-3 bg-white border-b">
           <div>
             <h2 className="text-lg font-bold text-foreground">
-              {navItems.find((n) => n.id === currentView)?.label || 'لوحة التحكم'}
+              {getNavLabel(t, currentView)}
             </h2>
             <p className="text-xs text-muted-foreground">
-              {currentView === 'dashboard' ? 'نظرة عامة على المركز' : `إدارة ${navItems.find((n) => n.id === currentView)?.label || ''}`}
+              {getNavDesc(t, currentView)}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -186,7 +218,7 @@ export default function Home() {
             <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
               م
             </div>
-            <span className="text-sm font-medium text-foreground">المدير</span>
+            <span className="text-sm font-medium text-foreground">{t.sidebar.admin}</span>
           </div>
         </header>
 

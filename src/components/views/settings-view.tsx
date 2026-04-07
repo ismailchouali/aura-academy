@@ -14,6 +14,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useT } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -43,57 +44,47 @@ const DEFAULT_SETTINGS: SettingsData = {
   currency: 'MAD',
 };
 
-const FORM_FIELDS = [
-  {
-    key: 'center_name',
-    label: 'اسم المركز',
-    placeholder: 'Aura Academy',
-    icon: Building2,
-    dir: 'rtl' as const,
-  },
-  {
-    key: 'center_phone',
-    label: 'رقم الهاتف',
-    placeholder: '0606030356',
-    icon: Phone,
-    dir: 'ltr' as const,
-  },
-  {
-    key: 'center_address',
-    label: 'العنوان',
-    placeholder: 'بني ملال، شارع محمد الخامس...',
-    icon: MapPin,
-    dir: 'rtl' as const,
-  },
-  {
-    key: 'center_open_time',
-    label: 'ساعة الافتتاح',
-    placeholder: '11:00',
-    icon: Clock,
-    dir: 'ltr' as const,
-  },
-  {
-    key: 'center_close_time',
-    label: 'ساعة الإغلاق',
-    placeholder: '22:30',
-    icon: Clock,
-    dir: 'ltr' as const,
-  },
-  {
-    key: 'center_open_days',
-    label: 'أيام العمل',
-    placeholder: 'الأحد - الجمعة',
-    icon: CalendarDays,
-    dir: 'rtl' as const,
-  },
-  {
-    key: 'currency',
-    label: 'العملة',
-    placeholder: 'MAD',
-    icon: Coins,
-    dir: 'ltr' as const,
-  },
-];
+const FORM_FIELD_KEYS = ['center_name', 'center_phone', 'center_address', 'center_open_time', 'center_close_time', 'center_open_days', 'currency'] as const;
+
+const SETTINGS_LABEL_MAP: Record<string, string> = {
+  center_name: 'centerName',
+  center_phone: 'centerPhone',
+  center_address: 'centerAddress',
+  center_open_time: 'openTime',
+  center_close_time: 'closeTime',
+  center_open_days: 'openDays',
+  currency: 'currency',
+};
+
+const FORM_FIELD_ICONS: Record<string, React.ElementType> = {
+  center_name: Building2,
+  center_phone: Phone,
+  center_address: MapPin,
+  center_open_time: Clock,
+  center_close_time: Clock,
+  center_open_days: CalendarDays,
+  currency: Coins,
+};
+
+const FORM_FIELD_DIRS: Record<string, 'rtl' | 'ltr'> = {
+  center_name: 'rtl',
+  center_phone: 'ltr',
+  center_address: 'rtl',
+  center_open_time: 'ltr',
+  center_close_time: 'ltr',
+  center_open_days: 'rtl',
+  currency: 'ltr',
+};
+
+const FORM_FIELD_PLACEHOLDERS: Record<string, string> = {
+  center_name: 'Aura Academy',
+  center_phone: '0606030356',
+  center_address: 'بني ملال، شارع محمد الخامس...',
+  center_open_time: '11:00',
+  center_close_time: '22:30',
+  center_open_days: 'الأحد - الجمعة',
+  currency: 'MAD',
+};
 
 function LoadingSkeleton() {
   return (
@@ -120,6 +111,7 @@ function LoadingSkeleton() {
 }
 
 export function SettingsView() {
+  const t = useT();
   const [settings, setSettings] = useState<SettingsData>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -138,7 +130,7 @@ export function SettingsView() {
       }
       setSettings(merged);
     } catch {
-      toast.error('فشل في تحميل الإعدادات');
+      toast.error(t.settings.fetchError);
     } finally {
       setLoading(false);
     }
@@ -162,10 +154,10 @@ export function SettingsView() {
         body: JSON.stringify(settings),
       });
       if (!res.ok) throw new Error('Failed to save');
-      toast.success('تم حفظ الإعدادات بنجاح');
+      toast.success(t.settings.saveSuccess);
       setHasChanges(false);
     } catch {
-      toast.error('حدث خطأ أثناء حفظ الإعدادات');
+      toast.error(t.settings.saveError);
     } finally {
       setSaving(false);
     }
@@ -181,8 +173,8 @@ export function SettingsView() {
           <Settings className="w-5 h-5 text-white" />
         </div>
         <div>
-          <h2 className="text-2xl font-bold">إعدادات المركز</h2>
-          <p className="text-sm text-muted-foreground">إدارة المعلومات الأساسية للمركز</p>
+          <h2 className="text-2xl font-bold">{t.settings.title}</h2>
+          <p className="text-sm text-muted-foreground">{t.settings.subtitle}</p>
         </div>
       </div>
 
@@ -214,28 +206,30 @@ export function SettingsView() {
       {/* Settings Form */}
       <Card className="border-0 shadow-sm">
         <CardHeader className="pb-2">
-          <CardTitle className="text-lg">المعلومات الأساسية</CardTitle>
+          <CardTitle className="text-lg">{t.settings.basicInfo}</CardTitle>
         </CardHeader>
         <CardContent className="pt-4 space-y-5">
-          {FORM_FIELDS.map((field, index) => {
-            const Icon = field.icon;
+          {FORM_FIELD_KEYS.map((key, index) => {
+            const Icon = FORM_FIELD_ICONS[key];
+            const labelKey = SETTINGS_LABEL_MAP[key] || key;
+            const label = (t.settings as Record<string, string>)[labelKey] || key;
             return (
-              <div key={field.key} className="space-y-2">
+              <div key={key} className="space-y-2">
                 <div className="flex items-center gap-2">
                   <Icon className="w-4 h-4 text-muted-foreground" />
-                  <Label htmlFor={field.key}>{field.label}</Label>
+                  <Label htmlFor={key}>{label}</Label>
                 </div>
                 <Input
-                  id={field.key}
-                  value={settings[field.key] || ''}
-                  onChange={(e) => handleChange(field.key, e.target.value)}
-                  placeholder={field.placeholder}
-                  dir={field.dir}
+                  id={key}
+                  value={settings[key] || ''}
+                  onChange={(e) => handleChange(key, e.target.value)}
+                  placeholder={FORM_FIELD_PLACEHOLDERS[key]}
+                  dir={FORM_FIELD_DIRS[key]}
                   className={cn(
-                    field.key === 'center_address' && 'text-sm'
+                    key === 'center_address' && 'text-sm'
                   )}
                 />
-                {index < FORM_FIELDS.length - 1 && <Separator className="mt-5" />}
+                {index < FORM_FIELD_KEYS.length - 1 && <Separator className="mt-5" />}
               </div>
             );
           })}
@@ -245,7 +239,7 @@ export function SettingsView() {
       {/* Save Button */}
       <div className="flex justify-end gap-3">
         {!hasChanges && (
-          <p className="text-sm text-muted-foreground self-center">لا توجد تغييرات</p>
+          <p className="text-sm text-muted-foreground self-center">{t.common.noChanges}</p>
         )}
         <Button
           onClick={handleSave}
@@ -255,12 +249,12 @@ export function SettingsView() {
           {saving ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
-              جاري الحفظ...
+              {t.common.saving}
             </>
           ) : (
             <>
               <Save className="w-4 h-4" />
-              حفظ الإعدادات
+              {t.settings.saveSettings}
             </>
           )}
         </Button>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -62,33 +62,7 @@ import {
   X,
   ChevronDown,
 } from 'lucide-react';
-
-// ── Constants ──────────────────────────────────────────────────────────────
-
-const MONTHS = [
-  { value: 'January', label: 'يناير' },
-  { value: 'February', label: 'فبراير' },
-  { value: 'March', label: 'مارس' },
-  { value: 'April', label: 'أبريل' },
-  { value: 'May', label: 'ماي' },
-  { value: 'June', label: 'يونيو' },
-  { value: 'July', label: 'يوليوز' },
-  { value: 'August', label: 'غشت' },
-  { value: 'September', label: 'شتنبر' },
-  { value: 'October', label: 'أكتوبر' },
-  { value: 'November', label: 'نونبر' },
-  { value: 'December', label: 'دجنبر' },
-];
-
-const MONTH_NAMES: Record<string, string> = Object.fromEntries(
-  MONTHS.map((m) => [m.value, m.label])
-);
-
-const PAYMENT_METHODS = [
-  { value: 'cash', label: 'نقدي' },
-  { value: 'transfer', label: 'تحويل' },
-  { value: 'check', label: 'شيك' },
-];
+import { useT } from '@/hooks/use-translation';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -195,45 +169,12 @@ const defaultFormData: PaymentFormData = {
   status: 'pending',
 };
 
+const MONTH_KEYS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+] as const;
+
 // ── Helpers ────────────────────────────────────────────────────────────────
-
-function getStatusBadge(status: string) {
-  switch (status) {
-    case 'paid':
-      return (
-        <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100">
-          مدفوع
-        </Badge>
-      );
-    case 'partial':
-      return (
-        <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100">
-          جزئي
-        </Badge>
-      );
-    case 'pending':
-      return (
-        <Badge className="bg-red-100 text-red-700 border-red-200 hover:bg-red-100">
-          غير مدفوع
-        </Badge>
-      );
-    default:
-      return <Badge variant="outline">{status}</Badge>;
-  }
-}
-
-function getMethodLabel(method: string | null) {
-  switch (method) {
-    case 'cash':
-      return 'نقدي';
-    case 'transfer':
-      return 'تحويل';
-    case 'check':
-      return 'شيك';
-    default:
-      return method || '—';
-  }
-}
 
 function formatDate(dayMonthYear: string): string {
   if (!dayMonthYear) return '—';
@@ -254,19 +195,78 @@ function TableSkeleton() {
   );
 }
 
-// ── Bon (Receipt) Generator ────────────────────────────────────────────────
+// ── Component ──────────────────────────────────────────────────────────────
 
-function generateBon(payment: Payment) {
-  const student = payment.student;
-  const monthLabel = MONTH_NAMES[payment.month] || payment.month;
-  const paymentDate = payment.paymentDate ? formatDate(payment.paymentDate) : '—';
-  const netAmount = payment.amount - payment.discount;
+export function PaymentsView() {
+  const t = useT();
 
-  const html = `<!DOCTYPE html>
+  // ── Derived month data ──
+  const MONTHS = useMemo(() =>
+    MONTH_KEYS.map((key) => ({
+      value: key,
+      label: t.months[key],
+    })),
+  [t]);
+
+  const MONTH_NAMES = useMemo(() =>
+    Object.fromEntries(MONTHS.map((m) => [m.value, m.label])),
+  [MONTHS]);
+
+  const PAYMENT_METHODS = useMemo(() => [
+    { value: 'cash', label: t.payments.cash },
+    { value: 'transfer', label: t.payments.transfer },
+    { value: 'check', label: t.payments.check },
+  ], [t]);
+
+  const getStatusBadge = useCallback((status: string) => {
+    switch (status) {
+      case 'paid':
+        return (
+          <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100">
+            {t.payments.statusPaid}
+          </Badge>
+        );
+      case 'partial':
+        return (
+          <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100">
+            {t.payments.statusPartial}
+          </Badge>
+        );
+      case 'pending':
+        return (
+          <Badge className="bg-red-100 text-red-700 border-red-200 hover:bg-red-100">
+            {t.payments.statusPending}
+          </Badge>
+        );
+      default:
+        return <Badge variant="outline">{status}</Badge>;
+    }
+  }, [t]);
+
+  const getMethodLabel = useCallback((method: string | null) => {
+    switch (method) {
+      case 'cash':
+        return t.payments.cash;
+      case 'transfer':
+        return t.payments.transfer;
+      case 'check':
+        return t.payments.check;
+      default:
+        return method || '—';
+    }
+  }, [t]);
+
+  const generateBon = useCallback((payment: Payment) => {
+    const student = payment.student;
+    const monthLabel = MONTH_NAMES[payment.month] || payment.month;
+    const paymentDate = payment.paymentDate ? formatDate(payment.paymentDate) : '—';
+    const netAmount = payment.amount - payment.discount;
+
+    const html = `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <title>بون دفع</title>
+  <title>${t.payments.bonPrint}</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap');
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -398,72 +398,72 @@ function generateBon(payment: Payment) {
 </head>
 <body>
   <div class="no-print">
-    <button onclick="window.print()">طباعة البون</button>
+    <button onclick="window.print()">${t.payments.bonPrint}</button>
   </div>
   <div class="bon">
     <div class="header">
-      <h1>نظام إدارة المركز التربوي</h1>
+      <h1>${t.payments.bonTitle}</h1>
       <div class="address">
-        <div class="phone-line">الهاتف: 0606030356</div>
-        <div>Bd med V, N°407 Route de Marrakech, Béni Mellal</div>
+        <div class="phone-line">${t.payments.bonPhone}</div>
+        <div>${t.payments.bonAddress}</div>
       </div>
     </div>
     <div class="divider"></div>
     <div class="info-section">
       <div class="info-item">
-        <span class="label">اسم التلميذ: </span>
+        <span class="label">${t.payments.bonStudentName}: </span>
         <span class="value">${student.fullName}</span>
       </div>
       <div class="info-item">
-        <span class="label">الهاتف: </span>
+        <span class="label">${t.common.phone}: </span>
         <span class="value" dir="ltr">${student.phone || '—'}</span>
       </div>
     </div>
     <table class="details-table">
       <thead>
         <tr>
-          <th>البيان</th>
-          <th class="amount">المبلغ (درهم)</th>
+          <th>${t.payments.bonStatement}</th>
+          <th class="amount">${t.payments.bonAmountDh}</th>
         </tr>
       </thead>
       <tbody>
         <tr>
-          <td>المبلغ المطلوب</td>
+          <td>${t.payments.bonRequired}</td>
           <td class="amount">${payment.amount.toLocaleString('ar-MA', { minimumFractionDigits: 2 })}</td>
         </tr>
         ${payment.discount > 0 ? `<tr>
-          <td>الخصم</td>
+          <td>${t.payments.bonDiscount}</td>
           <td class="amount amber">- ${payment.discount.toLocaleString('ar-MA', { minimumFractionDigits: 2 })}</td>
         </tr>
         <tr>
-          <td>المبلغ بعد الخصم</td>
+          <td>${t.payments.bonAfterDiscount}</td>
           <td class="amount">${netAmount.toLocaleString('ar-MA', { minimumFractionDigits: 2 })}</td>
         </tr>` : ''}
         <tr>
-          <td>المدفوع</td>
+          <td>${t.payments.bonPaid}</td>
           <td class="amount green">${payment.paidAmount.toLocaleString('ar-MA', { minimumFractionDigits: 2 })}</td>
         </tr>
         <tr>
-          <td>المتبقي</td>
+          <td>${t.payments.bonRemaining}</td>
           <td class="amount red">${payment.remainingAmount.toLocaleString('ar-MA', { minimumFractionDigits: 2 })}</td>
         </tr>
         <tr>
-          <td>الشهر / السنة</td>
+          <td>${t.payments.bonMonthYear}</td>
           <td>${monthLabel} ${payment.year}</td>
         </tr>
         <tr>
-          <td>تاريخ الدفع</td>
+          <td>${t.payments.bonPaymentDate}</td>
           <td dir="ltr" style="text-align:right">${paymentDate}</td>
         </tr>
       </tbody>
     </table>
     <div class="signatures">
       <div class="sig-box">
-        <div class="sig-label">توقيع ولي الأمر</div>
+        <div class="sig-label">${t.payments.bonParentSig}</div>
         <div class="sig-line"></div>
       </div>
       <div class="sig-box">
-        <div class="sig-label">توقيع المركز</div>
+        <div class="sig-label">${t.payments.bonCenterSig}</div>
         <div class="sig-line"></div>
       </div>
     </div>
@@ -471,19 +471,16 @@ function generateBon(payment: Payment) {
 </body>
 </html>`;
 
-  const newWindow = window.open('', '_blank');
-  if (newWindow) {
-    newWindow.document.write(html);
-    newWindow.document.close();
-    setTimeout(() => {
-      newWindow.print();
-    }, 500);
-  }
-}
+    const newWindow = window.open('', '_blank');
+    if (newWindow) {
+      newWindow.document.write(html);
+      newWindow.document.close();
+      setTimeout(() => {
+        newWindow.print();
+      }, 500);
+    }
+  }, [t, MONTH_NAMES]);
 
-// ── Component ──────────────────────────────────────────────────────────────
-
-export function PaymentsView() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -529,11 +526,11 @@ export function PaymentsView() {
       const json = await res.json();
       setPayments(json);
     } catch {
-      toast.error('فشل في تحميل قائمة المدفوعات');
+      toast.error(t.payments.fetchError);
     } finally {
       setLoading(false);
     }
-  }, [filterMonth, filterYear, filterStatus]);
+  }, [filterMonth, filterYear, filterStatus, t]);
 
   useEffect(() => {
     fetchPayments();
@@ -603,11 +600,11 @@ export function PaymentsView() {
       const json = await res.json();
       setOverdueData(json);
     } catch {
-      toast.error('فشل في تحميل المدفوعات المستحقة');
+      toast.error(t.payments.overdueFetchError);
     } finally {
       setOverdueLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const handleOpenOverdue = () => {
     setOverdueOpen(true);
@@ -691,15 +688,15 @@ export function PaymentsView() {
 
   const handleSubmit = async () => {
     if (!formData.studentId) {
-      toast.error('يرجى اختيار التلميذ');
+      toast.error(t.payments.studentRequired);
       return;
     }
     if (!formData.amount || Number(formData.amount) <= 0) {
-      toast.error('يرجى إدخال المبلغ');
+      toast.error(t.payments.amountRequired);
       return;
     }
     if (!formData.month) {
-      toast.error('يرجى اختيار الشهر');
+      toast.error(t.payments.monthRequired);
       return;
     }
 
@@ -727,7 +724,7 @@ export function PaymentsView() {
       });
       if (!res.ok) throw new Error();
       toast.success(
-        editingPayment ? 'تم تحديث القسط بنجاح' : 'تم إضافة القسط بنجاح'
+        editingPayment ? t.payments.updateSuccess : t.payments.addSuccess
       );
 
       // Offer to print bon for new payments
@@ -736,7 +733,7 @@ export function PaymentsView() {
         setDialogOpen(false);
         fetchPayments();
         setTimeout(() => {
-          if (confirm('هل تريد طباعة بون الدفع؟')) {
+          if (confirm(t.common.printQuestion)) {
             generateBon(savedPayment);
           }
         }, 300);
@@ -746,7 +743,7 @@ export function PaymentsView() {
       setDialogOpen(false);
       fetchPayments();
     } catch {
-      toast.error('فشل في حفظ البيانات');
+      toast.error(t.common.saveError);
     } finally {
       setSubmitting(false);
     }
@@ -759,12 +756,12 @@ export function PaymentsView() {
         method: 'DELETE',
       });
       if (!res.ok) throw new Error();
-      toast.success('تم حذف القسط بنجاح');
+      toast.success(t.payments.deleteSuccess);
       setDeleteOpen(false);
       setDeletingPayment(null);
       fetchPayments();
     } catch {
-      toast.error('فشل في حذف القسط');
+      toast.error(t.common.deleteError);
     }
   };
 
@@ -791,7 +788,7 @@ export function PaymentsView() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-muted-foreground">
           <Wallet className="h-5 w-5" />
-          <span className="text-sm">{payments.length} قسط</span>
+          <span className="text-sm">{payments.length} {t.payments.paymentCount}</span>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -800,11 +797,11 @@ export function PaymentsView() {
             className="gap-2 border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
           >
             <AlertTriangle className="h-4 w-4" />
-            المدفوعات المستحقة
+            {t.payments.overdue}
           </Button>
           <Button onClick={() => handleOpenDialog()} className="gap-2">
             <Plus className="h-4 w-4" />
-            إضافة قسط
+            {t.payments.addPayment}
           </Button>
         </div>
       </div>
@@ -813,37 +810,37 @@ export function PaymentsView() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card>
           <CardContent className="p-3 text-center">
-            <p className="text-xs text-muted-foreground">المطلوب</p>
+            <p className="text-xs text-muted-foreground">{t.payments.requiredAmount}</p>
             <p className="text-lg font-bold mt-1">
               {totalAmount.toLocaleString()}{' '}
-              <span className="text-xs font-normal">درهم</span>
+              <span className="text-xs font-normal">{t.common.dh}</span>
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-3 text-center">
-            <p className="text-xs text-muted-foreground">الخصم</p>
+            <p className="text-xs text-muted-foreground">{t.payments.discount}</p>
             <p className="text-lg font-bold text-amber-600 mt-1">
               {totalDiscount.toLocaleString()}{' '}
-              <span className="text-xs font-normal">درهم</span>
+              <span className="text-xs font-normal">{t.common.dh}</span>
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-3 text-center">
-            <p className="text-xs text-muted-foreground">المدفوع</p>
+            <p className="text-xs text-muted-foreground">{t.payments.paid}</p>
             <p className="text-lg font-bold text-emerald-600 mt-1">
               {totalPaid.toLocaleString()}{' '}
-              <span className="text-xs font-normal">درهم</span>
+              <span className="text-xs font-normal">{t.common.dh}</span>
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-3 text-center">
-            <p className="text-xs text-muted-foreground">المتبقي</p>
+            <p className="text-xs text-muted-foreground">{t.payments.remaining}</p>
             <p className="text-lg font-bold text-red-600 mt-1">
               {totalRemaining.toLocaleString()}{' '}
-              <span className="text-xs font-normal">درهم</span>
+              <span className="text-xs font-normal">{t.common.dh}</span>
             </p>
           </CardContent>
         </Card>
@@ -857,10 +854,10 @@ export function PaymentsView() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-1 w-full">
               <Select value={filterMonth} onValueChange={setFilterMonth}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="كل الأشهر" />
+                  <SelectValue placeholder={t.payments.allMonths} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">كل الأشهر</SelectItem>
+                  <SelectItem value="all">{t.payments.allMonths}</SelectItem>
                   {MONTHS.map((m) => (
                     <SelectItem key={m.value} value={m.value}>
                       {m.label}
@@ -870,7 +867,7 @@ export function PaymentsView() {
               </Select>
               <Input
                 type="number"
-                placeholder="السنة"
+                placeholder={t.payments.year}
                 value={filterYear}
                 onChange={(e) => setFilterYear(e.target.value)}
                 dir="ltr"
@@ -878,13 +875,13 @@ export function PaymentsView() {
               />
               <Select value={filterStatus} onValueChange={setFilterStatus}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="كل الحالات" />
+                  <SelectValue placeholder={t.payments.allStatuses} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">كل الحالات</SelectItem>
-                  <SelectItem value="paid">مدفوع</SelectItem>
-                  <SelectItem value="partial">جزئي</SelectItem>
-                  <SelectItem value="pending">غير مدفوع</SelectItem>
+                  <SelectItem value="all">{t.payments.allStatuses}</SelectItem>
+                  <SelectItem value="paid">{t.payments.statusPaid}</SelectItem>
+                  <SelectItem value="partial">{t.payments.statusPartial}</SelectItem>
+                  <SelectItem value="pending">{t.payments.statusPending}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -900,9 +897,9 @@ export function PaymentsView() {
           ) : payments.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <Receipt className="h-12 w-12 mx-auto mb-3 opacity-30" />
-              <p className="font-medium">لا توجد مدفوعات</p>
+              <p className="font-medium">{t.payments.noPayments}</p>
               <p className="text-sm mt-1">
-                اضغط على &quot;إضافة قسط&quot; لإضافة قسط جديد
+                {t.payments.addFirst}
               </p>
             </div>
           ) : (
@@ -910,25 +907,25 @@ export function PaymentsView() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-right">التلميذ</TableHead>
-                    <TableHead className="text-right">الشهر/السنة</TableHead>
+                    <TableHead className="text-right">{t.payments.studentCol}</TableHead>
+                    <TableHead className="text-right">{t.payments.monthYearCol}</TableHead>
                     <TableHead className="text-right hidden md:table-cell">
-                      المبلغ
+                      {t.payments.amountCol}
                     </TableHead>
                     <TableHead className="text-right hidden md:table-cell">
-                      المدفوع
+                      {t.payments.paidCol}
                     </TableHead>
                     <TableHead className="text-right hidden lg:table-cell">
-                      المتبقي
+                      {t.payments.remainingCol}
                     </TableHead>
                     <TableHead className="text-right hidden lg:table-cell">
-                      الخصم
+                      {t.payments.discountCol}
                     </TableHead>
                     <TableHead className="text-right hidden lg:table-cell">
-                      التاريخ
+                      {t.payments.dateCol}
                     </TableHead>
-                    <TableHead className="text-right">الحالة</TableHead>
-                    <TableHead className="text-right">الإجراءات</TableHead>
+                    <TableHead className="text-right">{t.common.status}</TableHead>
+                    <TableHead className="text-right">{t.common.actions}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -955,21 +952,21 @@ export function PaymentsView() {
                       </TableCell>
                       <TableCell className="text-right hidden md:table-cell font-medium">
                         {payment.amount.toLocaleString()}{' '}
-                        <span className="text-xs font-normal">درهم</span>
+                        <span className="text-xs font-normal">{t.common.dh}</span>
                       </TableCell>
                       <TableCell className="text-right hidden md:table-cell text-emerald-600">
                         {payment.paidAmount.toLocaleString()}{' '}
-                        <span className="text-xs font-normal">درهم</span>
+                        <span className="text-xs font-normal">{t.common.dh}</span>
                       </TableCell>
                       <TableCell className="text-right hidden lg:table-cell text-red-600">
                         {payment.remainingAmount.toLocaleString()}{' '}
-                        <span className="text-xs font-normal">درهم</span>
+                        <span className="text-xs font-normal">{t.common.dh}</span>
                       </TableCell>
                       <TableCell className="text-right hidden lg:table-cell text-amber-600">
                         {payment.discount > 0 ? (
                           <span>
                             {payment.discount.toLocaleString()}{' '}
-                            <span className="text-xs font-normal">درهم</span>
+                            <span className="text-xs font-normal">{t.common.dh}</span>
                           </span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
@@ -990,7 +987,7 @@ export function PaymentsView() {
                             size="icon"
                             className="h-8 w-8"
                             onClick={() => generateBon(payment)}
-                            title="طباعة بون"
+                            title={t.common.printBon}
                           >
                             <FileText className="h-3.5 w-3.5" />
                           </Button>
@@ -1031,12 +1028,12 @@ export function PaymentsView() {
         <DialogContent className="sm:max-w-2xl flex flex-col p-0 gap-0 overflow-hidden max-h-[90vh]">
           <DialogHeader className="px-6 pt-6 pb-2">
             <DialogTitle>
-              {editingPayment ? 'تعديل القسط' : 'إضافة قسط جديد'}
+              {editingPayment ? t.payments.editPayment : t.payments.addNew}
             </DialogTitle>
             <DialogDescription>
               {editingPayment
-                ? 'قم بتعديل بيانات القسط أدناه'
-                : 'ابحث عن التلميذ ثم أدخل بيانات القسط'}
+                ? t.payments.editDesc
+                : t.payments.addDesc}
             </DialogDescription>
           </DialogHeader>
 
@@ -1046,12 +1043,12 @@ export function PaymentsView() {
               {!editingPayment && !selectedStudent && (
                 <div className="space-y-3">
                   <Label className="text-sm font-semibold">
-                    البحث عن التلميذ
+                    {t.payments.searchStudent}
                   </Label>
                   <div className="relative">
                     <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
-                      placeholder="اكتب اسم أو رقم هاتف التلميذ..."
+                      placeholder={t.payments.searchStudentPlaceholder}
                       value={studentSearchQuery}
                       onChange={(e) =>
                         setStudentSearchQuery(e.target.value)
@@ -1102,7 +1099,7 @@ export function PaymentsView() {
                                 )}
                                 {s.monthlyFee > 0 && (
                                   <span className="text-[10px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded">
-                                    {s.monthlyFee.toLocaleString()} درهم/شهر
+                                    {s.monthlyFee.toLocaleString()} {t.common.month}
                                   </span>
                                 )}
                               </div>
@@ -1117,7 +1114,7 @@ export function PaymentsView() {
                     studentSearchResults.length === 0 &&
                     !selectedStudent && (
                       <div className="text-center py-6 text-muted-foreground text-sm">
-                        لم يتم العثور على تلاميذ
+                        {t.payments.noStudentFound}
                       </div>
                     )}
                 </div>
@@ -1128,7 +1125,7 @@ export function PaymentsView() {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <Label className="text-sm font-semibold">
-                      التلميذ المختار
+                      {t.payments.selectedStudent}
                     </Label>
                     {!editingPayment && (
                       <Button
@@ -1138,7 +1135,7 @@ export function PaymentsView() {
                         className="h-7 text-xs text-muted-foreground"
                       >
                         <X className="h-3 w-3 ml-1" />
-                        تغيير
+                        {t.common.edit}
                       </Button>
                     )}
                   </div>
@@ -1151,7 +1148,7 @@ export function PaymentsView() {
                       <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
                         <div>
                           <span className="text-muted-foreground">
-                            الاسم:{' '}
+                            {t.common.name}:{' '}
                           </span>
                           <span className="font-bold">
                             {selectedStudent.fullName}
@@ -1159,7 +1156,7 @@ export function PaymentsView() {
                         </div>
                         <div>
                           <span className="text-muted-foreground">
-                            الهاتف:{' '}
+                            {t.common.phone}:{' '}
                           </span>
                           <span className="font-medium" dir="ltr">
                             {selectedStudent.phone || '—'}
@@ -1168,7 +1165,7 @@ export function PaymentsView() {
                         {selectedStudent.parentName && (
                           <div>
                             <span className="text-muted-foreground">
-                              ولي الأمر:{' '}
+                              {t.students.parentName}:{' '}
                             </span>
                             <span className="font-medium">
                               {selectedStudent.parentName}
@@ -1178,7 +1175,7 @@ export function PaymentsView() {
                         {selectedStudent.parentPhone && (
                           <div>
                             <span className="text-muted-foreground">
-                              هاتف ولي الأمر:{' '}
+                              {t.students.parentPhone}:{' '}
                             </span>
                             <span
                               className="font-medium"
@@ -1190,17 +1187,17 @@ export function PaymentsView() {
                         )}
                         <div>
                           <span className="text-muted-foreground">
-                            القسط الشهري:{' '}
+                            {t.students.monthlyFeeSection}:{' '}
                           </span>
                           <span className="font-bold text-teal-700">
                             {selectedStudent.monthlyFee.toLocaleString()}{' '}
-                            درهم
+                            {t.common.dh}
                           </span>
                         </div>
                         {selectedStudent.level && (
                           <div>
                             <span className="text-muted-foreground">
-                              المستوى:{' '}
+                              {t.students.level}:{' '}
                             </span>
                             <span className="font-medium">
                               {selectedStudent.level.subject.nameAr} -{' '}
@@ -1210,10 +1207,10 @@ export function PaymentsView() {
                         )}
                         <div className="sm:col-span-2">
                           <span className="text-muted-foreground">
-                            المدفوع هذا العام ({new Date().getFullYear()}):{' '}
+                            {t.common.dh} ({new Date().getFullYear()}):{' '}
                           </span>
                           <span className="font-bold text-emerald-600">
-                            {yearlyPaid.toLocaleString()} درهم
+                            {yearlyPaid.toLocaleString()} {t.common.dh}
                           </span>
                         </div>
                       </div>
@@ -1228,11 +1225,11 @@ export function PaymentsView() {
               <div className="space-y-3">
                 <h4 className="text-sm font-semibold flex items-center gap-2">
                   <Wallet className="h-4 w-4 text-primary" />
-                  تفاصيل المبلغ
+                  {t.common.amount}
                 </h4>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div className="space-y-1.5">
-                    <Label htmlFor="amount">المبلغ (درهم) *</Label>
+                    <Label htmlFor="amount">{t.payments.bonAmountDh} *</Label>
                     <Input
                       id="amount"
                       type="number"
@@ -1249,7 +1246,7 @@ export function PaymentsView() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="discount">الخصم (درهم)</Label>
+                    <Label htmlFor="discount">{t.payments.bonDiscount} ({t.common.dh})</Label>
                     <Input
                       id="discount"
                       type="number"
@@ -1266,7 +1263,7 @@ export function PaymentsView() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="paidAmount">المدفوع (درهم)</Label>
+                    <Label htmlFor="paidAmount">{t.payments.bonPaid} ({t.common.dh})</Label>
                     <Input
                       id="paidAmount"
                       type="number"
@@ -1283,21 +1280,21 @@ export function PaymentsView() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label>المتبقي</Label>
+                    <Label>{t.payments.remaining}</Label>
                     <div className="flex items-center h-9 px-3 rounded-md border bg-muted text-sm">
                       <span dir="ltr">
                         {Math.max(0, remainingAmount).toLocaleString()}
                       </span>
                       <span className="mr-1 text-muted-foreground text-xs">
-                        درهم
+                        {t.common.dh}
                       </span>
                     </div>
                   </div>
                 </div>
                 {discountValue > 0 && (
                   <div className="text-xs text-amber-600 bg-amber-50 rounded-md p-2">
-                    المبلغ بعد الخصم:{' '}
-                    <strong>{netAmount.toLocaleString()} درهم</strong>
+                    {t.payments.bonAfterDiscount}:{' '}
+                    <strong>{netAmount.toLocaleString()} {t.common.dh}</strong>
                   </div>
                 )}
               </div>
@@ -1305,7 +1302,7 @@ export function PaymentsView() {
               {/* ── Month / Year / Method ──────────────────────────────── */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1.5">
-                  <Label>الشهر *</Label>
+                  <Label>{t.payments.month} *</Label>
                   <Select
                     value={formData.month}
                     onValueChange={(val) =>
@@ -1313,7 +1310,7 @@ export function PaymentsView() {
                     }
                   >
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="اختر الشهر" />
+                      <SelectValue placeholder={t.payments.chooseMonth} />
                     </SelectTrigger>
                     <SelectContent>
                       {MONTHS.map((m) => (
@@ -1325,7 +1322,7 @@ export function PaymentsView() {
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>السنة *</Label>
+                  <Label>{t.payments.year} *</Label>
                   <Input
                     type="number"
                     min="2020"
@@ -1341,7 +1338,7 @@ export function PaymentsView() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>طريقة الدفع</Label>
+                  <Label>{t.payments.paymentMethod}</Label>
                   <Select
                     value={formData.method}
                     onValueChange={(val) =>
@@ -1364,14 +1361,14 @@ export function PaymentsView() {
 
               {/* ── Notes ──────────────────────────────────────────────── */}
               <div className="space-y-1.5">
-                <Label htmlFor="notes">ملاحظات</Label>
+                <Label htmlFor="notes">{t.common.notes}</Label>
                 <Textarea
                   id="notes"
                   value={formData.notes}
                   onChange={(e) =>
                     setFormData({ ...formData, notes: e.target.value })
                   }
-                  placeholder="ملاحظات إضافية (اختياري)"
+                  placeholder={`${t.common.notes} (${t.common.optional})`}
                   rows={2}
                 />
               </div>
@@ -1381,19 +1378,19 @@ export function PaymentsView() {
           <DialogFooter className="px-6 pb-6 pt-2 border-t bg-muted/30">
             <div className="flex items-center justify-between w-full">
               <div className="text-xs text-muted-foreground">
-                الحالة:{' '}
+                {t.common.status}:{' '}
                 {autoStatus === 'paid'
-                  ? 'مدفوع'
+                  ? t.payments.statusPaid
                   : autoStatus === 'partial'
-                    ? 'جزئي'
-                    : 'غير مدفوع'}
+                    ? t.payments.statusPartial
+                    : t.payments.statusPending}
               </div>
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
                   onClick={() => setDialogOpen(false)}
                 >
-                  إلغاء
+                  {t.common.cancel}
                 </Button>
                 <Button
                   onClick={handleSubmit}
@@ -1403,7 +1400,7 @@ export function PaymentsView() {
                   {submitting ? (
                     <span className="animate-spin">⏳</span>
                   ) : null}
-                  {editingPayment ? 'تحديث' : 'حفظ القسط'}
+                  {editingPayment ? t.common.saveChanges : t.payments.addPayment}
                 </Button>
               </div>
             </div>
@@ -1419,10 +1416,10 @@ export function PaymentsView() {
           <DialogHeader className="px-6 pt-6 pb-2">
             <DialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-amber-500" />
-              المدفوعات المستحقة
+              {t.payments.overdue}
             </DialogTitle>
             <DialogDescription>
-              قائمة التلاميذ الذين لديهم أقساط متأخرة عن الدفع
+              {t.payments.overdueDesc}
             </DialogDescription>
           </DialogHeader>
 
@@ -1437,19 +1434,19 @@ export function PaymentsView() {
           ) : overdueData.length === 0 ? (
             <div className="px-6 py-12 text-center text-muted-foreground">
               <AlertTriangle className="h-12 w-12 mx-auto mb-3 text-emerald-400 opacity-50" />
-              <p className="font-medium">لا توجد مدفوعات مستحقة</p>
-              <p className="text-sm mt-1">جميع الأقسط مسددة في وقتها</p>
+              <p className="font-medium">{t.common.noData}</p>
+              <p className="text-sm mt-1">{t.common.noData}</p>
             </div>
           ) : (
             <>
               {/* Grand total bar */}
               <div className="mx-6 mt-2 mb-3 p-3 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-between">
                 <span className="text-sm font-semibold text-amber-800">
-                  إجمالي المستحقات
+                  {t.common.total}
                 </span>
                 <span className="text-lg font-bold text-amber-700">
                   {grandTotalOverdue.toLocaleString()}{' '}
-                  <span className="text-sm font-normal">درهم</span>
+                  <span className="text-sm font-normal">{t.common.dh}</span>
                 </span>
               </div>
 
@@ -1467,8 +1464,8 @@ export function PaymentsView() {
                           variant="outline"
                           className="text-xs border-amber-300 text-amber-700"
                         >
-                          {service.studentCount} تلميذ —{' '}
-                          {service.totalOverdue.toLocaleString()} درهم
+                          {service.studentCount} {t.students.studentCount} —{' '}
+                          {service.totalOverdue.toLocaleString()} {t.common.dh}
                         </Badge>
                       </div>
 
@@ -1497,7 +1494,7 @@ export function PaymentsView() {
                                     </span>
                                     {student.parentName && (
                                       <span className="text-xs text-muted-foreground block">
-                                        ولي الأمر: {student.parentName}
+                                        {t.students.guardian}{student.parentName}
                                       </span>
                                     )}
                                   </div>
@@ -1524,13 +1521,13 @@ export function PaymentsView() {
                                   <div className="flex items-center gap-2">
                                     <span className="font-bold text-red-600">
                                       {student.totalOverdue.toLocaleString()}{' '}
-                                      درهم
+                                      {t.common.dh}
                                     </span>
                                     <Badge
                                       variant="outline"
                                       className="text-[10px] border-red-200 text-red-600"
                                     >
-                                      {student.paymentCount} شهر متأخر
+                                      {student.paymentCount} {t.payments.month}
                                     </Badge>
                                   </div>
                                 </div>
@@ -1554,18 +1551,18 @@ export function PaymentsView() {
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>تأكيد الحذف</AlertDialogTitle>
+            <AlertDialogTitle>{t.common.deleteConfirm}</AlertDialogTitle>
             <AlertDialogDescription>
-              هل أنت متأكد من حذف هذا القسط؟ لا يمكن التراجع عن هذا الإجراء.
+              {t.common.deleteConfirmMsg} {t.common.cannotUndo}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              حذف
+              {t.common.delete}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
