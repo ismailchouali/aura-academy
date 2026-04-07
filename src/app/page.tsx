@@ -32,6 +32,7 @@ import { ScheduleView } from '@/components/views/schedule-view';
 import { ServicesView } from '@/components/views/services-view';
 import { ClassroomsView } from '@/components/views/classrooms-view';
 import { SettingsView } from '@/components/views/settings-view';
+import { ErrorBoundary } from '@/components/error-boundary';
 
 const navIcons: Record<ViewType, React.ReactNode> = {
   dashboard: <LayoutDashboard className="h-5 w-5" />,
@@ -225,7 +226,9 @@ export default function Home() {
         {/* Page Content */}
         <div className="flex-1 overflow-y-auto p-4 lg:p-6">
           <div className="max-w-7xl mx-auto">
-            {renderView()}
+            <ErrorBoundary>
+              {renderView()}
+            </ErrorBoundary>
           </div>
         </div>
       </main>
