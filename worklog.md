@@ -481,3 +481,22 @@ Stage Summary:
 - Root cause: Prisma client was generated with an older schema that didn't include `levelId`
 - Fix: Regenerated Prisma client with `npx prisma generate` and restarted dev server
 - Student creation now works correctly (POST returns 201)
+---
+Task ID: 3
+Agent: Main Agent
+Task: Fix student search not working - no results in payments dialog and students view
+
+Work Log:
+- User reported: when adding payments, student search shows no results; same for name/phone search in students view
+- Checked dev server logs: Prisma error "Unknown argument `mode`. Did you mean `lte`?"
+- Root cause: The students API route used `mode: 'insensitive'` in the Prisma query, but SQLite doesn't support this option (only PostgreSQL/MySQL do)
+- SQLite is case-insensitive by default, so `contains` alone is sufficient
+- Fix: Removed `mode: 'insensitive'` from the fullName search filter in `/api/students/route.ts`
+- Verified no other files use this unsupported option
+- Tested: search by name ("hamza") → returns 1 result ✓
+- Tested: search by phone ("0634") → returns 1 result ✓
+- Both return HTTP 200
+
+Stage Summary:
+- Fixed the student search by removing SQLite-incompatible `mode: 'insensitive'` from Prisma query
+- Student search now works in both the students view AND the payments dialog
