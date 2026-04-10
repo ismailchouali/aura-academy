@@ -609,3 +609,67 @@ Stage Summary:
 - Teacher payments FIXED: Added `status` to Teacher interface
 - All 9 views scanned and verified working
 - Dev server running on port 3000, all APIs 200
+
+---
+Task ID: 7
+Agent: Main Agent
+Task: Rewrite schedule-view.tsx to show all 7 days in a single weekly grid
+
+Work Log:
+- Read entire schedule-view.tsx (1473 lines) to understand current structure
+- Identified day tabs (selectedDay state, dayCounts, daySchedules) as the main change target
+- Planned new weekly grid layout: Y-axis=time slots, X-axis=7 day columns
+- Implemented overlap detection algorithm for sessions in same day column (greedy column assignment)
+- Added classroom badge colors for visual distinction inside session cards
+- Updated handlePrint to generate weekly view with all 7 days as table columns
+
+### Work Summary
+
+**Removed:**
+- `selectedDay` state and `setSelectedDay`
+- Day tabs UI (the tab buttons for each day)
+- `daySchedules` computed value (filtered by selected day)
+- "Session count for selected day" text at bottom
+
+**Added/Changed:**
+- `DAY_COLUMN_WIDTH = 160` constant for day column sizing
+- `TIME_COLUMN_WIDTH = 70` constant for time column sizing
+- `classroomBadgeColors` array for colored classroom badges inside session cards
+- `classroomColorLookup` computed value mapping classroom ID to badge color class
+- `schedulesByDay` computed value: groups schedules by day with overlap column info
+  - Uses greedy algorithm to assign overlapping sessions to columns within each day
+  - Each session gets a `columnIndex` and the day has a `totalColumns` count
+- Weekly grid layout with 7 fixed-width day columns (160px each)
+  - Total minimum width: 70 + 7×160 = 1190px
+  - Sticky time column on right (RTL), sticky day headers on top
+  - ScrollArea for horizontal and vertical scrolling
+  - Session cards use `position: absolute` with `top`, `height`, `width`, and `right` for overlap positioning
+  - Each session card shows: session type badge, subject+level, classroom badge (colored), teacher, time range, group name
+  - Delete button on hover (top-left), edit icon on hover
+- `openCreateDialog` no longer pre-selects a day (sets `dayOfWeek: ''`)
+
+**Print Function:**
+- Rewritten for weekly view with all 7 days as columns
+- Simple HTML table with day headers and session count badges
+- Service-based background colors for session cells
+- Landscape orientation via `@page` CSS
+- Shows total session count in header
+
+**Preserved (unchanged):**
+- All imports, types, interfaces
+- All constants (SLOT_HEIGHT, FIRST_SLOT_MINUTES, timeSlots, serviceColorMap, defaultColor, emptyForm)
+- All helper functions (timeToMinutes, timesOverlap, getSlotTop, getSessionHeight, getSlotCount, getDays)
+- All data fetching (fetchSchedules, fetchServices, fetchTeachers, fetchClassrooms)
+- All computed values (allSubjects, serviceColorLookup, getColorClasses, selectedSubjectLevels, filteredTeachers, dayCounts)
+- All form handling (openCreateDialog modified, openEditDialog, handleSessionTypeChange, toggleDay, handleSubmit)
+- All conflict detection (checkClientConflicts)
+- handleDelete function
+- Complete Add/Edit Dialog (all fields, validation, recurring day selection)
+- Complete Delete confirmation dialog
+- Session type filter buttons (الكل / ثابتة / تجريبية)
+- Stats cards at top
+
+**Quality:**
+- ESLint passes with zero errors
+- Dev server compiled successfully (✓ Compiled in 591ms)
+- ~1100 lines of TypeScript code

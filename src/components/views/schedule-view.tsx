@@ -161,6 +161,8 @@ function getDays(t: ReturnType<typeof useT>) {
 
 const SLOT_HEIGHT = 48;
 const FIRST_SLOT_MINUTES = 11 * 60; // 11:00 = 660 min
+const DAY_COLUMN_WIDTH = 160;
+const TIME_COLUMN_WIDTH = 70;
 
 function generateTimeSlots(): string[] {
   const slots: string[] = [];
@@ -217,6 +219,16 @@ const defaultColor = {
   badgeTrial: 'bg-slate-100/70 text-slate-700 border-slate-300',
 };
 
+// Classroom badge colors
+const classroomBadgeColors = [
+  'bg-teal-100 text-teal-700 border-teal-200',
+  'bg-amber-100 text-amber-700 border-amber-200',
+  'bg-violet-100 text-violet-700 border-violet-200',
+  'bg-rose-100 text-rose-700 border-rose-200',
+  'bg-sky-100 text-sky-700 border-sky-200',
+  'bg-emerald-100 text-emerald-700 border-emerald-200',
+];
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function timeToMinutes(time: string): number {
@@ -272,7 +284,6 @@ export function ScheduleView() {
   const days = useMemo(() => getDays(t), [t]);
 
   // View state
-  const [selectedDay, setSelectedDay] = useState<string>('1');
   const [sessionFilter, setSessionFilter] = useState<'all' | 'fixed' | 'trial'>('all');
 
   // Dialog states
@@ -388,14 +399,14 @@ export function ScheduleView() {
     };
   }
 
-  // Schedules filtered for selected day
-  const daySchedules = useMemo(() => {
-    let filtered = schedules.filter((s) => s.dayOfWeek === selectedDay);
-    if (sessionFilter !== 'all') {
-      filtered = filtered.filter((s) => s.sessionType === sessionFilter);
-    }
-    return filtered;
-  }, [schedules, selectedDay, sessionFilter]);
+  // Classroom color lookup by classroom id
+  const classroomColorLookup = useMemo(() => {
+    const map: Record<string, string> = {};
+    classrooms.forEach((c, idx) => {
+      map[c.id] = classroomBadgeColors[idx % classroomBadgeColors.length];
+    });
+    return map;
+  }, [classrooms]);
 
   // Schedule count per day
   const dayCounts = useMemo(() => {
@@ -408,7 +419,50 @@ export function ScheduleView() {
       counts[d.value] = count.length;
     });
     return counts;
-  }, [schedules, sessionFilter]);
+  }, [schedules, sessionFilter, days]);
+
+  // Schedules grouped by day with overlap column info
+  const schedulesByDay = useMemo(() => {
+    const map: Record<string, {
+      schedules: Schedule[];
+      columns: Map<string, number>;
+      totalColumns: number;
+    }> = {};
+
+    days.forEach((d) => {
+      let dayScheds = schedules.filter((s) => s.dayOfWeek === d.value);
+      if (sessionFilter !== 'all') {
+        dayScheds = dayScheds.filter((s) => s.sessionType === sessionFilter);
+      }
+
+      // Compute overlap columns using greedy algorithm
+      const sorted = [...dayScheds].sort((a, b) => {
+        const startDiff = timeToMinutes(a.startTime) - timeToMinutes(b.startTime);
+        if (startDiff !== 0) return startDiff;
+        return timeToMinutes(a.endTime) - timeToMinutes(b.endTime);
+      });
+
+      const columns = new Map<string, number>();
+      const endTimes: number[] = []; // end time for each column
+
+      sorted.forEach((sched) => {
+        const startMin = timeToMinutes(sched.startTime);
+        let col = 0;
+        while (col < endTimes.length && endTimes[col] > startMin) {
+          col++;
+        }
+        columns.set(sched.id, col);
+        if (col >= endTimes.length) {
+          endTimes.push(0);
+        }
+        endTimes[col] = timeToMinutes(sched.endTime);
+      });
+
+      const totalColumns = Math.max(1, endTimes.length);
+      map[d.value] = { schedules: dayScheds, columns, totalColumns };
+    });
+    return map;
+  }, [schedules, sessionFilter, days]);
 
   // Levels for selected subject
   const selectedSubjectLevels = useMemo(() => {
@@ -468,7 +522,7 @@ export function ScheduleView() {
   const openCreateDialog = () => {
     setEditingSchedule(null);
     setConflictErrors([]);
-    setForm({ ...emptyForm, dayOfWeek: selectedDay });
+    setForm({ ...emptyForm, dayOfWeek: '' });
     setFormOpen(true);
   };
 
@@ -630,10 +684,9 @@ export function ScheduleView() {
     }
   };
 
-  // ─── Print Schedule ─────────────────────────────────────────────────────
+  // ─── Print Schedule (Weekly View) ───────────────────────────────────────
 
   const handlePrint = () => {
-    const dayLabel = days.find((d) => d.value === selectedDay)?.label || '';
     const dateStr = new Date().toLocaleDateString('ar-MA', {
       weekday: 'long',
       year: 'numeric',
@@ -641,73 +694,116 @@ export function ScheduleView() {
       day: 'numeric',
     });
 
+    // Compute service color for print
+    function getServiceColor(svcId: string): string {
+      const svc = services.find((s) => s.id === svcId);
+      if (!svc) return '#f1f5f9';
+      const name = svc.name.toLowerCase();
+      if (name.includes('soutien')) return '#f0fdfa';
+      if (name.includes('langue')) return '#fffbeb';
+      if (name.includes('informatique') || name === 'it') return '#faf5ff';
+      if (name.includes('concours')) return '#fff1f2';
+      return '#f8fafc';
+    }
+
+    function getServiceBorderColor(svcId: string): string {
+      const svc = services.find((s) => s.id === svcId);
+      if (!svc) return '#e2e8f0';
+      const name = svc.name.toLowerCase();
+      if (name.includes('soutien')) return '#14b8a6';
+      if (name.includes('langue')) return '#f59e0b';
+      if (name.includes('informatique') || name === 'it') return '#a855f7';
+      if (name.includes('concours')) return '#f43f5e';
+      return '#94a3b8';
+    }
+
     let html = `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8">
       <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; padding: 20px; color: #1a1a1a; }
-        .header { text-align: center; margin-bottom: 20px; padding: 15px; background: linear-gradient(135deg, #0d9488, #14b8a6); color: white; border-radius: 8px; }
-        .header h1 { font-size: 24px; margin-bottom: 4px; }
-        .header p { font-size: 14px; opacity: 0.9; }
-        .day-title { text-align: center; font-size: 18px; font-weight: bold; margin-bottom: 15px; color: #334155; }
-        table { width: 100%; border-collapse: collapse; font-size: 12px; }
-        th { background: #f1f5f9; padding: 8px 6px; border: 1px solid #e2e8f0; font-weight: bold; text-align: center; }
-        td { padding: 6px; border: 1px solid #e2e8f0; vertical-align: middle; }
-        tr:nth-child(even) td { background: #f8fafc; }
-        .session-cell { padding: 4px 6px; border-radius: 4px; font-size: 11px; }
-        .footer { text-align: center; margin-top: 15px; font-size: 11px; color: #94a3b8; }
-        @media print { body { padding: 10px; } }
+        body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; padding: 15px; color: #1a1a1a; font-size: 11px; }
+        .header { text-align: center; margin-bottom: 15px; padding: 12px; background: linear-gradient(135deg, #0d9488, #14b8a6); color: white; border-radius: 8px; }
+        .header h1 { font-size: 20px; margin-bottom: 2px; }
+        .header p { font-size: 12px; opacity: 0.9; }
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        th { background: #f1f5f9; padding: 6px 4px; border: 1px solid #e2e8f0; font-weight: bold; text-align: center; font-size: 11px; }
+        td { padding: 4px; border: 1px solid #e2e8f0; vertical-align: top; }
+        .time-cell { text-align: center; font-weight: bold; white-space: nowrap; font-size: 10px; width: 50px; }
+        .day-cell { width: auto; min-width: 100px; }
+        .session-cell { padding: 3px 4px; border-radius: 3px; font-size: 9px; margin-bottom: 2px; border-right: 3px solid; }
+        .session-cell strong { font-size: 10px; }
+        .footer { text-align: center; margin-top: 10px; font-size: 10px; color: #94a3b8; }
+        .meta { text-align: center; margin-bottom: 10px; font-size: 11px; color: #64748b; }
+        @page { size: landscape; margin: 10mm; }
+        @media print { body { padding: 5px; } }
       </style></head><body>`;
-    html += `<div class="header"><h1>AURA ACADEMY</h1><p>بني ملال</p></div>`;
-    html += `<div class="day-title">جدول الحصص - ${dayLabel}</div>`;
-    html += `<p style="text-align:center;margin-bottom:10px;font-size:12px;color:#64748b;">${dateStr}</p>`;
-    html += `<table><thead><tr><th>الوقت</th>`;
+    html += `<div class="header"><h1>AURA ACADEMY</h1><p>بني ملال — الجدول الأسبوعي</p></div>`;
+    html += `<div class="meta">${dateStr} | إجمالي الحصص: ${schedules.length}</div>`;
+    html += `<table><thead><tr><th class="time-cell">الوقت</th>`;
 
-    classrooms.forEach((c) => {
-      html += `<th>${c.nameAr || c.name}</th>`;
+    days.forEach((d) => {
+      const count = dayCounts[d.value] || 0;
+      html += `<th class="day-cell">${d.label} <span style="opacity:0.6">(${count})</span></th>`;
     });
     html += `</tr></thead><tbody>`;
 
-    const dayScheds = schedules.filter((s) => s.dayOfWeek === selectedDay);
+    timeSlots.forEach((time, timeIdx) => {
+      // Only show even time slots (full hours) for cleaner layout
+      if (timeIdx % 2 !== 0) return;
 
-    timeSlots.forEach((time) => {
-      const slotMin = timeToMinutes(time);
-      const nextSlotMin = slotMin + 30;
-      const cellScheds = dayScheds.filter(
-        (s) => timeToMinutes(s.startTime) === slotMin && s.classroomId
-      );
+      html += `<tr>`;
+      html += `<td class="time-cell" rowspan="2">${time}<br/>${timeSlots[timeIdx + 1] || ''}</td>`;
 
-      html += `<tr><td style="text-align:center;font-weight:bold;white-space:nowrap;">${time}</td>`;
-      classrooms.forEach((classroom) => {
-        const sess = cellScheds.find((s) => s.classroomId === classroom.id);
-        if (sess) {
-          const endLabel = sess.endTime;
-          html += `<td rowspan="${getSlotCount(sess.startTime, sess.endTime)}">
-            <div class="session-cell" style="background:#f0fdfa;border-right:3px solid #14b8a6;">
+      days.forEach((d) => {
+        const dayData = schedulesByDay[d.value];
+        if (!dayData) { html += `<td class="day-cell"></td>`; return; }
+
+        // Find sessions that START at this time slot
+        const slotMin = timeToMinutes(time);
+        const startScheds = dayData.schedules.filter(
+          (s) => timeToMinutes(s.startTime) === slotMin
+        );
+
+        // Find sessions that SPAN this time slot (started earlier)
+        const spanScheds = dayData.schedules.filter(
+          (s) => timeToMinutes(s.startTime) < slotMin && timeToMinutes(s.endTime) > slotMin
+        );
+
+        if (startScheds.length === 0 && spanScheds.length === 0) {
+          html += `<td class="day-cell"></td>`;
+        } else if (spanScheds.length > 0 && startScheds.length === 0) {
+          // This cell is spanned — don't output td (rowspan handles it)
+          // Actually for the print table we can't easily do rowspan with overlapping sessions
+          // Just leave it empty — the starting cell covers it visually
+          html += `<td class="day-cell" style="display:none;"></td>`;
+        } else {
+          html += `<td class="day-cell" rowspan="${Math.max(1, Math.ceil(startScheds.reduce((max, s) => {
+            const span = timeToMinutes(s.endTime) - timeToMinutes(s.startTime);
+            return Math.max(max, span / 60);
+          }, 1)))}">`;
+
+          startScheds.forEach((sess) => {
+            const bg = getServiceColor(sess.subject?.service?.id || '');
+            const border = getServiceBorderColor(sess.subject?.service?.id || '');
+            html += `<div class="session-cell" style="background:${bg};border-color:${border};">
               <strong>${sess.subject?.nameAr || sess.subject?.name}</strong>
               ${sess.level ? `<br/>${sess.level?.nameAr || sess.level?.name}` : ''}
               ${sess.teacher ? `<br/><span style="color:#64748b;">${sess.teacher.fullName}</span>` : ''}
-              ${sess.group ? `<br/><span style="color:#94a3b8;">👥 ${sess.group}</span>` : ''}
-              <br/><span style="font-size:10px;color:#94a3b8;">${sess.startTime}-${endLabel}</span>
-            </div>
-          </td>`;
-        } else {
-          // Check if this cell is spanned by a session starting above
-          const isSpanned = dayScheds.some(
-            (s) =>
-              s.classroomId === classroom.id &&
-              timeToMinutes(s.startTime) < slotMin &&
-              timeToMinutes(s.endTime) > slotMin
-          );
-          if (!isSpanned) {
-            html += `<td></td>`;
-          }
+              ${sess.classroom ? `<br/><span style="color:#0d9488;font-size:8px;">📍 ${sess.classroom.nameAr || sess.classroom.name}</span>` : ''}
+              ${sess.sessionType === 'trial' ? '<br/><span style="color:#f59e0b;font-size:8px;">⚡ تجريبية</span>' : ''}
+              ${sess.group ? `<br/><span style="color:#94a3b8;font-size:8px;">👥 ${sess.group}</span>` : ''}
+              <br/><span style="font-size:8px;color:#94a3b8;">${sess.startTime}-${sess.endTime}</span>
+            </div>`;
+          });
+
+          html += `</td>`;
         }
       });
+
       html += `</tr>`;
     });
 
     html += `</tbody></table>`;
-    html += `<div class="footer">Aura Academy - بني ملال | جدول الحصص</div>`;
+    html += `<div class="footer">Aura Academy - بني ملال | الجدول الأسبوعي للحصص</div>`;
     html += `</body></html>`;
 
     const printWindow = window.open('', '_blank');
@@ -721,6 +817,7 @@ export function ScheduleView() {
   // ─── Render ─────────────────────────────────────────────────────────────
 
   const totalGridHeight = timeSlots.length * SLOT_HEIGHT;
+  const totalMinWidth = TIME_COLUMN_WIDTH + 7 * DAY_COLUMN_WIDTH;
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -776,68 +873,37 @@ export function ScheduleView() {
           </Card>
         </div>
 
-        {/* Day Tabs + Session Filter */}
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-          {/* Day tabs */}
-          <div className="flex flex-wrap gap-1.5 flex-1">
-            {days.map((day) => (
-              <Button
-                key={day.value}
-                variant={selectedDay === day.value ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setSelectedDay(day.value)}
-                className="gap-1.5 text-xs px-3"
-              >
-                {day.short}
-                {dayCounts[day.value] > 0 && (
-                  <Badge
-                    variant="secondary"
-                    className={cn(
-                      'h-4 min-w-4 px-1 text-[10px] flex items-center justify-center',
-                      selectedDay === day.value
-                        ? 'bg-white/20 text-white hover:bg-white/20'
-                        : ''
-                    )}
-                  >
-                    {dayCounts[day.value]}
-                  </Badge>
-                )}
-              </Button>
-            ))}
-          </div>
-
-          {/* Session type filter */}
-          <div className="flex gap-1.5 shrink-0">
-            <Button
-              variant={sessionFilter === 'all' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setSessionFilter('all')}
-              className="text-xs px-3"
-            >
-              الكل
-            </Button>
-            <Button
-              variant={sessionFilter === 'fixed' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setSessionFilter('fixed')}
-              className="text-xs px-3 gap-1"
-            >
-              <CalendarDays className="h-3 w-3" />
-              ثابتة
-            </Button>
-            <Button
-              variant={sessionFilter === 'trial' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setSessionFilter('trial')}
-              className="text-xs px-3 gap-1"
-            >
-              <Zap className="h-3 w-3" />
-              تجريبية
-            </Button>
-          </div>
+        {/* Session Type Filter */}
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant={sessionFilter === 'all' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setSessionFilter('all')}
+            className="text-xs px-3"
+          >
+            الكل
+          </Button>
+          <Button
+            variant={sessionFilter === 'fixed' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setSessionFilter('fixed')}
+            className="text-xs px-3 gap-1"
+          >
+            <CalendarDays className="h-3 w-3" />
+            ثابتة
+          </Button>
+          <Button
+            variant={sessionFilter === 'trial' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setSessionFilter('trial')}
+            className="text-xs px-3 gap-1"
+          >
+            <Zap className="h-3 w-3" />
+            تجريبية
+          </Button>
         </div>
 
-        {/* Schedule Grid */}
+        {/* Weekly Schedule Grid */}
         {loading ? (
           <Card>
             <CardContent className="p-4 space-y-3">
@@ -847,25 +913,12 @@ export function ScheduleView() {
               ))}
             </CardContent>
           </Card>
-        ) : classrooms.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-              <MapPin className="h-16 w-16 text-muted-foreground/30 mb-4" />
-              <p className="text-lg font-medium text-muted-foreground">لا توجد قاعات</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                قم بإضافة القاعات أولاً من صفحة القاعات
-              </p>
-            </CardContent>
-          </Card>
         ) : (
           <Card>
             <CardContent className="p-0">
-              <ScrollArea className="w-full" style={{ maxHeight: 'calc(100vh - 320px)' }}>
-                <div
-                  className="min-w-[600px]"
-                  style={{ width: `${Math.max(600, 70 + classrooms.length * 180)}px` }}
-                >
-                  {/* Header */}
+              <ScrollArea className="w-full" style={{ maxHeight: 'calc(100vh - 300px)' }}>
+                <div style={{ minWidth: `${totalMinWidth}px` }}>
+                  {/* Header Row - Day Names */}
                   <div
                     className="sticky top-0 z-20 bg-background border-b flex"
                     style={{ height: '44px' }}
@@ -873,37 +926,42 @@ export function ScheduleView() {
                     {/* Time header */}
                     <div
                       className="shrink-0 border-l flex items-center justify-center bg-muted/40"
-                      style={{ width: '70px' }}
+                      style={{ width: `${TIME_COLUMN_WIDTH}px` }}
                     >
                       <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                     </div>
 
-                    {/* Classroom headers */}
-                    {classrooms.map((classroom) => (
-                      <div
-                        key={classroom.id}
-                        className="flex-1 border-l last:border-l-0 flex items-center justify-center gap-1.5 px-2"
-                      >
-                        <MapPin className="h-3 w-3 text-muted-foreground shrink-0" />
-                        <span className="text-xs font-bold truncate">
-                          {classroom.nameAr || classroom.name}
-                        </span>
-                        <Badge
-                          variant="outline"
-                          className="h-4 px-1 text-[9px] shrink-0"
+                    {/* Day column headers */}
+                    {days.map((day) => {
+                      const count = dayCounts[day.value] || 0;
+                      return (
+                        <div
+                          key={day.value}
+                          className="shrink-0 border-l last:border-l-0 flex items-center justify-center gap-1.5 px-1"
+                          style={{ width: `${DAY_COLUMN_WIDTH}px` }}
                         >
-                          {classroom.capacity}
-                        </Badge>
-                      </div>
-                    ))}
+                          <span className="text-xs font-bold truncate">
+                            {day.label}
+                          </span>
+                          {count > 0 && (
+                            <Badge
+                              variant="secondary"
+                              className="h-4 min-w-4 px-1 text-[10px] shrink-0"
+                            >
+                              {count}
+                            </Badge>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
 
                   {/* Grid Body */}
                   <div className="flex">
-                    {/* Time Labels Column */}
+                    {/* Time Labels Column - sticky left in RTL (right side) */}
                     <div
-                      className="shrink-0 border-l bg-muted/20"
-                      style={{ width: '70px' }}
+                      className="shrink-0 border-l bg-muted/20 sticky right-0 z-10"
+                      style={{ width: `${TIME_COLUMN_WIDTH}px` }}
                     >
                       {timeSlots.map((time, index) => (
                         <div
@@ -921,16 +979,14 @@ export function ScheduleView() {
                       ))}
                     </div>
 
-                    {/* Classroom Columns */}
-                    {classrooms.map((classroom) => {
-                      const classroomSchedules = daySchedules.filter(
-                        (s) => s.classroomId === classroom.id
-                      );
-
+                    {/* Day Columns */}
+                    {days.map((day) => {
+                      const dayData = schedulesByDay[day.value];
                       return (
                         <div
-                          key={classroom.id}
-                          className="flex-1 border-l last:border-l-0 relative"
+                          key={day.value}
+                          className="shrink-0 border-l last:border-l-0 relative"
+                          style={{ width: `${DAY_COLUMN_WIDTH}px` }}
                         >
                           {/* Grid lines */}
                           <div style={{ height: `${totalGridHeight}px` }}>
@@ -943,23 +999,31 @@ export function ScheduleView() {
                             ))}
 
                             {/* Sessions */}
-                            {classroomSchedules.map((sched) => {
+                            {dayData && dayData.schedules.map((sched) => {
                               const top = getSlotTop(sched.startTime);
                               const height = getSessionHeight(sched.startTime, sched.endTime);
                               const { cell, badge } = getColorClasses(sched);
                               const isTrial = sched.sessionType === 'trial';
                               const slotCount = getSlotCount(sched.startTime, sched.endTime);
 
+                              // Overlap positioning
+                              const colIndex = dayData.columns.get(sched.id) || 0;
+                              const totalCols = dayData.totalColumns;
+                              const widthPercent = 100 / totalCols;
+                              const rightOffset = colIndex * widthPercent;
+
                               return (
                                 <div
                                   key={sched.id}
                                   className={cn(
-                                    'absolute inset-x-1 rounded-md border-2 px-2 py-1.5 cursor-pointer hover:shadow-md transition-all group overflow-hidden',
+                                    'absolute rounded-md border-2 px-1.5 py-1 cursor-pointer hover:shadow-md transition-all group overflow-hidden',
                                     cell
                                   )}
                                   style={{
                                     top: `${top + 1}px`,
                                     height: `${Math.max(height - 2, 20)}px`,
+                                    width: `calc(${widthPercent}% - 4px)`,
+                                    right: `calc(${rightOffset}% + 2px)`,
                                   }}
                                   onClick={() => openEditDialog(sched)}
                                 >
@@ -967,48 +1031,69 @@ export function ScheduleView() {
                                   <Badge
                                     variant="outline"
                                     className={cn(
-                                      'text-[8px] px-1 py-0 h-3.5 mb-0.5 leading-none',
+                                      'text-[7px] px-1 py-0 h-3 mb-0.5 leading-none',
                                       badge
                                     )}
                                   >
-                                    {isTrial ? '⚡ تجريبية' : '📌 ثابتة'}
+                                    {isTrial ? '⚡' : '📌'}
                                   </Badge>
 
                                   {/* Subject + Level */}
-                                  <p className="text-[11px] font-bold leading-tight truncate">
+                                  <p className="text-[10px] font-bold leading-tight truncate">
                                     {sched.subject?.nameAr || sched.subject?.name}
                                     {sched.level && (
-                                      <span className="font-normal opacity-80 mr-1">
+                                      <span className="font-normal opacity-80 mr-0.5">
                                         — {sched.level?.nameAr || sched.level?.name}
                                       </span>
                                     )}
                                   </p>
 
+                                  {/* Classroom badge */}
+                                  {sched.classroom && (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span
+                                          className={cn(
+                                            'inline-block text-[7px] px-1 py-0 rounded border leading-none mt-0.5 truncate max-w-full',
+                                            classroomColorLookup[sched.classroomId] || 'bg-slate-100 text-slate-600 border-slate-200'
+                                          )}
+                                        >
+                                          📍 {sched.classroom.nameAr || sched.classroom.name}
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="top">
+                                        <p>{sched.classroom.nameAr || sched.classroom.name}</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  )}
+
                                   {/* Teacher */}
                                   {sched.teacher && (
-                                    <p className="text-[10px] leading-tight truncate opacity-75 mt-0.5">
-                                      {sched.teacher.fullName}
+                                    <p className="text-[9px] leading-tight truncate opacity-75 mt-0.5">
+                                      👨‍🏫 {sched.teacher.fullName}
                                     </p>
                                   )}
 
                                   {/* Time range */}
-                                  <div className="flex items-center justify-between mt-1">
-                                    <span
-                                      className="text-[9px] opacity-50 font-mono"
-                                      dir="ltr"
-                                    >
-                                      {sched.startTime}-{sched.endTime}
-                                    </span>
-                                    {slotCount >= 2 && sched.group && (
-                                      <span className="text-[9px] opacity-60 truncate">
-                                        👥 {sched.group}
+                                  {slotCount >= 2 && (
+                                    <div className="flex items-center mt-0.5">
+                                      <span
+                                        className="text-[8px] opacity-50 font-mono"
+                                        dir="ltr"
+                                      >
+                                        {sched.startTime}-{sched.endTime}
                                       </span>
-                                    )}
-                                  </div>
+                                      {sched.group && (
+                                        <span className="text-[8px] opacity-60 truncate mr-1">
+                                          👥 {sched.group}
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
 
                                   {/* Group name for short sessions */}
                                   {slotCount < 2 && sched.group && (
-                                    <p className="text-[9px] leading-tight truncate opacity-60 mt-0.5">
+                                    <p className="text-[8px] leading-tight truncate opacity-60 mt-0.5">
                                       👥 {sched.group}
                                     </p>
                                   )}
@@ -1017,24 +1102,24 @@ export function ScheduleView() {
                                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors rounded-md" />
 
                                   {/* Action buttons on hover */}
-                                  <div className="absolute top-1 left-1 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <div className="absolute top-0.5 left-0.5 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                                     <Button
                                       variant="destructive"
                                       size="icon"
-                                      className="h-5 w-5 rounded-sm"
+                                      className="h-4 w-4 rounded-sm"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setDeletingSchedule(sched);
                                         setDeleteOpen(true);
                                       }}
                                     >
-                                      <Trash2 className="h-2.5 w-2.5" />
+                                      <Trash2 className="h-2 w-2" />
                                     </Button>
                                   </div>
 
                                   {/* Edit icon on hover */}
-                                  <div className="absolute top-1 left-7 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <Edit2 className="h-3 w-3 opacity-40" />
+                                  <div className="absolute top-0.5 left-5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <Edit2 className="h-2.5 w-2.5 opacity-40" />
                                   </div>
                                 </div>
                               );
@@ -1051,11 +1136,10 @@ export function ScheduleView() {
           </Card>
         )}
 
-        {/* Session count for selected day */}
-        {!loading && classrooms.length > 0 && (
+        {/* Total sessions info */}
+        {!loading && (
           <div className="text-xs text-muted-foreground text-center">
-            {days.find((d) => d.value === selectedDay)?.label} —{' '}
-            {daySchedules.length} حصة
+            الجدول الأسبوعي — {schedules.length} حصة في 7 أيام
           </div>
         )}
 
