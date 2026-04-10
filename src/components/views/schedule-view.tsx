@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { useT } from '@/hooks/use-translation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -261,11 +262,14 @@ const emptyForm: ScheduleFormData = {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function ScheduleView() {
+  const t = useT();
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const days = useMemo(() => getDays(t), [t]);
 
   // View state
   const [selectedDay, setSelectedDay] = useState<string>('1');

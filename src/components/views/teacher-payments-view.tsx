@@ -70,6 +70,7 @@ interface Teacher {
   fullName: string;
   phone?: string;
   percentage?: number;
+  status?: string;
   subjects: {
     id: string;
     subjectId: string;
