@@ -957,22 +957,27 @@ export function ScheduleView() {
                   <div className="flex">
                     {/* Time Labels Column - sticky left in RTL (right side) */}
                     <div
-                      className="shrink-0 border-l bg-muted/20 sticky right-0 z-10"
+                      className="shrink-0 border-l border-gray-400 bg-muted/10 sticky right-0 z-10"
                       style={{ width: `${TIME_COLUMN_WIDTH}px` }}
                     >
                       {timeSlots.map((time, index) => (
                         <div
                           key={time}
-                          className="flex items-start justify-center border-b border-border/50"
+                          className={cn(
+                            'flex items-start justify-center border-b',
+                            index % 2 === 0
+                              ? 'border-gray-400'
+                              : 'border-gray-200 border-dashed'
+                          )}
                           style={{ height: `${SLOT_HEIGHT}px` }}
                         >
                           <span
                             dir="ltr"
                             className={cn(
-                              'font-mono text-muted-foreground mt-1',
+                              'font-mono mt-1',
                               index % 2 === 0
-                                ? 'text-[10px] font-medium'
-                                : 'text-[9px] opacity-60'
+                                ? 'text-[10px] font-bold text-gray-700'
+                                : 'text-[9px] text-gray-400'
                             )}
                           >
                             {time}
@@ -987,7 +992,7 @@ export function ScheduleView() {
                       return (
                         <div
                           key={day.value}
-                          className="shrink-0 border-l last:border-l-0 relative"
+                          className="shrink-0 border-l border-gray-300 last:border-l-0 relative"
                           style={{ width: `${DAY_COLUMN_WIDTH}px` }}
                         >
                           {/* Grid lines */}
@@ -998,8 +1003,8 @@ export function ScheduleView() {
                                 className={cn(
                                   'border-b',
                                   index % 2 === 0
-                                    ? 'border-border/50'
-                                    : 'border-border/20 border-dashed'
+                                    ? 'border-gray-400'
+                                    : 'border-gray-200 border-dashed'
                                 )}
                                 style={{ height: `${SLOT_HEIGHT}px` }}
                               />
