@@ -914,10 +914,10 @@ export function ScheduleView() {
           <Card>
             <CardContent className="p-0">
               <ScrollArea className="w-full" style={{ maxHeight: 'calc(100vh - 300px)' }}>
-                <div style={{ minWidth: `${totalMinWidth}px` }}>
+                <div className="inline-block" style={{ minWidth: `${totalMinWidth}px`, width: `${totalMinWidth}px` }}>
                   {/* Header Row - Day Names */}
                   <div
-                    className="sticky top-0 z-20 bg-background border-b flex"
+                    className="sticky top-0 z-20 bg-background border-b flex flex-nowrap"
                     style={{ height: '44px' }}
                   >
                     {/* Time header */}
@@ -954,7 +954,7 @@ export function ScheduleView() {
                   </div>
 
                   {/* Grid Body */}
-                  <div className="flex">
+                  <div className="flex flex-nowrap">
                     {/* Time Labels Column - sticky left in RTL (right side) */}
                     <div
                       className="shrink-0 border-l border-gray-400 bg-muted/10 sticky right-0 z-10"
@@ -1032,8 +1032,8 @@ export function ScheduleView() {
                                     cell
                                   )}
                                   style={{
-                                    top: `${top + 1}px`,
-                                    height: `${Math.max(height - 2, 20)}px`,
+                                    top: `${top}px`,
+                                    height: `${height}px`,
                                     width: `calc(${widthPercent}% - 4px)`,
                                     right: `calc(${rightOffset}% + 2px)`,
                                   }}
