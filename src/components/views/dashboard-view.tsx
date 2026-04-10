@@ -357,8 +357,8 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                         style={{ height: `${Math.max(revenueH, 2)}%` }}
                       />
                     </div>
-                    <span className={cn('text-[10px] font-medium mt-1', isCurrentMonth ? 'text-teal-700' : 'text-muted-foreground')}>
-                      {item.month.slice(0, 3)}
+                    <span className={cn('text-[8px] font-medium mt-1 leading-tight', isCurrentMonth ? 'text-teal-700' : 'text-muted-foreground')}>
+                      {item.month}
                     </span>
                   </div>
                 );

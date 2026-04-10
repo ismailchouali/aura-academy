@@ -159,7 +159,7 @@ function getDays(t: ReturnType<typeof useT>) {
   ];
 }
 
-const SLOT_HEIGHT = 48;
+const SLOT_HEIGHT = 64;
 const FIRST_SLOT_MINUTES = 11 * 60; // 11:00 = 660 min
 const DAY_COLUMN_WIDTH = 160;
 const TIME_COLUMN_WIDTH = 70;
@@ -826,9 +826,6 @@ export function ScheduleView() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h2 className="text-2xl font-bold text-foreground">جدول الحصص</h2>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              إدارة ومتابعة الجدول الأسبوعي للمركز
-            </p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" className="gap-1.5" onClick={handlePrint}>

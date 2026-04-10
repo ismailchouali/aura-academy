@@ -673,3 +673,23 @@ Work Log:
 - ESLint passes with zero errors
 - Dev server compiled successfully (✓ Compiled in 591ms)
 - ~1100 lines of TypeScript code
+
+---
+Task ID: 8
+Agent: Main Agent
+Task: Multiple UI improvements - schedule clarity, payment date, full month names
+
+Work Log:
+- Read user requests (Moroccan Arabic) and analyzed uploaded screenshots with VLM
+- Schedule view: Increased SLOT_HEIGHT from 48px to 64px for clearer 30-min time separation
+- Schedule view: Removed subtitle text "إدارة ومتابعة الجدول الأسبوعي للمركز" from schedule header
+- Payments view: Added manual date input (type="date") to payment form dialog in a 4-column grid (month, year, date, method)
+- Dashboard view: Changed month labels in monthly income chart from `item.month.slice(0,3)` to full `item.month`, reduced font size to 8px to fit
+- Verified all changes: ESLint passes with zero errors
+- Dev server compiled successfully (GET / 200)
+
+Stage Summary:
+- Schedule grid now has larger time slots (64px per 30-min) for better visual clarity
+- Schedule page header simplified (removed subtitle text)
+- Payment form now has a manual date picker field (تاريخ الدفع) for entering past payment dates
+- Dashboard monthly income chart now shows full Arabic month names instead of 3-letter abbreviations

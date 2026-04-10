@@ -1309,8 +1309,8 @@ export function PaymentsView() {
                 )}
               </div>
 
-              {/* ── Month / Year / Method ──────────────────────────────── */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* ── Month / Year / Date / Method ────────────────────────── */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="space-y-1.5">
                   <Label>{t.payments.month} *</Label>
                   <Select
@@ -1342,6 +1342,20 @@ export function PaymentsView() {
                       setFormData({
                         ...formData,
                         year: Number(e.target.value) || '',
+                      })
+                    }
+                    dir="ltr"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>{t.payments.bonPaymentDate}</Label>
+                  <Input
+                    type="date"
+                    value={formData.paymentDate}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        paymentDate: e.target.value,
                       })
                     }
                     dir="ltr"
