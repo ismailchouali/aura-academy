@@ -693,3 +693,27 @@ Stage Summary:
 - Schedule page header simplified (removed subtitle text)
 - Payment form now has a manual date picker field (تاريخ الدفع) for entering past payment dates
 - Dashboard monthly income chart now shows full Arabic month names instead of 3-letter abbreviations
+
+---
+Task ID: 9
+Agent: Main Agent
+Task: Fix schedule time labels and remove internal title text
+
+Work Log:
+- User reported: time slots only show full hours (13:00, 14:00...) instead of all 30-min increments
+- User reported: title text still visible inside the schedule grid area
+- Analyzed screenshot with VLM to identify exact issues
+- Found time label code at line 973: `{index % 2 === 0 ? time : ''}` - only showing even-indexed (full hour) slots
+- Found info text at line 1138-1140: "الجدول الأسبوعي — X حصة في 7 أيام" displayed below the grid
+- Changed time labels to show ALL 30-min slots: full hours with `text-[10px] font-medium`, half-hours with `text-[9px] opacity-60`
+- Added dashed lighter border for half-hour grid lines (`border-border/20 border-dashed`) vs solid for full hours (`border-border/50`)
+- Reduced SLOT_HEIGHT from 64px to 48px (24 slots × 48px = 1152px total, more manageable)
+- Removed the "الجدول الأسبوعي — X حصة في 7 أيام" text below the grid
+- ESLint passes with zero errors
+- Dev server compiled successfully (✓ Compiled in 454ms)
+
+Stage Summary:
+- All 30-minute time slots now visible with labels (11:00, 11:30, 12:00, 12:30...)
+- Half-hour labels styled smaller/dimmer for visual hierarchy
+- Half-hour grid lines use dashed style to distinguish from full-hour solid lines
+- Internal title text "الجدول الأسبوعي — X حصة في 7 أيام" removed from below the grid

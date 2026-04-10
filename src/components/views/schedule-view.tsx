@@ -159,7 +159,7 @@ function getDays(t: ReturnType<typeof useT>) {
   ];
 }
 
-const SLOT_HEIGHT = 64;
+const SLOT_HEIGHT = 48;
 const FIRST_SLOT_MINUTES = 11 * 60; // 11:00 = 660 min
 const DAY_COLUMN_WIDTH = 160;
 const TIME_COLUMN_WIDTH = 70;
@@ -968,9 +968,14 @@ export function ScheduleView() {
                         >
                           <span
                             dir="ltr"
-                            className="text-[10px] font-mono text-muted-foreground mt-1"
+                            className={cn(
+                              'font-mono text-muted-foreground mt-1',
+                              index % 2 === 0
+                                ? 'text-[10px] font-medium'
+                                : 'text-[9px] opacity-60'
+                            )}
                           >
-                            {index % 2 === 0 ? time : ''}
+                            {time}
                           </span>
                         </div>
                       ))}
@@ -990,7 +995,12 @@ export function ScheduleView() {
                             {timeSlots.map((_, index) => (
                               <div
                                 key={index}
-                                className="border-b border-border/40"
+                                className={cn(
+                                  'border-b',
+                                  index % 2 === 0
+                                    ? 'border-border/50'
+                                    : 'border-border/20 border-dashed'
+                                )}
                                 style={{ height: `${SLOT_HEIGHT}px` }}
                               />
                             ))}
@@ -1133,12 +1143,7 @@ export function ScheduleView() {
           </Card>
         )}
 
-        {/* Total sessions info */}
-        {!loading && (
-          <div className="text-xs text-muted-foreground text-center">
-            الجدول الأسبوعي — {schedules.length} حصة في 7 أيام
-          </div>
-        )}
+
 
         {/* ─── Add/Edit Dialog ──────────────────────────────────────────────── */}
         <Dialog open={formOpen} onOpenChange={(open) => { if (!open) setConflictErrors([]); setFormOpen(open); }}>
