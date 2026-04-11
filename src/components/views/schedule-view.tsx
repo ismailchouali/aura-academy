@@ -148,15 +148,14 @@ interface ConflictError {
 
 // Days array - populated inside component with translations
 function getDays(t: ReturnType<typeof useT>) {
-  // RTL: first in array → rightmost. So reverse: last = leftmost
-  // Visual left→right: الإثنين, الثلاثاء, الأربعاء, الخميس, الجمعة, السبت, الأحد
+  // Left to right: الإثنين, الثلاثاء, الأربعاء, الخميس, الجمعة, السبت, الأحد
   return [
-    { value: '7', label: t.days['7'], short: t.days.short['7'] },
-    { value: '6', label: t.days['6'], short: t.days.short['6'] },
-    { value: '5', label: t.days['5'], short: t.days.short['5'] },
-    { value: '4', label: t.days['4'], short: t.days.short['4'] },
-    { value: '3', label: t.days['3'], short: t.days.short['3'] },
     { value: '2', label: t.days['2'], short: t.days.short['2'] },
+    { value: '3', label: t.days['3'], short: t.days.short['3'] },
+    { value: '4', label: t.days['4'], short: t.days.short['4'] },
+    { value: '5', label: t.days['5'], short: t.days.short['5'] },
+    { value: '6', label: t.days['6'], short: t.days.short['6'] },
+    { value: '7', label: t.days['7'], short: t.days.short['7'] },
     { value: '1', label: t.days['1'], short: t.days.short['1'] },
   ];
 }
