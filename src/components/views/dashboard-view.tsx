@@ -27,6 +27,9 @@ import {
   Phone,
   Calendar,
   BookOpen,
+  Clock,
+  MapPin,
+  User,
 } from 'lucide-react';
 
 interface DashboardData {
@@ -79,6 +82,21 @@ interface DashboardData {
     teacher?: { fullName: string };
   }[];
   teacherPaymentsThisYear: number;
+  todaySessions: {
+    id: string;
+    dayOfWeek: string;
+    startTime: string;
+    endTime: string;
+    group?: string;
+    sessionType: string;
+    subject: {
+      nameAr: string;
+      service?: { nameAr: string; id: string };
+    };
+    teacher?: { fullName: string };
+    classroom?: { name: string };
+    level?: { nameAr: string };
+  }[];
 }
 
 function DashboardSkeleton() {
@@ -153,6 +171,27 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
   if (loading) return <DashboardSkeleton />;
   if (!data) return null;
 
+  // Compute today's day key for schedule: JS getDay() 0=Sun..6=Sat → Schedule "1"=Sun, "2"=Mon..etc
+  const todayJsDay = new Date().getDay();
+  const todayDayKey = todayJsDay === 0 ? '1' : String(todayJsDay + 1);
+
+  function getServiceColors(serviceName: string) {
+    const lower = serviceName.toLowerCase();
+    if (lower.includes('soutien')) {
+      return { cardBg: 'bg-teal-50 border-teal-200', text: 'text-teal-700' };
+    }
+    if (lower.includes('langue')) {
+      return { cardBg: 'bg-amber-50 border-amber-200', text: 'text-amber-700' };
+    }
+    if (lower.includes('informatique') || lower.includes('it')) {
+      return { cardBg: 'bg-purple-50 border-purple-200', text: 'text-purple-700' };
+    }
+    if (lower.includes('concours') || lower.includes('prépa')) {
+      return { cardBg: 'bg-rose-50 border-rose-200', text: 'text-rose-700' };
+    }
+    return { cardBg: 'bg-gray-50 border-gray-200', text: 'text-gray-700' };
+  }
+
   const quickActions = [
     {
       label: t.dashboard.registerStudent,
@@ -213,6 +252,101 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
             <p className="text-sm text-muted-foreground">{t.dashboard.totalStudents}</p>
             <p className="text-2xl font-bold mt-1">{data.totalStudents}</p>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Today's Sessions */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CalendarDays className="h-5 w-5 text-teal-600" />
+              <CardTitle className="text-base">{t.dashboard.todaySessions}</CardTitle>
+              <Badge variant="outline" className="text-xs font-normal">{t.days[todayDayKey]}</Badge>
+            </div>
+            <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => onNavigate('schedule')}>
+              {t.common.viewAll}
+              <ArrowLeft className="h-3.5 w-3.5 mr-1" />
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {data.todaySessions.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <CalendarDays className="h-10 w-10 mx-auto mb-3 opacity-30" />
+              <p className="text-sm">{t.dashboard.noSessionsToday}</p>
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {data.todaySessions.map((session) => {
+                const serviceName = session.subject.service?.nameAr || '';
+                const colors = getServiceColors(serviceName);
+                return (
+                  <div
+                    key={session.id}
+                    className={cn(
+                      'p-3 rounded-lg border transition-colors',
+                      session.sessionType === 'trial'
+                        ? 'border-dashed bg-opacity-50'
+                        : 'border-solid',
+                      colors.cardBg
+                    )}
+                  >
+                    <div className="flex items-start gap-3">
+                      {/* Time */}
+                      <div className="shrink-0 text-center min-w-[52px]">
+                        <div className="flex items-center justify-center gap-1 text-xs font-bold text-foreground">
+                          <Clock className="h-3 w-3" />
+                          <span dir="ltr">{session.startTime}</span>
+                        </div>
+                        <div className="text-[10px] text-muted-foreground mt-0.5" dir="ltr">
+                          — {session.endTime}
+                        </div>
+                      </div>
+
+                      {/* Session Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className={cn('font-semibold text-sm', colors.text)}>
+                            {session.subject.nameAr}
+                          </span>
+                          {session.level && (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                              {session.level.nameAr}
+                            </Badge>
+                          )}
+                          {session.sessionType === 'trial' && (
+                            <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-[10px] px-1.5 py-0">
+                              تجريبية
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                          {session.teacher && (
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <User className="h-3 w-3" />
+                              {session.teacher.fullName}
+                            </span>
+                          )}
+                          {session.classroom && (
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <MapPin className="h-3 w-3" />
+                              {session.classroom.name}
+                            </span>
+                          )}
+                          {session.group && (
+                            <span className="text-xs text-muted-foreground">
+                              🏷️ {session.group}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </CardContent>
       </Card>
 

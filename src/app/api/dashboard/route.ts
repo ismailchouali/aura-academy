@@ -128,6 +128,27 @@ export async function GET() {
       _sum: { amount: true },
     });
 
+    // Today's sessions
+    // JavaScript getDay(): 0=Sunday, 1=Monday, ..., 6=Saturday
+    // Schedule dayOfWeek: "1"=Sunday, "2"=Monday, ..., "7"=Saturday
+    const jsDay = new Date().getDay();
+    const scheduleDayOfWeek = jsDay === 0 ? '1' : String(jsDay + 1);
+
+    const todaySessions = await db.schedule.findMany({
+      where: { dayOfWeek: scheduleDayOfWeek },
+      include: {
+        subject: {
+          include: {
+            service: true,
+          },
+        },
+        teacher: true,
+        classroom: true,
+        level: true,
+      },
+      orderBy: { startTime: 'asc' },
+    });
+
     return NextResponse.json({
       totalStudents,
       activeStudents,
@@ -148,6 +169,7 @@ export async function GET() {
       recentStudents,
       totalTeacherPayments: teacherPaymentStats._sum.amount || 0,
       teacherPaymentsThisYear: teacherPaymentsTotal,
+      todaySessions,
     });
   } catch (error) {
     console.error('Error fetching dashboard stats:', error);

@@ -787,3 +787,137 @@ Stage Summary:
 - Sidebar shows "التقارير المالية" with TrendingUp icon after "لوحة التحكم"
 - ESLint passes with zero errors
 - Dev server returns 200
+
+---
+## Task ID: 4
+Agent: Main Agent
+Task: Add today's sessions display to the Dashboard (لوحة التحكم)
+
+Work Log:
+- Read worklog.md for project context
+- Read dashboard-view.tsx, dashboard API route, schedule-view.tsx, and translations.ts
+- Analyzed dayOfWeek mapping: schedule uses "1"=Sunday, "2"=Monday, ..., "7"=Saturday; JS getDay() returns 0=Sunday..6=Saturday
+- Mapping formula: `(jsDay === 0) ? '1' : String(jsDay + 1)`
+
+### Changes Made
+
+**1. Dashboard API (`/src/app/api/dashboard/route.ts`):**
+- Added today's sessions query: computes schedule dayOfWeek from JS Date, fetches schedules with includes (subject→service, teacher, classroom, level), sorts by startTime
+- Added `todaySessions` to the JSON response
+
+**2. Dashboard View (`/src/components/views/dashboard-view.tsx`):**
+- Added `todaySessions` to DashboardData interface with full type (id, dayOfWeek, startTime, endTime, group, sessionType, subject with service, teacher, classroom, level)
+- Added `todayDayKey` computation using same JS→Schedule day mapping
+- Added `getServiceColors()` helper function for service-based color coding:
+  - Cours de Soutiens → teal (bg-teal-50, text-teal-700)
+  - Langues → amber (bg-amber-50, text-amber-700)
+  - Informatique → purple (bg-purple-50, text-purple-700)
+  - Préparation Concours → rose (bg-rose-50, text-rose-700)
+  - Default → gray
+- Added "Today's Sessions" Card between Students Stats and New Registrations:
+  - Header: CalendarDays icon + "الحصص اليومية" + today's day name badge (e.g. الإثنين) + "View All" button
+  - Empty state: CalendarDays icon + "لا توجد حصص اليوم"
+  - Each session row shows: start/end time (Clock icon), subject name (service-colored), level badge, trial badge (if applicable), teacher (User icon), classroom (MapPin icon), group name
+  - Trial sessions have dashed borders
+  - Max height 320px with scroll overflow
+- Added imports: Clock, MapPin, User from lucide-react
+
+**3. Translations (`/src/lib/translations.ts`):**
+- Arabic: `dashboard.todaySessions` = "الحصص اليومية", `dashboard.noSessionsToday` = "لا توجد حصص اليوم"
+- French: `dashboard.todaySessions` = "Séances du jour", `dashboard.noSessionsToday` = "Aucune séance aujourd'hui"
+
+Stage Summary:
+- Dashboard now displays today's sessions card with service-based color coding
+- Sessions sorted by start time, showing subject, level, teacher, classroom, group
+- Day name shown in Arabic/French based on language setting
+- ESLint passes with zero errors
+- API returns todaySessions array correctly (tested with curl, returned 200)
+
+---
+Task ID: 5
+Agent: Main Agent
+Task: Fix language pack payment deferral logic in overdue payments API
+
+Work Log:
+- Read worklog.md for project context and understood the overdue payments system
+- Read `/src/app/api/payments/overdue/route.ts` (155 lines) to understand current pack deferral logic
+- Verified `paymentDate` field exists in Prisma schema as `DateTime?` (nullable)
+- Identified that `countMonthsOverdue` used `month`/`year` fields as reference date for pack deferral
+- Modified `countMonthsOverdue` to accept `paymentDate` (Date | string | null) as 5th parameter
+- When `isLangues && packMonths > 1 && paymentDate`: uses `paymentDate` to calculate months since actual payment
+- When `paymentDate` is null/missing: falls back to original `month`/`year` logic
+- Updated `isOverdue` to pass `paymentDate` through to `countMonthsOverdue`
+- Updated all 4 call sites to pass `p.paymentDate`
+
+### Changes Made
+
+**File: `src/app/api/payments/overdue/route.ts`**
+
+1. **`countMonthsOverdue` function** — Added `paymentDate?: Date | string | null` parameter:
+   - New Langues pack logic: calculates `monthsSincePayment = currentYearMonth - paymentDateYearMonth`
+   - Returns `max(0, monthsSincePayment - (packMonths - 1))`
+   - Falls back to original `month`/`year` logic when `paymentDate` is null or not applicable
+
+2. **`isOverdue` function** — Added `paymentDate` parameter, passes it through
+
+3. **Filter (line ~79)** — Now passes `p.paymentDate` to `isOverdue`
+
+4. **maxMonthsOverdue calculation (line ~108)** — Now passes `p.paymentDate` to `countMonthsOverdue`
+
+5. **overduePayments map (line ~131)** — Now passes `p.paymentDate` to `countMonthsOverdue`
+
+**Behavior example:**
+- Student pays 750dh for a 3-month pack on January 15 (paymentDate = Jan 15)
+- February: `monthsSincePayment = 1`, `1 - (3-1) = -1` → `max(0, -1) = 0` → NOT overdue ✓
+- March: `monthsSincePayment = 2`, `2 - 2 = 0` → NOT overdue ✓
+- April: `monthsSincePayment = 3`, `3 - 2 = 1` → IS overdue ✓
+
+Stage Summary:
+- Language pack payment deferral now uses `paymentDate` instead of `month`/`year` fields
+- Pack months are correctly deferred from the actual payment date
+- Non-language courses and payments without `paymentDate` use original logic unchanged
+- ESLint passes with zero errors
+- No new dependencies or schema changes needed
+
+---
+Task ID: 6
+Agent: Main Agent
+Task: Verify and fix teacher payment calculation for language course packs
+
+Work Log:
+- Read worklog.md for project context (Aura Academy management app)
+- Read `/src/app/api/teacher-payments/route.ts` (233 lines) — analyzed calculation mode logic
+- Read `/src/components/views/teacher-payments-view.tsx` (1115+ lines) — analyzed frontend triggers
+- Read `prisma/schema.prisma` — verified Payment model has month, year, paymentDate, packMonths fields
+- Confirmed the existing Langues pack division logic was correct (divide paidAmount by packMonths)
+- **Identified the bug**: The calculation summed ALL payments across ALL time for a teacher, not just those relevant to the selected month/year
+  - This meant a teacher paid for January would see February/March/etc. payments included too
+  - For pack payments, the monthly equivalent was counted once but in multiple teacher payment months
+
+### Changes Made
+
+**Backend: `/src/app/api/teacher-payments/route.ts`**
+- Added `paymentDate` to the payments select query (for future coverage period calculations)
+- Added month/year filter parsing: `filterMonth` and `filterYear` with `hasMonthFilter` flag
+- Added `toMonthIndex(m, y)` helper for cross-year month comparison (handles year boundaries like Nov→Jan)
+- When `hasMonthFilter` is true, the payment reduce now filters:
+  - **Regular payments (packMonths=1)**: Only include if `payment.month === filterMonth && payment.year === filterYear`
+  - **Pack payments (packMonths>1)**: Only include if the filter month falls within the pack's coverage period `[packStart, packStart + packMonths)`
+    - Uses absolute month index to correctly handle year boundary crossings (e.g., 3-month pack starting Nov 2025 covers Nov 2025, Dec 2025, Jan 2026)
+- When no month/year specified, preserves original behavior (sum all payments)
+
+**Frontend: `/src/components/views/teacher-payments-view.tsx`**
+- Updated `fetchCalcData(teacherId?, calcMonth?, calcYear?)` to accept and pass month/year as query params
+- Updated `openCreateDialog()` to pass current month/year to `fetchCalcData`
+- Updated `openEditDialog(payment)` to pass the payment's month/year to `fetchCalcData`
+- Updated `handleTeacherSelect(teacherId)` to re-fetch calculation with current form month/year
+- Added new `useEffect` that watches `form.month`, `form.year`, `formOpen`, `form.teacherId` and re-fetches calc data when they change (only in create mode, not edit mode)
+
+Stage Summary:
+- Teacher payment calculation now correctly scopes to the selected month/year
+- Regular (non-pack) payments: exact month/year match
+- Language pack payments: checked against coverage period using absolute month indices
+- Pack coverage correctly crosses year boundaries (e.g., Nov + 3 months = Nov, Dec, Jan)
+- Calculation re-fetches automatically when user changes month/year or teacher in the dialog
+- ESLint passes with zero errors
+- No schema or dependency changes needed

@@ -16,23 +16,38 @@ function getMonthIndex(month: string): number {
   return MONTH_ORDER.indexOf(month);
 }
 
-function countMonthsOverdue(month: string, year: number, packMonths?: number | null, isLangues?: boolean): number {
-  const mIdx = getMonthIndex(month);
+function countMonthsOverdue(
+  month: string,
+  year: number,
+  packMonths?: number | null,
+  isLangues?: boolean,
+  paymentDate?: Date | string | null
+): number {
   const now = new Date();
   const curYear = now.getFullYear();
   const curMonth = now.getMonth(); // 0-indexed
-  const paymentYM = year * 12 + mIdx;
   const currentYM = curYear * 12 + curMonth;
-  const rawOverdue = Math.max(0, currentYM - paymentYM);
-  // For Langues service, subtract packMonths (the student already paid for those months)
-  if (isLangues && packMonths && packMonths > 1) {
-    return Math.max(0, rawOverdue - (packMonths - 1));
+
+  // For Langues service with a pack, use paymentDate to calculate months since payment
+  if (isLangues && packMonths && packMonths > 1 && paymentDate) {
+    const pDate = new Date(paymentDate);
+    const payYear = pDate.getFullYear();
+    const payMonth = pDate.getMonth(); // 0-indexed
+    const paymentYM = payYear * 12 + payMonth;
+    const monthsSincePayment = Math.max(0, currentYM - paymentYM);
+    // The pack covers (packMonths - 1) additional months beyond the first
+    return Math.max(0, monthsSincePayment - (packMonths - 1));
   }
+
+  // Default: use month/year fields
+  const mIdx = getMonthIndex(month);
+  const paymentYM = year * 12 + mIdx;
+  const rawOverdue = Math.max(0, currentYM - paymentYM);
   return rawOverdue;
 }
 
-function isOverdue(month: string, year: number, packMonths?: number | null, isLangues?: boolean): boolean {
-  return countMonthsOverdue(month, year, packMonths, isLangues) >= 1;
+function isOverdue(month: string, year: number, packMonths?: number | null, isLangues?: boolean, paymentDate?: Date | string | null): boolean {
+  return countMonthsOverdue(month, year, packMonths, isLangues, paymentDate) >= 1;
 }
 
 export async function GET() {
@@ -61,7 +76,7 @@ export async function GET() {
     const overduePayments = payments.filter((p) => {
       const serviceId = p.student.level?.subject?.service?.id || '';
       const isLangues = serviceId === 'service_langues';
-      return isOverdue(p.month, p.year, p.packMonths, isLangues);
+      return isOverdue(p.month, p.year, p.packMonths, isLangues, p.paymentDate);
     });
 
     // Group by service → level → student
@@ -90,7 +105,7 @@ export async function GET() {
             ...payments.map((p) => {
               const serviceId = p.student.level?.subject?.service?.id || '';
               const isLangues = serviceId === 'service_langues';
-              return countMonthsOverdue(p.month, p.year, p.packMonths, isLangues);
+              return countMonthsOverdue(p.month, p.year, p.packMonths, isLangues, p.paymentDate);
             })
           );
 
@@ -113,7 +128,7 @@ export async function GET() {
                 monthLabel: MONTH_LABELS[p.month] || p.month,
                 year: p.year,
                 remainingAmount: p.remainingAmount,
-                monthsOverdue: countMonthsOverdue(p.month, p.year, p.packMonths, isLangues),
+                monthsOverdue: countMonthsOverdue(p.month, p.year, p.packMonths, isLangues, p.paymentDate),
               };
             }),
           };

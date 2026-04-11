@@ -209,6 +209,7 @@ function printTeacherBon(
 <head>
 <meta charset="UTF-8">
 <title>${t.teacherPayments.bonTitle} - ${teacherName}</title>
+<base href="${typeof window !== 'undefined' ? window.location.origin + '/' : '/'}">
 <style>
   @page { size: A4; margin: 10mm; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -334,7 +335,7 @@ function printTeacherBon(
 <body>
   <div class="bon-container">
     <div class="bon-header">
-      <img src="/upload/pasted_image_1775936460008.jpg" alt="Aura Academy">
+      <img src="/logo.jpg" alt="Aura Academy">
       <h1>Aura Academy</h1>
     </div>
 
@@ -496,11 +497,13 @@ export function TeacherPaymentsView() {
     }
   }, []);
 
-  const fetchCalcData = useCallback(async (teacherId?: string) => {
+  const fetchCalcData = useCallback(async (teacherId?: string, calcMonth?: string, calcYear?: string) => {
     setCalcLoading(true);
     try {
       const params = new URLSearchParams({ calculate: 'true' });
       if (teacherId) params.set('teacherId', teacherId);
+      if (calcMonth) params.set('month', calcMonth);
+      if (calcYear) params.set('year', calcYear);
       const res = await fetch(`/api/teacher-payments?${params.toString()}`);
       if (!res.ok) throw new Error('Failed');
       const data = await res.json();
@@ -519,6 +522,13 @@ export function TeacherPaymentsView() {
   useEffect(() => {
     fetchTeachers();
   }, [fetchTeachers]);
+
+  // Re-fetch calculation data when month/year changes in the form (if dialog is open with a teacher)
+  useEffect(() => {
+    if (formOpen && form.teacherId && !editingPayment) {
+      fetchCalcData(form.teacherId, form.month, form.year);
+    }
+  }, [form.month, form.year, formOpen, form.teacherId, editingPayment, fetchCalcData]);
 
   // ─── Computed Values ──────────────────────────────────────────────
 
@@ -558,28 +568,32 @@ export function TeacherPaymentsView() {
 
   const openCreateDialog = () => {
     setEditingPayment(null);
+    const currentM = String(now.getMonth() + 1);
+    const currentY = String(now.getFullYear());
     setForm({
       ...emptyForm,
-      month: String(now.getMonth() + 1),
-      year: String(now.getFullYear()),
+      month: currentM,
+      year: currentY,
       paymentDate: now.toISOString().split('T')[0],
     });
-    fetchCalcData();
+    fetchCalcData(undefined, currentM, currentY);
     setFormOpen(true);
   };
 
   const openEditDialog = (payment: TeacherPayment) => {
     setEditingPayment(payment);
+    const editMonth = payment.month || '';
+    const editYear = payment.year ? String(payment.year) : '';
     setForm({
       teacherId: payment.teacherId,
       amount: payment.amount ? String(payment.amount) : '',
-      month: payment.month || '',
-      year: payment.year ? String(payment.year) : '',
+      month: editMonth,
+      year: editYear,
       paymentDate: payment.paymentDate ? payment.paymentDate.split('T')[0] : '',
       notes: payment.notes || '',
       status: payment.status,
     });
-    fetchCalcData(payment.teacherId);
+    fetchCalcData(payment.teacherId, editMonth, editYear);
     setFormOpen(true);
   };
 
@@ -589,6 +603,8 @@ export function TeacherPaymentsView() {
       teacherId,
       amount: '',
     }));
+    // Re-fetch calculation with current month/year for the selected teacher
+    fetchCalcData(teacherId, form.month, form.year);
   };
 
   const handleApplyCalculation = () => {

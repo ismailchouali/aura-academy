@@ -147,6 +147,8 @@ const ar = {
     dateCol: 'التاريخ',
     from: 'من',
     fetchError: 'فشل في تحميل لوحة التحكم',
+    todaySessions: 'الحصص اليومية',
+    noSessionsToday: 'لا توجد حصص اليوم',
   },
 
   // ── Students ──
@@ -705,6 +707,8 @@ const fr: typeof ar = {
     dateCol: 'Date',
     from: 'de',
     fetchError: 'Échec du chargement du tableau de bord',
+    todaySessions: 'Séances du jour',
+    noSessionsToday: 'Aucune séance aujourd\'hui',
   },
 
   // ── Students ──

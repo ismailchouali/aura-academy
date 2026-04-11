@@ -276,6 +276,7 @@ export function PaymentsView() {
 <head>
   <meta charset="UTF-8">
   <title>${t.payments.bonPrint}</title>
+  <base href="${typeof window !== 'undefined' ? window.location.origin + '/' : '/'}">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap');
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -421,7 +422,7 @@ export function PaymentsView() {
   </div>
   <div class="bon">
     <div class="header">
-      <img src="/upload/pasted_image_1775936460008.jpg" alt="Aura Academy" class="logo">
+      <img src="/logo.jpg" alt="Aura Academy" class="logo">
       <h1>Aura Academy</h1>
     </div>
     <div class="divider"></div>
