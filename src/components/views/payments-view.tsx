@@ -310,7 +310,10 @@ export function PaymentsView() {
       margin-bottom: 0;
     }
     .header .logo {
-      max-height: 80px;
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      object-fit: cover;
       display: block;
       margin: 0 auto;
     }
@@ -417,9 +420,6 @@ export function PaymentsView() {
   </style>
 </head>
 <body>
-  <div class="no-print">
-    <button onclick="window.print()">${t.payments.bonPrint}</button>
-  </div>
   <div class="bon">
     <div class="header">
       <img src="/logo.jpg" alt="Aura Academy" class="logo">
@@ -488,6 +488,9 @@ export function PaymentsView() {
       <div class="phone-line">${t.payments.bonPhone}</div>
       <div>${t.payments.bonAddress}</div>
     </div>
+  </div>
+  <div class="no-print" style="text-align:center; margin-top:16px;">
+    <button onclick="window.print()">${t.payments.bonPrint}</button>
   </div>
 </body>
 </html>`;

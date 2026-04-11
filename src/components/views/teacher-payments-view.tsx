@@ -238,7 +238,10 @@ function printTeacherBon(
     border-bottom: 2px solid #0d9488;
   }
   .bon-header img {
-    max-height: 80px;
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    object-fit: cover;
     display: block;
     margin: 0 auto;
   }
