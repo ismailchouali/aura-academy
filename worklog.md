@@ -921,3 +921,27 @@ Stage Summary:
 - Calculation re-fetches automatically when user changes month/year or teacher in the dialog
 - ESLint passes with zero errors
 - No schema or dependency changes needed
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix student creation error - Prisma client out of sync with schema
+
+Work Log:
+- User reported error "خطأ في إدخال البيانات !" when trying to save a student
+- Analyzed screenshot with VLM - confirmed form was submitting but getting 500 error
+- Tested POST /api/students via curl - got 500 Internal Server Error
+- Added temporary error details to API response to diagnose
+- Found Prisma error: "Unknown argument `levelId`. Did you mean `level`?"
+- Root cause: Prisma generated client was stale/out of sync with the schema
+- `.config` file (JuiceFS) was blocking `npx prisma generate` command
+- Fix: Temporarily renamed `.config` → `.config.bak`, ran `npx prisma generate` and `npx prisma db push`, then restored `.config`
+- Also cleared `.next` cache and restarted dev server
+- Verified POST /api/students returns 201 (Created) successfully
+- Removed debug error details from API response
+- Cleaned up test student data
+
+Stage Summary:
+- Student creation now works correctly
+- Prisma client regenerated after temporarily moving .config file
+- Dev server restarted with fresh .next cache
