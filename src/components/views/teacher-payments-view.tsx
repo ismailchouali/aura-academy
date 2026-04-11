@@ -338,7 +338,7 @@ function printTeacherBon(
 <body>
   <div class="bon-container">
     <div class="bon-header">
-      <img src="/logo.jpg" alt="Aura Academy">
+      <img src="/logo.png" alt="Aura Academy">
       <h1>Aura Academy</h1>
     </div>
 

@@ -102,6 +102,7 @@ interface StudentSearchResult {
   parentName: string | null;
   parentPhone: string | null;
   monthlyFee: number;
+  packMonths?: number;
   level: {
     nameAr: string;
     subject: { nameAr: string; service?: { nameAr: string; id: string } | null } | null;
@@ -422,7 +423,7 @@ export function PaymentsView() {
 <body>
   <div class="bon">
     <div class="header">
-      <img src="/logo.jpg" alt="Aura Academy" class="logo">
+      <img src="/logo.png" alt="Aura Academy" class="logo">
       <h1>Aura Academy</h1>
     </div>
     <div class="divider"></div>
@@ -698,7 +699,9 @@ export function PaymentsView() {
       ...prev,
       studentId: student.id,
       amount: student.monthlyFee || '',
-      packMonths: student.level?.subject?.service?.id === 'service_langues' ? prev.packMonths : 1,
+      packMonths: student.level?.subject?.service?.id === 'service_langues'
+        ? (student.packMonths || prev.packMonths)
+        : 1,
     }));
   };
 

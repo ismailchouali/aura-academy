@@ -53,6 +53,7 @@ export async function PUT(
         parentName: body.parentName,
         parentPhone: body.parentPhone,
         monthlyFee: body.monthlyFee ?? 0,
+        packMonths: body.packMonths ?? 1,
         status: body.status,
         enrollmentDate: body.enrollmentDate ? new Date(body.enrollmentDate) : undefined,
       },

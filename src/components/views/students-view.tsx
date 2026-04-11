@@ -77,6 +77,7 @@ interface Student {
   parentName: string | null;
   parentPhone: string | null;
   monthlyFee: number;
+  packMonths?: number;
   status: string;
   enrollmentDate: string;
   payments: unknown[];
@@ -129,6 +130,7 @@ interface FormState {
   parentName: string;
   parentPhone: string;
   monthlyFee: string;
+  packMonths: number;
 }
 
 type WizardStep = 1 | 2 | 3 | 4 | 5;
@@ -139,6 +141,7 @@ const initialForm: FormState = {
   parentName: '',
   parentPhone: '',
   monthlyFee: '',
+  packMonths: 1,
 };
 
 // ── Service icons map ──────────────────────────────────────────────────────
@@ -321,6 +324,7 @@ export function StudentsView() {
         parentName: student.parentName || '',
         parentPhone: student.parentPhone || '',
         monthlyFee: student.monthlyFee ? String(student.monthlyFee) : '',
+        packMonths: student.packMonths || 1,
       });
       // Pre-select service, subject, level, teacher from student data
       if (student.level?.subject) {
@@ -438,6 +442,7 @@ export function StudentsView() {
         parentName: form.parentName || null,
         parentPhone: form.parentPhone || null,
         monthlyFee: parseFloat(form.monthlyFee) || 0,
+        packMonths: form.packMonths || 1,
         levelId: selectedLevel.id,
         teacherId: noTeacher ? null : (selectedTeacher?.id || null),
         status: editingStudent?.status || 'active',
@@ -1028,6 +1033,35 @@ export function StudentsView() {
                   className="text-left"
                 />
               </div>
+              {/* Pack Type (Langues only) */}
+              {selectedService?.id === 'service_langues' && (
+                <div className="space-y-1.5">
+                  <Label>{t.payments.packType}</Label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {[
+                      { value: 1, label: t.payments.pack1 },
+                      { value: 3, label: t.payments.pack3 },
+                      { value: 6, label: t.payments.pack6 },
+                      { value: 9, label: t.payments.pack9 },
+                    ].map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() =>
+                          setForm((prev) => ({ ...prev, packMonths: opt.value }))
+                        }
+                        className={`px-3 py-2 rounded-lg border-2 text-sm font-medium transition-colors ${
+                          form.packMonths === opt.value
+                            ? 'border-teal-500 bg-teal-50 text-teal-700'
+                            : 'border-muted bg-card hover:border-teal-200 hover:bg-teal-50/50 text-foreground'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         );
