@@ -19,14 +19,10 @@ import {
 import { ViewType } from '@/store/store';
 import {
   Users,
-  Wallet,
-  TrendingUp,
-  TrendingDown,
   UserPlus,
   Receipt,
   CalendarDays,
-  GraduationCap,
-  DollarSign,
+  TrendingUp,
   ArrowLeft,
   Phone,
   Calendar,
@@ -85,48 +81,44 @@ interface DashboardData {
   teacherPaymentsThisYear: number;
 }
 
-const MONTH_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
-
 function DashboardSkeleton() {
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Card key={i}>
-            <CardContent className="p-4">
-              <Skeleton className="h-10 w-10 rounded-lg mb-3" />
-              <Skeleton className="h-4 w-24 mb-2" />
-              <Skeleton className="h-7 w-20" />
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-      <div className="grid lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <Skeleton className="h-6 w-40" />
-          </CardHeader>
-          <CardContent>
-            <Skeleton className="h-52 w-full" />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-6 w-36" />
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-16 w-full rounded-lg" />
-            ))}
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardContent className="p-4">
+          <Skeleton className="h-10 w-10 rounded-lg mb-3" />
+          <Skeleton className="h-4 w-24 mb-2" />
+          <Skeleton className="h-7 w-20" />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <Skeleton className="h-6 w-36" />
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-16 w-full rounded-lg" />
+          ))}
+        </CardContent>
+      </Card>
       <Card>
         <CardHeader>
           <Skeleton className="h-6 w-48" />
         </CardHeader>
         <CardContent>
           <Skeleton className="h-60 w-full" />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <Skeleton className="h-6 w-36" />
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-3 gap-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-20 w-full rounded-xl" />
+            ))}
+          </div>
         </CardContent>
       </Card>
     </div>
@@ -141,21 +133,6 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const t = useT();
-
-  const monthLabels: Record<string, string> = {
-    '1': t.months.January,
-    '2': t.months.February,
-    '3': t.months.March,
-    '4': t.months.April,
-    '5': t.months.May,
-    '6': t.months.June,
-    '7': t.months.July,
-    '8': t.months.August,
-    '9': t.months.September,
-    '10': t.months.October,
-    '11': t.months.November,
-    '12': t.months.December,
-  };
 
   useEffect(() => {
     async function fetchDashboard() {
@@ -175,14 +152,6 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
 
   if (loading) return <DashboardSkeleton />;
   if (!data) return null;
-
-  const chartData = MONTH_KEYS.map((key) => ({
-    month: monthLabels[key],
-    monthKey: key,
-    revenue: data.monthlyStats[key]?.revenue || 0,
-    expected: data.monthlyStats[key]?.expected || 0,
-  }));
-  const maxChartValue = Math.max(...chartData.map((d) => Math.max(d.revenue, d.expected)), 1);
 
   const quickActions = [
     {
@@ -228,201 +197,80 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
 
   return (
     <div className="space-y-6">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="overflow-hidden border-r-4 border-r-teal-500">
-          <CardContent className="p-4">
-            <div className="flex items-start justify-between">
-              <div className="p-2.5 rounded-lg bg-teal-100">
-                <Users className="h-5 w-5 text-teal-600" />
-              </div>
-              <div className="flex items-center gap-1 text-teal-600 text-xs font-medium">
-                <TrendingUp className="h-3.5 w-3.5" />
-                <span>{data.activeStudents} {t.common.active}</span>
-              </div>
+      {/* Students Stats Card */}
+      <Card className="overflow-hidden border-r-4 border-r-teal-500">
+        <CardContent className="p-4">
+          <div className="flex items-start justify-between">
+            <div className="p-2.5 rounded-lg bg-teal-100">
+              <Users className="h-5 w-5 text-teal-600" />
             </div>
-            <div className="mt-3">
-              <p className="text-sm text-muted-foreground">{t.dashboard.totalStudents}</p>
-              <p className="text-2xl font-bold mt-1">{data.totalStudents}</p>
+            <div className="flex items-center gap-1 text-teal-600 text-xs font-medium">
+              <TrendingUp className="h-3.5 w-3.5" />
+              <span>{data.activeStudents} {t.common.active}</span>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+          <div className="mt-3">
+            <p className="text-sm text-muted-foreground">{t.dashboard.totalStudents}</p>
+            <p className="text-2xl font-bold mt-1">{data.totalStudents}</p>
+          </div>
+        </CardContent>
+      </Card>
 
-        <Card className="overflow-hidden border-r-4 border-r-emerald-500">
-          <CardContent className="p-4">
-            <div className="flex items-start justify-between">
-              <div className="p-2.5 rounded-lg bg-emerald-100">
-                <Wallet className="h-5 w-5 text-emerald-600" />
-              </div>
-              <Badge variant="outline" className="text-emerald-600 border-emerald-200 text-xs">
-                {monthLabels[String(data.currentMonth)]}
-              </Badge>
+      {/* New Registrations */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5 text-amber-600" />
+              <CardTitle className="text-base">{t.dashboard.newRegistrations}</CardTitle>
             </div>
-            <div className="mt-3">
-              <p className="text-sm text-muted-foreground">{t.dashboard.monthlyIncome}</p>
-              <p className="text-2xl font-bold mt-1">
-                {data.monthlyIncome.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">{t.common.currency}</span>
-              </p>
+            <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => onNavigate('students')}>
+              {t.common.viewAll}
+              <ArrowLeft className="h-3.5 w-3.5 mr-1" />
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {data.recentStudents.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Users className="h-10 w-10 mx-auto mb-3 opacity-30" />
+              <p className="text-sm">{t.dashboard.noRegistrations}</p>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card className="overflow-hidden border-r-4 border-r-amber-500">
-          <CardContent className="p-4">
-            <div className="flex items-start justify-between">
-              <div className="p-2.5 rounded-lg bg-amber-100">
-                <DollarSign className="h-5 w-5 text-amber-600" />
-              </div>
-              <div className="flex items-center gap-1 text-amber-600 text-xs font-medium">
-                <TrendingUp className="h-3.5 w-3.5" />
-                <span>{data.currentYear}</span>
-              </div>
-            </div>
-            <div className="mt-3">
-              <p className="text-sm text-muted-foreground">{t.dashboard.totalIncome}</p>
-              <p className="text-2xl font-bold mt-1">
-                {data.totalRevenue.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">{t.common.currency}</span>
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="overflow-hidden border-r-4 border-r-rose-500">
-          <CardContent className="p-4">
-            <div className="flex items-start justify-between">
-              <div className="p-2.5 rounded-lg bg-rose-100">
-                <GraduationCap className="h-5 w-5 text-rose-600" />
-              </div>
-              <div className="flex items-center gap-1 text-rose-600 text-xs font-medium">
-                <TrendingDown className="h-3.5 w-3.5" />
-                <span>{data.currentYear}</span>
-              </div>
-            </div>
-            <div className="mt-3">
-              <p className="text-sm text-muted-foreground">{t.dashboard.expenses}</p>
-              <p className="text-2xl font-bold mt-1">
-                {data.teacherPaymentsThisYear.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">{t.common.currency}</span>
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Chart + Registrations */}
-      <div className="grid lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-teal-600" />
-                <CardTitle className="text-base">{t.dashboard.monthlyChart}</CardTitle>
-              </div>
-              <div className="flex items-center gap-4 text-xs">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-sm bg-teal-500" />
-                  <span className="text-muted-foreground">{t.dashboard.collected}</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-sm bg-amber-400/60" />
-                  <span className="text-muted-foreground">{t.dashboard.expected}</span>
-                </div>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-end gap-2 h-52">
-              {chartData.map((item) => {
-                const revenueH = maxChartValue > 0 ? (item.revenue / maxChartValue) * 100 : 0;
-                const expectedH = maxChartValue > 0 ? (item.expected / maxChartValue) * 100 : 0;
-                const isCurrentMonth = item.monthKey === String(data.currentMonth);
-                return (
-                  <div key={item.monthKey} className="flex-1 flex flex-col items-center gap-1">
-                    {item.revenue > 0 && (
-                      <span className="text-[10px] text-teal-600 font-medium opacity-80">
-                        {(item.revenue / 1000).toFixed(1)}k
-                      </span>
-                    )}
-                    <div className="w-full flex gap-0.5 items-end" style={{ height: '160px' }}>
-                      <div
-                        className="flex-1 bg-amber-400/40 rounded-t-sm transition-all duration-500 min-h-[2px]"
-                        style={{ height: `${Math.max(expectedH, 2)}%` }}
-                      />
-                      <div
-                        className={cn(
-                          'flex-1 rounded-t-sm transition-all duration-500 min-h-[2px]',
-                          isCurrentMonth
-                            ? 'bg-gradient-to-t from-teal-600 to-teal-400'
-                            : 'bg-gradient-to-t from-teal-500 to-teal-300'
-                        )}
-                        style={{ height: `${Math.max(revenueH, 2)}%` }}
-                      />
+          ) : (
+            <div className="space-y-3 max-h-80 overflow-y-auto">
+              {data.recentStudents.map((student) => (
+                <div key={student.id} className="p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors cursor-pointer" onClick={() => onNavigate('students')}>
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-bold text-sm shrink-0">
+                      {student.fullName.charAt(0)}
                     </div>
-                    <span className={cn('text-[8px] font-medium mt-1 leading-tight', isCurrentMonth ? 'text-teal-700' : 'text-muted-foreground')}>
-                      {item.month}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* New Registrations */}
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <UserPlus className="h-5 w-5 text-amber-600" />
-                <CardTitle className="text-base">{t.dashboard.newRegistrations}</CardTitle>
-              </div>
-              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => onNavigate('students')}>
-                {t.common.viewAll}
-                <ArrowLeft className="h-3.5 w-3.5 mr-1" />
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {data.recentStudents.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Users className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                <p className="text-sm">{t.dashboard.noRegistrations}</p>
-              </div>
-            ) : (
-              <div className="space-y-3 max-h-80 overflow-y-auto">
-                {data.recentStudents.map((student) => (
-                  <div key={student.id} className="p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors cursor-pointer" onClick={() => onNavigate('students')}>
-                    <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-bold text-sm shrink-0">
-                        {student.fullName.charAt(0)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm truncate">{student.fullName}</p>
-                        {student.level && (
-                          <p className="text-xs text-muted-foreground truncate mt-0.5">
-                            {student.level.subject?.nameAr} — {student.level.nameAr}
-                          </p>
-                        )}
-                        {student.phone && (
-                          <span className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
-                            <Phone className="h-3 w-3" />
-                            <span dir="ltr">{student.phone}</span>
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-left shrink-0">
-                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Calendar className="h-3 w-3" />
-                          {fmtDate(student.enrollmentDate)}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm truncate">{student.fullName}</p>
+                      {student.level && (
+                        <p className="text-xs text-muted-foreground truncate mt-0.5">
+                          {student.level.subject?.nameAr} — {student.level.nameAr}
+                        </p>
+                      )}
+                      {student.phone && (
+                        <span className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                          <Phone className="h-3 w-3" />
+                          <span dir="ltr">{student.phone}</span>
                         </span>
-                      </div>
+                      )}
+                    </div>
+                    <div className="text-left shrink-0">
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Calendar className="h-3 w-3" />
+                        {fmtDate(student.enrollmentDate)}
+                      </span>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Recent Payments */}
       <Card>

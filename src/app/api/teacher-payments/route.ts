@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
           payments: {
             select: {
               paidAmount: true,
+              packMonths: true,
               month: true,
               year: true,
             },
@@ -67,11 +68,19 @@ export async function GET(request: NextRequest) {
         const totalStudents = teacherStudents.length;
 
         // Sum all paid amounts from these students' payments
+        // For Langues service, divide by packMonths to get per-month equivalent
         const totalCollected = teacherStudents.reduce(
           (sum, student) =>
             sum +
             student.payments.reduce(
-              (pSum, p) => pSum + (p.paidAmount || 0),
+              (pSum, p) => {
+                const rawAmount = p.paidAmount || 0;
+                const packMonths = p.packMonths || 1;
+                const serviceId = student.level?.subject?.serviceId || '';
+                const isLangues = serviceId === 'service_langues';
+                // For Langues, divide by packMonths to get monthly equivalent
+                return pSum + (isLangues && packMonths > 1 ? rawAmount / packMonths : rawAmount);
+              },
               0
             ),
           0

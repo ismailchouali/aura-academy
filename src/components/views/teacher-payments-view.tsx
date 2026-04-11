@@ -230,25 +230,23 @@ function printTeacherBon(
     background: white;
   }
   .bon-header {
-    background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
-    color: white;
+    background: white;
+    color: #0d9488;
     text-align: center;
     padding: 14px 20px;
+    border-bottom: 2px solid #0d9488;
+  }
+  .bon-header img {
+    max-height: 80px;
+    display: block;
+    margin: 0 auto;
   }
   .bon-header h1 {
     font-size: 20px;
     font-weight: 700;
-    margin-bottom: 2px;
+    margin-top: 8px;
+    margin-bottom: 0;
   }
-  .bon-sub {
-    display: flex;
-    justify-content: center;
-    gap: 24px;
-    font-size: 11px;
-    opacity: 0.9;
-    flex-wrap: wrap;
-  }
-  .bon-sub span { direction: ltr; }
   .bon-title-bar {
     background: #f0fdfa;
     text-align: center;
@@ -315,24 +313,17 @@ function printTeacherBon(
     margin-bottom: 6px;
   }
   .bon-footer {
-    padding: 20px 20px 14px;
-    display: flex;
-    justify-content: space-between;
-    gap: 20px;
-  }
-  .signature-box {
-    flex: 1;
+    padding: 12px 20px 14px;
     text-align: center;
-  }
-  .signature-label {
     font-size: 11px;
     color: #64748b;
-    margin-bottom: 28px;
+    line-height: 1.8;
+    border-top: 1px solid #e2e8f0;
   }
-  .signature-line {
-    border-bottom: 1px solid #94a3b8;
-    width: 140px;
-    margin: 0 auto;
+  .bon-footer .phone-line {
+    font-weight: 600;
+    direction: ltr;
+    display: inline-block;
   }
   @media print {
     body { padding: 0; }
@@ -343,11 +334,8 @@ function printTeacherBon(
 <body>
   <div class="bon-container">
     <div class="bon-header">
-      <h1>${t.teacherPayments.bonCenter}</h1>
-      <div class="bon-sub">
-        <span>${t.payments.bonPhone}</span>
-        <span>${t.payments.bonAddress}</span>
-      </div>
+      <img src="/upload/pasted_image_1775936460008.jpg" alt="Aura Academy">
+      <h1>Aura Academy</h1>
     </div>
 
     <div class="bon-title-bar">
@@ -402,14 +390,8 @@ function printTeacherBon(
     </div>
 
     <div class="bon-footer">
-      <div class="signature-box">
-        <div class="signature-label">${t.teacherPayments.bonCenterSig}</div>
-        <div class="signature-line"></div>
-      </div>
-      <div class="signature-box">
-        <div class="signature-label">${t.teacherPayments.bonTeacherSig}</div>
-        <div class="signature-line"></div>
-      </div>
+      <div class="phone-line">${t.payments.bonPhone}</div>
+      <div>${t.payments.bonAddress}</div>
     </div>
   </div>
 

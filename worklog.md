@@ -717,3 +717,73 @@ Stage Summary:
 - Half-hour labels styled smaller/dimmer for visual hierarchy
 - Half-hour grid lines use dashed style to distinguish from full-hour solid lines
 - Internal title text "الجدول الأسبوعي — X حصة في 7 أيام" removed from below the grid
+---
+Task ID: 1
+Agent: Main Agent
+Task: Modify student bon and teacher bon in Aura Academy app
+
+Work Log:
+- Read worklog.md for project context
+- Read payments-view.tsx generateBon function (lines 258-480) and teacher-payments-view.tsx printTeacherBon function (lines 149-435)
+- Read translations.ts for bonTitle values (Arabic line 284, French line 809)
+
+### Changes Made
+
+**Student Bon (`src/components/views/payments-view.tsx`):**
+- Replaced header: Removed `t.payments.bonTitle` title, added logo image (`/upload/pasted_image_1775936460008.jpg`, max-height 80px) + "Aura Academy" h1
+- Removed phone/address from header section
+- Removed "توقيع المركز" signature box (second sig-box)
+- Changed signature section from `space-between` to `center` (single signature)
+- Added footer section with phone and address at bottom of bon page
+- Added `.bon-footer` CSS styles (border-top, centered text, phone-line styling)
+
+**Teacher Bon (`src/components/views/teacher-payments-view.tsx`):**
+- Replaced green gradient header with clean white background + teal border-bottom
+- Added logo image + "Aura Academy" h1 in header
+- Removed phone/address from header (bon-sub div)
+- Removed both signature boxes (توقيع المركز + توقيع الأستاذ) entirely
+- Removed `.signature-box`, `.signature-label`, `.signature-line` CSS
+- Added `.bon-footer` CSS with phone/address centered at bottom
+
+**Translations (`src/lib/translations.ts`):**
+- Changed Arabic `bonTitle` from 'نظام إدارة المركز التربوي' to 'Aura Academy' (line 284)
+- Changed French `bonTitle` from 'Système de Gestion du Centre Éducatif' to 'Aura Academy' (line 809)
+
+Stage Summary:
+- Student bon: logo + Aura Academy header, single parent signature, phone/address moved to footer
+- Teacher bon: clean white header with logo, no signatures, phone/address moved to footer
+- ESLint passes with zero errors
+
+---
+Task ID: 4-5
+Agent: Main Agent
+Task: Redesign dashboard and create password-protected financial reports page
+
+Work Log:
+- Read worklog.md for project context
+- Read dashboard-view.tsx, store.ts, translations.ts, and page.tsx for current structure
+- Redesigned dashboard: removed financial data (monthly income, total income, expenses cards + chart)
+- Kept only: students stat card, new registrations, recent payments, quick actions
+- Added 'financial-reports' to ViewType union in store.ts
+- Added financial-reports nav entry in page.tsx (icon, navKeys, getNavLabel, getNavDesc, switch case)
+- Added TrendingUp icon import and FinancialReportsView import to page.tsx
+- Added financialReports section to both Arabic and French translations
+- Added nav.financialReports, nav.financialReportsDesc, nav.manageFinancialReports to both languages
+- Created financial-reports-view.tsx with password protection (Aura@07) using localStorage persistence
+- Financial reports view contains: 3 stat cards (monthly income, total income, expenses) + monthly chart
+- Fixed ESLint error: replaced setState-in-effect with lazy useState initializer for localStorage check
+
+### Files Modified
+1. `src/components/views/dashboard-view.tsx` — Removed financial cards and chart, kept students/registrations/payments/actions
+2. `src/store/store.ts` — Added 'financial-reports' to ViewType union
+3. `src/lib/translations.ts` — Added financialReports section (AR+FR) and nav entries
+4. `src/app/page.tsx` — Added nav icon, key, label, desc, and switch case for financial-reports
+5. `src/components/views/financial-reports-view.tsx` — New file with password screen + financial content
+
+Stage Summary:
+- Dashboard now shows only student stats, new registrations, recent payments, and quick actions
+- Financial data moved to a separate password-protected page (التقارير المالية)
+- Password: Aura@07, persisted in localStorage (survives page reload)
+- Sidebar shows "التقارير المالية" with TrendingUp icon after "لوحة التحكم"
+- ESLint passes with zero errors
+- Dev server returns 200

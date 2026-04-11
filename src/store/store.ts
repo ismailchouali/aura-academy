@@ -2,6 +2,7 @@ import { create } from 'zustand';
 
 export type ViewType =
   | 'dashboard'
+  | 'financial-reports'
   | 'students'
   | 'teachers'
   | 'payments'

@@ -10,6 +10,7 @@ import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   LayoutDashboard,
+  TrendingUp,
   Users,
   GraduationCap,
   Receipt,
@@ -23,6 +24,7 @@ import {
   MapPin,
   Globe,
 } from 'lucide-react';
+import { FinancialReportsView } from '@/components/views/financial-reports-view';
 import { DashboardView } from '@/components/views/dashboard-view';
 import { StudentsView } from '@/components/views/students-view';
 import { TeachersView } from '@/components/views/teachers-view';
@@ -36,6 +38,7 @@ import { ErrorBoundary } from '@/components/error-boundary';
 
 const navIcons: Record<ViewType, React.ReactNode> = {
   dashboard: <LayoutDashboard className="h-5 w-5" />,
+  'financial-reports': <TrendingUp className="h-5 w-5" />,
   students: <Users className="h-5 w-5" />,
   teachers: <GraduationCap className="h-5 w-5" />,
   payments: <Receipt className="h-5 w-5" />,
@@ -47,13 +50,14 @@ const navIcons: Record<ViewType, React.ReactNode> = {
 };
 
 const navKeys: ViewType[] = [
-  'dashboard', 'students', 'teachers', 'payments',
+  'dashboard', 'financial-reports', 'students', 'teachers', 'payments',
   'teacher-payments', 'schedule', 'services', 'classrooms', 'settings',
 ];
 
 function getNavLabel(t: ReturnType<typeof useT>, id: ViewType): string {
   const map: Record<ViewType, string> = {
     dashboard: t.nav.dashboard,
+    'financial-reports': t.nav.financialReports,
     students: t.nav.students,
     teachers: t.nav.teachers,
     payments: t.nav.payments,
@@ -68,6 +72,7 @@ function getNavLabel(t: ReturnType<typeof useT>, id: ViewType): string {
 
 function getNavDesc(t: ReturnType<typeof useT>, id: ViewType): string {
   if (id === 'dashboard') return t.nav.dashboardDesc;
+  if (id === 'financial-reports') return t.nav.financialReportsDesc;
   return `${t.nav.manageDashboard.replace(t.nav.dashboard, '')} ${getNavLabel(t, id)}`;
 }
 
@@ -157,6 +162,7 @@ export default function Home() {
   const renderView = () => {
     switch (currentView) {
       case 'dashboard': return <DashboardView onNavigate={setCurrentView} />;
+      case 'financial-reports': return <FinancialReportsView />;
       case 'students': return <StudentsView />;
       case 'teachers': return <TeachersView />;
       case 'payments': return <PaymentsView />;

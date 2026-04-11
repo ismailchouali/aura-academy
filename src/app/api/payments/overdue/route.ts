@@ -16,18 +16,23 @@ function getMonthIndex(month: string): number {
   return MONTH_ORDER.indexOf(month);
 }
 
-function countMonthsOverdue(month: string, year: number): number {
+function countMonthsOverdue(month: string, year: number, packMonths?: number | null, isLangues?: boolean): number {
   const mIdx = getMonthIndex(month);
   const now = new Date();
   const curYear = now.getFullYear();
   const curMonth = now.getMonth(); // 0-indexed
   const paymentYM = year * 12 + mIdx;
   const currentYM = curYear * 12 + curMonth;
-  return Math.max(0, currentYM - paymentYM);
+  const rawOverdue = Math.max(0, currentYM - paymentYM);
+  // For Langues service, subtract packMonths (the student already paid for those months)
+  if (isLangues && packMonths && packMonths > 1) {
+    return Math.max(0, rawOverdue - (packMonths - 1));
+  }
+  return rawOverdue;
 }
 
-function isOverdue(month: string, year: number): boolean {
-  return countMonthsOverdue(month, year) >= 1;
+function isOverdue(month: string, year: number, packMonths?: number | null, isLangues?: boolean): boolean {
+  return countMonthsOverdue(month, year, packMonths, isLangues) >= 1;
 }
 
 export async function GET() {
@@ -52,10 +57,12 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
     });
 
-    // Filter to only overdue payments (payment month is at least 1 month in the past)
-    const overduePayments = payments.filter(
-      (p) => isOverdue(p.month, p.year)
-    );
+    // Filter to only overdue payments, checking packMonths for Langues
+    const overduePayments = payments.filter((p) => {
+      const serviceId = p.student.level?.subject?.service?.id || '';
+      const isLangues = serviceId === 'service_langues';
+      return isOverdue(p.month, p.year, p.packMonths, isLangues);
+    });
 
     // Group by service → level → student
     const serviceMap = new Map<string, Map<string, Map<string, typeof overduePayments>>>();
@@ -80,7 +87,11 @@ export async function GET() {
           const student = payments[0].student;
           const totalOverdue = payments.reduce((s, p) => s + p.remainingAmount, 0);
           const maxMonthsOverdue = Math.max(
-            ...payments.map((p) => countMonthsOverdue(p.month, p.year))
+            ...payments.map((p) => {
+              const serviceId = p.student.level?.subject?.service?.id || '';
+              const isLangues = serviceId === 'service_langues';
+              return countMonthsOverdue(p.month, p.year, p.packMonths, isLangues);
+            })
           );
 
           return {
@@ -93,14 +104,18 @@ export async function GET() {
             totalOverdue,
             monthsOverdue: maxMonthsOverdue,
             paymentCount: payments.length,
-            overduePayments: payments.map((p) => ({
-              id: p.id,
-              month: p.month,
-              monthLabel: MONTH_LABELS[p.month] || p.month,
-              year: p.year,
-              remainingAmount: p.remainingAmount,
-              monthsOverdue: countMonthsOverdue(p.month, p.year),
-            })),
+            overduePayments: payments.map((p) => {
+              const serviceId = p.student.level?.subject?.service?.id || '';
+              const isLangues = serviceId === 'service_langues';
+              return {
+                id: p.id,
+                month: p.month,
+                monthLabel: MONTH_LABELS[p.month] || p.month,
+                year: p.year,
+                remainingAmount: p.remainingAmount,
+                monthsOverdue: countMonthsOverdue(p.month, p.year, p.packMonths, isLangues),
+              };
+            }),
           };
         });
 

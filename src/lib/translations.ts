@@ -68,6 +68,9 @@ const ar = {
     dashboard: 'لوحة التحكم',
     dashboardDesc: 'نظرة عامة على المركز',
     manageDashboard: 'إدارة لوحة التحكم',
+    financialReports: 'التقارير المالية',
+    financialReportsDesc: 'تحليل المداخيل والمصروفات',
+    manageFinancialReports: 'إدارة التقارير المالية',
     students: 'التلاميذ',
     studentsDesc: 'إدارة التلاميذ',
     manageStudents: 'إدارة التلاميذ',
@@ -99,6 +102,23 @@ const ar = {
     systemName: 'نظام إدارة المركز',
     admin: 'المدير',
     menuTitle: 'القائمة الجانبية',
+  },
+
+  // ── Financial Reports ──
+  financialReports: {
+    title: 'التقارير المالية',
+    subtitle: 'تحليل المداخيل والمصروفات المالية للمركز',
+    monthlyIncome: 'المداخيل الشهرية',
+    totalIncome: 'المداخيل الإجمالية',
+    expenses: 'مصروفات الأساتذة',
+    monthlyChart: 'المداخيل الشهرية',
+    collected: 'المحصل',
+    expected: 'المتوقع',
+    passwordTitle: 'تقارير مالية',
+    passwordDesc: 'هذه الصفحة محمية بكلمة مرور',
+    passwordHint: 'أدخل كلمة المرور للوصول',
+    wrongPassword: 'كلمة المرور غير صحيحة',
+    unlock: 'فتح',
   },
 
   // ── Dashboard ──
@@ -281,7 +301,7 @@ const ar = {
     paymentDate: 'تاريخ الدفع',
     paymentMethod: 'طريقة الدفع',
     // Bon
-    bonTitle: 'نظام إدارة المركز التربوي',
+    bonTitle: 'Aura Academy',
     bonPhone: 'الهاتف: 0606030356',
     bonAddress: 'Bd med V, N°407 Route de Marrakech, Béni Mellal',
     bonStudentName: 'اسم التلميذ',
@@ -297,6 +317,15 @@ const ar = {
     bonPrint: 'طباعة البون',
     bonStatement: 'البيان',
     bonAmountDh: 'المبلغ (درهم)',
+    // Pack system
+    packType: 'نوع الدفعة',
+    pack1: 'شهر واحد',
+    pack3: '3 أشهر',
+    pack6: '6 أشهر',
+    pack9: '9 أشهر',
+    packBadge: 'باك',
+    packMonthsUnit: 'أشهر',
+    packMonthlyEquiv: 'المعادل الشهري',
   },
 
   // ── Teacher Payments ──
@@ -597,6 +626,9 @@ const fr: typeof ar = {
     dashboard: 'Tableau de bord',
     dashboardDesc: 'Vue d\'ensemble du centre',
     manageDashboard: 'Gérer le tableau de bord',
+    financialReports: 'Rapports Financiers',
+    financialReportsDesc: 'Analyse des revenus et dépenses',
+    manageFinancialReports: 'Gérer les rapports financiers',
     students: 'Étudiants',
     studentsDesc: 'Gérer les étudiants',
     manageStudents: 'Gérer les étudiants',
@@ -628,6 +660,23 @@ const fr: typeof ar = {
     systemName: 'Système de gestion du centre',
     admin: 'Admin',
     menuTitle: 'Menu latéral',
+  },
+
+  // ── Financial Reports ──
+  financialReports: {
+    title: 'Rapports Financiers',
+    subtitle: 'Analyse des revenus et dépenses du centre',
+    monthlyIncome: 'Revenus Mensuels',
+    totalIncome: 'Revenus Totaux',
+    expenses: 'Dépenses Professeurs',
+    monthlyChart: 'Revenus Mensuels',
+    collected: 'Collecté',
+    expected: 'Attendu',
+    passwordTitle: 'Rapports Financiers',
+    passwordDesc: 'Cette page est protégée par mot de passe',
+    passwordHint: 'Entrez le mot de passe pour accéder',
+    wrongPassword: 'Mot de passe incorrect',
+    unlock: 'Déverrouiller',
   },
 
   // ── Dashboard ──
@@ -806,7 +855,7 @@ const fr: typeof ar = {
     year: 'Année',
     paymentDate: 'Date de paiement',
     paymentMethod: 'Mode de paiement',
-    bonTitle: 'Système de Gestion du Centre Éducatif',
+    bonTitle: 'Aura Academy',
     bonPhone: 'Tél : 0606030356',
     bonAddress: 'Bd med V, N°407 Route de Marrakech, Béni Mellal',
     bonStudentName: 'Nom de l\'étudiant',
@@ -822,6 +871,15 @@ const fr: typeof ar = {
     bonPrint: 'Imprimer le reçu',
     bonStatement: 'Détail',
     bonAmountDh: 'Montant (DH)',
+    // Pack system
+    packType: 'Type de paiement',
+    pack1: '1 mois',
+    pack3: '3 mois',
+    pack6: '6 mois',
+    pack9: '9 mois',
+    packBadge: 'Pack',
+    packMonthsUnit: 'mois',
+    packMonthlyEquiv: 'Équivalent mensuel',
   },
 
   // ── Teacher Payments ──

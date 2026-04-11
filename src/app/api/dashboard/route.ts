@@ -24,7 +24,26 @@ export async function GET() {
     const currentMonth = new Date().getMonth() + 1; // 1-12
     const monthlyPayments = await db.payment.findMany({
       where: { year: currentYear },
-      select: { month: true, paidAmount: true, amount: true, remainingAmount: true },
+      select: {
+        month: true,
+        paidAmount: true,
+        amount: true,
+        remainingAmount: true,
+        packMonths: true,
+        student: {
+          select: {
+            level: {
+              select: {
+                subject: {
+                  select: {
+                    serviceId: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     });
 
     // Map English month names to numbers
@@ -46,9 +65,14 @@ export async function GET() {
       if (!monthlyStats[key]) {
         monthlyStats[key] = { revenue: 0, expected: 0, remaining: 0, count: 0 };
       }
-      monthlyStats[key].revenue += p.paidAmount;
-      monthlyStats[key].expected += p.amount;
-      monthlyStats[key].remaining += p.remainingAmount;
+      // For Langues service with packMonths > 1, use monthly equivalent
+      const serviceId = p.student?.level?.subject?.serviceId || '';
+      const isLangues = serviceId === 'service_langues';
+      const packMonths = (p.packMonths || 1);
+      const divisor = (isLangues && packMonths > 1) ? packMonths : 1;
+      monthlyStats[key].revenue += p.paidAmount / divisor;
+      monthlyStats[key].expected += p.amount / divisor;
+      monthlyStats[key].remaining += p.remainingAmount / divisor;
       monthlyStats[key].count += 1;
     }
 

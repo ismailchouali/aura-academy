@@ -52,6 +52,7 @@ export async function PUT(
         year: body.year,
         paymentDate: body.paymentDate ? new Date(body.paymentDate) : null,
         discount: body.discount || 0,
+        packMonths: body.packMonths || 1,
         method: body.method,
         notes: body.notes,
         status: body.status,

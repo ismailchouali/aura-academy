@@ -119,6 +119,7 @@ model Payment {
   year           Int
   paymentDate    DateTime?
   discount       Float    @default(0)
+  packMonths     Int      @default(1)
   method         String?
   notes          String?
   status         String   @default("pending")

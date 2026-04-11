@@ -77,7 +77,7 @@ interface Payment {
     monthlyFee: number;
     level: {
       nameAr: string;
-      subject: { nameAr: string; service?: { nameAr: string } | null } | null;
+      subject: { nameAr: string; service?: { nameAr: string; id: string } | null } | null;
     } | null;
     teacher: { id: string; fullName: string } | null;
   };
@@ -85,6 +85,7 @@ interface Payment {
   paidAmount: number;
   remainingAmount: number;
   discount: number;
+  packMonths: number;
   month: string;
   year: number;
   paymentDate: string | null;
@@ -103,7 +104,7 @@ interface StudentSearchResult {
   monthlyFee: number;
   level: {
     nameAr: string;
-    subject: { nameAr: string; service?: { nameAr: string } | null } | null;
+    subject: { nameAr: string; service?: { nameAr: string; id: string } | null } | null;
   } | null;
   teacher: { id: string; fullName: string } | null;
 }
@@ -113,6 +114,7 @@ interface PaymentFormData {
   amount: number | '';
   paidAmount: number | '';
   discount: number | '';
+  packMonths: number;
   month: string;
   year: number | '';
   paymentDate: string;
@@ -160,6 +162,7 @@ const defaultFormData: PaymentFormData = {
   amount: '',
   paidAmount: '',
   discount: '',
+  packMonths: 1,
   month: '',
   year: new Date().getFullYear(),
   paymentDate: new Date().toISOString().split('T')[0],
@@ -215,6 +218,13 @@ export function PaymentsView() {
     { value: 'cash', label: t.payments.cash },
     { value: 'transfer', label: t.payments.transfer },
     { value: 'check', label: t.payments.check },
+  ], [t]);
+
+  const PACK_OPTIONS = useMemo(() => [
+    { value: 1, label: t.payments.pack1 },
+    { value: 3, label: t.payments.pack3 },
+    { value: 6, label: t.payments.pack6 },
+    { value: 9, label: t.payments.pack9 },
   ], [t]);
 
   const getStatusBadge = useCallback((status: string) => {
@@ -295,17 +305,13 @@ export function PaymentsView() {
       font-size: 20px;
       font-weight: 800;
       color: #0d9488;
-      margin-bottom: 8px;
+      margin-top: 8px;
+      margin-bottom: 0;
     }
-    .header .address {
-      font-size: 12px;
-      color: #475569;
-      line-height: 1.8;
-    }
-    .header .phone-line {
-      font-weight: 600;
-      direction: ltr;
-      display: inline-block;
+    .header .logo {
+      max-height: 80px;
+      display: block;
+      margin: 0 auto;
     }
     .divider {
       height: 2px;
@@ -357,7 +363,7 @@ export function PaymentsView() {
     .details-table .amber { color: #d97706; }
     .signatures {
       display: flex;
-      justify-content: space-between;
+      justify-content: center;
       margin-top: 60px;
       padding-top: 20px;
     }
@@ -376,6 +382,20 @@ export function PaymentsView() {
       height: 1px;
       background: #334155;
       margin: 0 auto;
+    }
+    .bon-footer {
+      margin-top: 40px;
+      padding-top: 16px;
+      border-top: 1px solid #e2e8f0;
+      text-align: center;
+      font-size: 12px;
+      color: #475569;
+      line-height: 1.8;
+    }
+    .bon-footer .phone-line {
+      font-weight: 600;
+      direction: ltr;
+      display: inline-block;
     }
     .no-print {
       text-align: center;
@@ -401,11 +421,8 @@ export function PaymentsView() {
   </div>
   <div class="bon">
     <div class="header">
-      <h1>${t.payments.bonTitle}</h1>
-      <div class="address">
-        <div class="phone-line">${t.payments.bonPhone}</div>
-        <div>${t.payments.bonAddress}</div>
-      </div>
+      <img src="/upload/pasted_image_1775936460008.jpg" alt="Aura Academy" class="logo">
+      <h1>Aura Academy</h1>
     </div>
     <div class="divider"></div>
     <div class="info-section">
@@ -448,8 +465,12 @@ export function PaymentsView() {
         </tr>
         <tr>
           <td>${t.payments.bonMonthYear}</td>
-          <td>${monthLabel} ${payment.year}</td>
+          <td>${monthLabel} ${payment.year}${payment.packMonths > 1 ? ` (${t.payments.packBadge} ${payment.packMonths} ${t.payments.packMonthsUnit})` : ''}</td>
         </tr>
+        ${payment.packMonths > 1 ? `<tr>
+          <td>${t.payments.packMonthlyEquiv}</td>
+          <td class="amount">${Math.round(payment.amount / payment.packMonths).toLocaleString('ar-MA', { minimumFractionDigits: 2 })}</td>
+        </tr>` : ''}
         <tr>
           <td>${t.payments.bonPaymentDate}</td>
           <td dir="ltr" style="text-align:right">${paymentDate}</td>
@@ -461,10 +482,10 @@ export function PaymentsView() {
         <div class="sig-label">${t.payments.bonParentSig}</div>
         <div class="sig-line"></div>
       </div>
-      <div class="sig-box">
-        <div class="sig-label">${t.payments.bonCenterSig}</div>
-        <div class="sig-line"></div>
-      </div>
+    </div>
+    <div class="bon-footer">
+      <div class="phone-line">${t.payments.bonPhone}</div>
+      <div>${t.payments.bonAddress}</div>
     </div>
   </div>
 </body>
@@ -491,6 +512,11 @@ export function PaymentsView() {
   const studentsLoaded = useRef(false);
   const [selectedStudent, setSelectedStudent] = useState<StudentSearchResult | null>(null);
   const [yearlyPaid, setYearlyPaid] = useState(0);
+
+  // Check if selected student belongs to Langues service
+  const isLanguesService = useMemo(() => {
+    return selectedStudent?.level?.subject?.service?.id === 'service_langues';
+  }, [selectedStudent]);
 
   // Filters
   const [filterMonth, setFilterMonth] = useState('all');
@@ -633,6 +659,7 @@ export function PaymentsView() {
         amount: payment.amount,
         paidAmount: payment.paidAmount,
         discount: payment.discount || 0,
+        packMonths: payment.packMonths || 1,
         month: payment.month,
         year: payment.year,
         paymentDate:
@@ -667,13 +694,14 @@ export function PaymentsView() {
       ...prev,
       studentId: student.id,
       amount: student.monthlyFee || '',
+      packMonths: student.level?.subject?.service?.id === 'service_langues' ? prev.packMonths : 1,
     }));
   };
 
   const handleClearStudent = () => {
     setSelectedStudent(null);
     setStudentSearchQuery('');
-    setFormData((prev) => ({ ...prev, studentId: '', amount: '' }));
+    setFormData((prev) => ({ ...prev, studentId: '', amount: '', packMonths: 1 }));
   };
 
   // Computed amounts
@@ -717,6 +745,7 @@ export function PaymentsView() {
         amount: Number(formData.amount),
         paidAmount: Number(formData.paidAmount) || 0,
         discount: Number(formData.discount) || 0,
+        packMonths: formData.packMonths || 1,
         year: Number(formData.year),
         remainingAmount:
           netAmount - (Number(formData.paidAmount) || 0),
@@ -957,8 +986,17 @@ export function PaymentsView() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right text-sm">
-                        {MONTH_NAMES[payment.month] || payment.month}{' '}
-                        {payment.year}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span>
+                            {MONTH_NAMES[payment.month] || payment.month}{' '}
+                            {payment.year}
+                          </span>
+                          {payment.packMonths > 1 && (
+                            <Badge className="bg-violet-100 text-violet-700 border-violet-200 hover:bg-violet-100 text-[10px] px-1.5 py-0">
+                              {t.payments.packBadge} {payment.packMonths} {t.payments.packMonthsUnit}
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-right hidden md:table-cell font-medium">
                         {payment.amount.toLocaleString()}{' '}
@@ -1307,7 +1345,38 @@ export function PaymentsView() {
                     <strong>{netAmount.toLocaleString()} {t.common.dh}</strong>
                   </div>
                 )}
+                {formData.packMonths > 1 && typeof formData.amount === 'number' && formData.amount > 0 && (
+                  <div className="text-xs bg-teal-50 text-teal-700 rounded-md p-2">
+                    {t.payments.packMonthlyEquiv}:{' '}
+                    <strong>{Math.round(formData.amount / formData.packMonths).toLocaleString()} {t.common.dh} / {t.common.month}</strong>
+                  </div>
+                )}
               </div>
+
+              {/* ── Pack Type (Langues only) ───────────────────────────── */}
+              {isLanguesService && (
+                <div className="space-y-1.5">
+                  <Label>{t.payments.packType}</Label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {PACK_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() =>
+                          setFormData({ ...formData, packMonths: opt.value })
+                        }
+                        className={`px-3 py-2 rounded-lg border-2 text-sm font-medium transition-colors ${
+                          formData.packMonths === opt.value
+                            ? 'border-teal-500 bg-teal-50 text-teal-700'
+                            : 'border-muted bg-card hover:border-teal-200 hover:bg-teal-50/50 text-foreground'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* ── Month / Year / Date / Method ────────────────────────── */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
