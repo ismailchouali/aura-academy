@@ -1,7 +1,8 @@
 'use client';
 
 import { useAppStore, ViewType } from '@/store/store';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import LoginPage from '@/components/login-page';
 import { cn } from '@/lib/utils';
 import { useT } from '@/hooks/use-translation';
 import { Button } from '@/components/ui/button';
@@ -35,6 +36,7 @@ import { ServicesView } from '@/components/views/services-view';
 import { ClassroomsView } from '@/components/views/classrooms-view';
 import { SettingsView } from '@/components/views/settings-view';
 import { ErrorBoundary } from '@/components/error-boundary';
+import { LogOut } from 'lucide-react';
 
 const navIcons: Record<ViewType, React.ReactNode> = {
   dashboard: <LayoutDashboard className="h-5 w-5" />,
@@ -157,7 +159,42 @@ function LanguageToggle() {
 export default function Home() {
   const { currentView, setCurrentView, lang } = useAppStore();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [userName, setUserName] = useState('');
   const t = useT();
+
+  // Check auth on mount
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then(res => {
+        if (res.ok) return res.json();
+        throw new Error('Not authenticated');
+      })
+      .then(data => {
+        setIsAuthenticated(true);
+        setUserName(data.user?.fullName || 'مستخدم');
+      })
+      .catch(() => {
+        setIsAuthenticated(false);
+      });
+  }, []);
+
+  if (isAuthenticated === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="animate-spin w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full"></div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginPage />;
+  }
+
+  const handleLogout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    setIsAuthenticated(false);
+  };
 
   const renderView = () => {
     switch (currentView) {
@@ -222,10 +259,13 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-2">
             <LanguageToggle />
+            <Button variant="ghost" size="icon" onClick={handleLogout} className="h-9 w-9 text-muted-foreground hover:text-destructive" title="تسجيل الخروج">
+              <LogOut className="h-4 w-4" />
+            </Button>
             <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
-              م
+              {userName.charAt(0)}
             </div>
-            <span className="text-sm font-medium text-foreground">{t.sidebar.admin}</span>
+            <span className="text-sm font-medium text-foreground">{userName}</span>
           </div>
         </header>
 
