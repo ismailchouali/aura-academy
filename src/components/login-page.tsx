@@ -1,38 +1,28 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { GraduationCap, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
 
-interface SetupData {
-  hasUsers: boolean;
-}
-
 export default function LoginPage() {
   const [isSetup, setIsSetup] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    fullName: '',
-  });
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
 
-  // Check if setup is needed
-  useState(() => {
+  // Check if setup is needed on mount
+  useEffect(() => {
     fetch('/api/auth/setup')
       .then(res => res.json())
-      .then((data: SetupData) => {
-        setIsSetup(data.hasUsers);
-      })
-      .catch(() => {
-        setError('خطأ في الاتصال بالخادم');
-      });
-  });
+      .then(data => setIsSetup(data.hasUsers))
+      .catch(() => setIsSetup(false));
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,41 +30,34 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const endpoint = isSetup ? '/api/auth/login' : '/api/auth/setup';
-      const body = isSetup
-        ? { email: formData.email, password: formData.password }
-        : { email: formData.email, password: formData.password, fullName: formData.fullName };
-
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error || 'حدث خطأ');
-        return;
-      }
-
       if (!isSetup) {
-        // Setup successful, now login
-        const loginRes = await fetch('/api/auth/login', {
+        // First time: create admin account
+        const setupRes = await fetch('/api/auth/setup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: formData.email, password: formData.password }),
+          body: JSON.stringify({ email, password, fullName: fullName || 'المسؤول' }),
         });
 
-        if (loginRes.ok) {
-          window.location.reload();
-        } else {
-          setIsSetup(true);
+        if (!setupRes.ok) {
+          const data = await setupRes.json();
+          setError(data.error || 'حدث خطأ أثناء إنشاء الحساب');
+          return;
         }
+      }
+
+      // Login
+      const loginRes = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (!loginRes.ok) {
+        const data = await loginRes.json();
+        setError(data.error || 'بيانات الدخول غير صحيحة');
         return;
       }
 
-      // Login successful
       window.location.reload();
     } catch {
       setError('خطأ في الاتصال بالخادم');
@@ -83,10 +66,18 @@ export default function LoginPage() {
     }
   };
 
+  if (isSetup === null) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 flex items-center justify-center">
+        <div className="animate-spin w-8 h-8 border-3 border-emerald-600 border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 flex items-center justify-center p-4" dir="rtl">
       <Card className="w-full max-w-md shadow-xl border-0">
-        <CardHeader className="text-center space-y-4 pb-2">
+        <CardHeader className="text-center space-y-3 pb-2">
           <div className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg">
             <GraduationCap className="h-8 w-8 text-white" />
           </div>
@@ -95,9 +86,9 @@ export default function LoginPage() {
               أكاديمية أورا
             </CardTitle>
             <CardDescription className="text-sm text-muted-foreground mt-1">
-              {isSetup === false
-                ? 'إنشاء حساب المسؤول الأول'
-                : 'تسجيل الدخول إلى نظام إدارة الأكاديمية'}
+              {isSetup
+                ? 'تسجيل الدخول إلى نظام إدارة الأكاديمية'
+                : 'إنشاء حساب المسؤول الأول'}
             </CardDescription>
           </div>
         </CardHeader>
@@ -108,10 +99,9 @@ export default function LoginPage() {
                 <Label htmlFor="fullName">الاسم الكامل</Label>
                 <Input
                   id="fullName"
-                  placeholder="أدخل اسمك الكامل"
-                  value={formData.fullName}
-                  onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                  required
+                  placeholder="مثال: إسماعيل"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
                   className="h-11"
                 />
               </div>
@@ -123,8 +113,8 @@ export default function LoginPage() {
                 id="email"
                 type="email"
                 placeholder="example@email.com"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 required
                 className="h-11"
                 dir="ltr"
@@ -137,9 +127,9 @@ export default function LoginPage() {
                 <Input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
-                  placeholder="أدخل كلمة المرور"
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   required
                   className="h-11 pl-10"
                   dir="ltr"
@@ -163,7 +153,7 @@ export default function LoginPage() {
 
             <Button
               type="submit"
-              className="w-full h-11 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-medium"
+              className="w-full h-11 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-medium shadow-md"
               disabled={loading}
             >
               {loading ? (
@@ -171,10 +161,10 @@ export default function LoginPage() {
                   <Loader2 className="h-4 w-4 animate-spin ml-2" />
                   جاري المعالجة...
                 </>
-              ) : isSetup === false ? (
-                'إنشاء الحساب والدخول'
-              ) : (
+              ) : isSetup ? (
                 'تسجيل الدخول'
+              ) : (
+                'إنشاء الحساب والدخول'
               )}
             </Button>
           </form>
