@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
         email: session.user.email,
         fullName: session.user.fullName,
         role: session.user.role,
+        accessPages: session.user.accessPages,
       },
     });
   } catch (error) {

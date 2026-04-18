@@ -144,15 +144,16 @@ model TeacherPayment {
 }
 
 model User {
-  id        String    @id @default(cuid())
-  email     String    @unique
-  password  String
-  fullName  String
-  role      String    @default("ADMIN")
-  status    String    @default("active")
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  sessions  Session[]
+  id          String    @id @default(cuid())
+  email       String    @unique
+  password    String
+  fullName    String
+  role        String    @default("ADMIN")
+  status      String    @default("active")
+  accessPages String    @default("") // comma-separated: dashboard,students,teachers,...
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  sessions    Session[]
   @@map("users")
 }
 

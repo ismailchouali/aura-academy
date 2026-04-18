@@ -24,6 +24,7 @@ import {
   Phone,
   MapPin,
   Globe,
+  ShieldCheck,
 } from 'lucide-react';
 import { FinancialReportsView } from '@/components/views/financial-reports-view';
 import { DashboardView } from '@/components/views/dashboard-view';
@@ -35,6 +36,7 @@ import { ScheduleView } from '@/components/views/schedule-view';
 import { ServicesView } from '@/components/views/services-view';
 import { ClassroomsView } from '@/components/views/classrooms-view';
 import { SettingsView } from '@/components/views/settings-view';
+import UsersView from '@/components/views/users-view';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { LogOut } from 'lucide-react';
 
@@ -48,11 +50,12 @@ const navIcons: Record<ViewType, React.ReactNode> = {
   schedule: <CalendarDays className="h-5 w-5" />,
   services: <BookOpen className="h-5 w-5" />,
   classrooms: <DoorOpen className="h-5 w-5" />,
+  'user-management': <ShieldCheck className="h-5 w-5" />,
   settings: <Settings className="h-5 w-5" />,
 };
 
 const navKeys: ViewType[] = [
-  'dashboard', 'financial-reports', 'students', 'teachers', 'payments',
+  'dashboard', 'user-management', 'financial-reports', 'students', 'teachers', 'payments',
   'teacher-payments', 'schedule', 'services', 'classrooms', 'settings',
 ];
 
@@ -67,6 +70,7 @@ function getNavLabel(t: ReturnType<typeof useT>, id: ViewType): string {
     schedule: t.nav.schedule,
     services: t.nav.services,
     classrooms: t.nav.classrooms,
+    'user-management': 'إدارة المستخدمين',
     settings: t.nav.settings,
   };
   return map[id] || id;
@@ -163,13 +167,23 @@ export default function Home() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [userName, setUserName] = useState('');
   const [userRole, setUserRole] = useState<string>('');
+  const [accessPages, setAccessPages] = useState<string>('');
   const t = useT();
 
   const isAdmin = userRole === 'ADMIN';
 
-  // Items hidden for secretary
-  const hiddenForSecretary = new Set<ViewType>(['financial-reports', 'teacher-payments']);
-  const filteredNavKeys = navKeys.filter(k => isAdmin || !hiddenForSecretary.has(k));
+  // Filter nav items by role and accessPages
+  const hiddenForSecretary = new Set<ViewType>(['user-management', 'financial-reports', 'teacher-payments']);
+  const filteredNavKeys = navKeys.filter(k => {
+    if (isAdmin) return true; // Admin sees everything
+    if (hiddenForSecretary.has(k)) return false; // Secretary can never see these
+    // Check accessPages for custom permissions
+    if (accessPages) {
+      const pages = accessPages.split(',').map(p => p.trim());
+      if (pages.length > 0 && !pages.includes(k)) return false;
+    }
+    return true;
+  });
 
   // Check auth on mount
   useEffect(() => {
@@ -182,6 +196,7 @@ export default function Home() {
         setIsAuthenticated(true);
         setUserName(data.user?.fullName || 'مستخدم');
         setUserRole(data.user?.role || '');
+        setAccessPages(data.user?.accessPages || '');
       })
       .catch(() => {
         setIsAuthenticated(false);
@@ -216,6 +231,7 @@ export default function Home() {
       case 'schedule': return <ScheduleView />;
       case 'services': return <ServicesView />;
       case 'classrooms': return <ClassroomsView />;
+      case 'user-management': return isAdmin ? <UsersView /> : <DashboardView onNavigate={setCurrentView} />;
       case 'settings': return <SettingsView />;
       default: return <DashboardView onNavigate={setCurrentView} />;
     }
