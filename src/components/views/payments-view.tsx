@@ -1489,17 +1489,20 @@ export function PaymentsView() {
                 <Button
                   variant="outline"
                   onClick={() => setDialogOpen(false)}
+                  className="gap-2"
                 >
                   {t.common.cancel}
                 </Button>
                 <Button
                   onClick={handleSubmit}
                   disabled={submitting}
-                  className="gap-2"
+                  className="gap-2 bg-emerald-600 hover:bg-emerald-700"
                 >
                   {submitting ? (
                     <span className="animate-spin">⏳</span>
-                  ) : null}
+                  ) : (
+                    <span>✓</span>
+                  )}
                   {editingPayment ? t.common.saveChanges : t.payments.addPayment}
                 </Button>
               </div>

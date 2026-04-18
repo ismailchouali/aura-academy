@@ -78,8 +78,9 @@ function getNavDesc(t: ReturnType<typeof useT>, id: ViewType): string {
   return `${t.nav.manageDashboard.replace(t.nav.dashboard, '')} ${getNavLabel(t, id)}`;
 }
 
-function SidebarContent({ currentView, onNavigate, onMobileClose }: { currentView: ViewType; onNavigate: (v: ViewType) => void; onMobileClose?: () => void }) {
+function SidebarContent({ currentView, onNavigate, onMobileClose, navKeys: keys }: { currentView: ViewType; onNavigate: (v: ViewType) => void; onMobileClose?: () => void; navKeys?: ViewType[] }) {
   const t = useT();
+  const items = keys || navKeys;
 
   return (
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground">
@@ -101,7 +102,7 @@ function SidebarContent({ currentView, onNavigate, onMobileClose }: { currentVie
       {/* Navigation */}
       <ScrollArea className="flex-1 py-3 px-2">
         <nav className="space-y-1">
-          {navKeys.map((id) => (
+          {items.map((id) => (
             <Button
               key={id}
               variant="ghost"
@@ -161,7 +162,14 @@ export default function Home() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [userName, setUserName] = useState('');
+  const [userRole, setUserRole] = useState<string>('');
   const t = useT();
+
+  const isAdmin = userRole === 'ADMIN';
+
+  // Items hidden for secretary
+  const hiddenForSecretary = new Set<ViewType>(['financial-reports', 'teacher-payments']);
+  const filteredNavKeys = navKeys.filter(k => isAdmin || !hiddenForSecretary.has(k));
 
   // Check auth on mount
   useEffect(() => {
@@ -173,6 +181,7 @@ export default function Home() {
       .then(data => {
         setIsAuthenticated(true);
         setUserName(data.user?.fullName || 'مستخدم');
+        setUserRole(data.user?.role || '');
       })
       .catch(() => {
         setIsAuthenticated(false);
@@ -219,7 +228,7 @@ export default function Home() {
     <div className="flex h-screen overflow-hidden bg-bg-main" dir={dir}>
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex w-64 shrink-0 shadow-xl">
-        <SidebarContent currentView={currentView} onNavigate={setCurrentView} />
+        <SidebarContent currentView={currentView} onNavigate={setCurrentView} navKeys={filteredNavKeys} />
       </aside>
 
       {/* Main Content */}
@@ -238,6 +247,7 @@ export default function Home() {
                 currentView={currentView}
                 onNavigate={setCurrentView}
                 onMobileClose={() => setMobileOpen(false)}
+                navKeys={filteredNavKeys}
               />
             </SheetContent>
           </Sheet>
@@ -265,7 +275,10 @@ export default function Home() {
             <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
               {userName.charAt(0)}
             </div>
-            <span className="text-sm font-medium text-foreground">{userName}</span>
+            <div className="flex flex-col items-start">
+              <span className="text-sm font-medium text-foreground">{userName}</span>
+              <span className="text-[10px] text-muted-foreground">{userRole === 'ADMIN' ? 'مدير' : 'سكرتير'}</span>
+            </div>
           </div>
         </header>
 
