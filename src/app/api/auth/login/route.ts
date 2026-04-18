@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { randomUUID } from 'crypto';
+import bcrypt from 'bcryptjs';
+
+const SALT_ROUNDS = 12;
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,7 +16,29 @@ export async function POST(request: NextRequest) {
     // Find user
     const user = await db.user.findUnique({ where: { email } });
 
-    if (!user || user.password !== password) {
+    if (!user) {
+      return NextResponse.json({ error: 'بيانات الدخول غير صحيحة' }, { status: 401 });
+    }
+
+    // Check password with bcrypt (supports both hashed and legacy plaintext)
+    let passwordValid = false;
+    if (user.password.startsWith('$2')) {
+      // Already hashed with bcrypt
+      passwordValid = await bcrypt.compare(password, user.password);
+    } else {
+      // Legacy plaintext password — validate and upgrade to hash
+      passwordValid = user.password === password;
+      if (passwordValid) {
+        // Auto-upgrade: re-hash the password in-place
+        const hash = await bcrypt.hash(password, SALT_ROUNDS);
+        await db.user.update({
+          where: { id: user.id },
+          data: { password: hash },
+        });
+      }
+    }
+
+    if (!passwordValid) {
       return NextResponse.json({ error: 'بيانات الدخول غير صحيحة' }, { status: 401 });
     }
 

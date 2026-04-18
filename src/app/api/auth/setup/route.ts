@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { randomUUID } from 'crypto';
+import bcrypt from 'bcryptjs';
+
+const SALT_ROUNDS = 12;
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,12 +19,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'تم إنشاء المسؤول بالفعل' }, { status: 400 });
     }
 
+    // Hash password with bcrypt
+    const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+
     // Create admin user
     const user = await db.user.create({
       data: {
         id: randomUUID(),
         email,
-        password,
+        password: hashedPassword,
         fullName,
         role: 'ADMIN',
         status: 'active',

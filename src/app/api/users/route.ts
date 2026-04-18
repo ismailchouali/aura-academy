@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import bcrypt from 'bcryptjs';
+
+const SALT_ROUNDS = 12;
 
 // GET /api/users — list all users (admin only check via cookie)
 export async function GET() {
@@ -38,10 +41,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'هذا البريد الإلكتروني مستخدم بالفعل' }, { status: 409 });
     }
 
+    // Hash password with bcrypt
+    const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+
     const user = await db.user.create({
       data: {
         email,
-        password,
+        password: hashedPassword,
         fullName,
         role: role || 'SECRETARY',
         status: status || 'active',

@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import bcrypt from 'bcryptjs';
+
+const SALT_ROUNDS = 12;
 
 // GET /api/users/[id]
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -43,7 +46,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const updateData: Record<string, unknown> = {};
     if (fullName !== undefined) updateData.fullName = fullName;
     if (email !== undefined) updateData.email = email;
-    if (password !== undefined && password !== '') updateData.password = password;
+    if (password !== undefined && password !== '') {
+      // Hash new password with bcrypt
+      updateData.password = await bcrypt.hash(password, SALT_ROUNDS);
+    }
     if (role !== undefined) updateData.role = role;
     if (status !== undefined) updateData.status = status;
     if (accessPages !== undefined) updateData.accessPages = accessPages;
