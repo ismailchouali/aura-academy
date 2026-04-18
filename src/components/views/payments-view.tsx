@@ -1092,7 +1092,7 @@ export function PaymentsView() {
             </DialogDescription>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 px-6">
+          <ScrollArea className="flex-1 min-h-0 px-6">
             <div className="grid gap-4 pb-6 pt-2">
               {/* ── Student Search ─────────────────────────────────────── */}
               {!editingPayment && !selectedStudent && (
@@ -1475,7 +1475,7 @@ export function PaymentsView() {
             </div>
           </ScrollArea>
 
-          <DialogFooter className="px-6 pb-6 pt-2 border-t bg-muted/30">
+          <DialogFooter className="shrink-0 px-6 pb-6 pt-2 border-t bg-muted/30">
             <div className="flex items-center justify-between w-full">
               <div className="text-xs text-muted-foreground">
                 {t.common.status}:{' '}
@@ -1553,7 +1553,7 @@ export function PaymentsView() {
                 </span>
               </div>
 
-              <ScrollArea className="flex-1 px-6 pb-6 max-h-[65vh]">
+              <ScrollArea className="flex-1 min-h-0 px-6 pb-6 max-h-[65vh]">
                 <div className="space-y-6">
                   {overdueData.map((service) => (
                     <div key={service.service}>

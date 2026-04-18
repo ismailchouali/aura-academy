@@ -502,7 +502,7 @@ export default function UsersView() {
             </DialogDescription>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 px-6">
+          <ScrollArea className="flex-1 min-h-0 px-6">
             <div className="grid gap-5 pb-6 pt-2">
               {/* ── Full Name ─────────────────────────────────────────── */}
               <div className="space-y-2">
@@ -656,7 +656,7 @@ export default function UsersView() {
             </div>
           </ScrollArea>
 
-          <div className="border-t px-6 py-4 bg-muted/30 flex flex-col-reverse sm:flex-row items-center gap-2 sm:justify-end">
+          <div className="shrink-0 border-t px-6 py-4 bg-muted/30 flex flex-col-reverse sm:flex-row items-center gap-2 sm:justify-end">
             <Button
               type="button"
               variant="outline"
