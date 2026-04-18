@@ -707,8 +707,8 @@ export function TeachersView() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto px-6 pb-4">
-            <div className="space-y-6 py-4">
+          <div className="flex-1 overflow-y-auto min-h-0 px-6 py-4">
+            <div className="space-y-6">
               {/* Personal Info */}
               <div>
                 <h4 className="text-sm font-semibold flex items-center gap-2 mb-3">
@@ -1015,8 +1015,8 @@ export function TeachersView() {
           </DialogHeader>
 
           {detailTeacher && (
-            <div className="overflow-y-auto flex-1 min-h-0 -mx-6 px-6">
-              <div className="space-y-6 pb-4">
+            <div className="overflow-y-auto flex-1 min-h-0 px-6 py-4">
+              <div className="space-y-6">
                 {/* Contact Info */}
                 <div className="space-y-2.5">
                   <h4 className="font-semibold text-sm flex items-center gap-2">

@@ -1,13 +1,21 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useT } from '@/hooks/use-translation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -152,6 +160,25 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
   const [loading, setLoading] = useState(true);
   const t = useT();
 
+  // ── Monthly registrations state ──
+  const [regYear, setRegYear] = useState(String(new Date().getFullYear()));
+  const [regMonth, setRegMonth] = useState('all');
+  const [registrations, setRegistrations] = useState<{
+    students: {
+      id: string;
+      fullName: string;
+      phone?: string;
+      enrollmentDate: string;
+      status: string;
+      monthlyFee: number;
+      level?: { nameAr: string; subject?: { nameAr: string; service?: { nameAr: string } } };
+      teacher?: { fullName: string };
+    }[];
+    total: number;
+    monthLabels: { value: number; count: number }[];
+  } | null>(null);
+  const [regLoading, setRegLoading] = useState(false);
+
   useEffect(() => {
     async function fetchDashboard() {
       try {
@@ -167,6 +194,28 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
     }
     fetchDashboard();
   }, []);
+
+  // ── Fetch monthly registrations ──
+  const fetchRegistrations = useCallback(async () => {
+    setRegLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set('year', regYear);
+      if (regMonth !== 'all') params.set('month', regMonth);
+      const res = await fetch(`/api/dashboard/registrations?${params.toString()}`);
+      if (!res.ok) throw new Error();
+      const json = await res.json();
+      setRegistrations(json);
+    } catch {
+      // Silently fail
+    } finally {
+      setRegLoading(false);
+    }
+  }, [regYear, regMonth]);
+
+  useEffect(() => {
+    fetchRegistrations();
+  }, [fetchRegistrations]);
 
   if (loading) return <DashboardSkeleton />;
   if (!data) return null;
@@ -350,7 +399,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
         </CardContent>
       </Card>
 
-      {/* New Registrations */}
+      {/* Monthly New Registrations Tracking */}
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
@@ -363,44 +412,96 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
               <ArrowLeft className="h-3.5 w-3.5 mr-1" />
             </Button>
           </div>
+          {/* Month/Year filter */}
+          <div className="flex items-center gap-2 mt-3">
+            <Select value={regMonth} onValueChange={setRegMonth}>
+              <SelectTrigger className="w-40 h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">كل الأشهر</SelectItem>
+                <SelectItem value="1">يناير</SelectItem>
+                <SelectItem value="2">فبراير</SelectItem>
+                <SelectItem value="3">مارس</SelectItem>
+                <SelectItem value="4">أبريل</SelectItem>
+                <SelectItem value="5">ماي</SelectItem>
+                <SelectItem value="6">يونيو</SelectItem>
+                <SelectItem value="7">يوليوز</SelectItem>
+                <SelectItem value="8">غشت</SelectItem>
+                <SelectItem value="9">شتنبر</SelectItem>
+                <SelectItem value="10">أكتوبر</SelectItem>
+                <SelectItem value="11">نونبر</SelectItem>
+                <SelectItem value="12">دجنبر</SelectItem>
+              </SelectContent>
+            </Select>
+            <Input
+              type="number"
+              value={regYear}
+              onChange={(e) => setRegYear(e.target.value)}
+              dir="ltr"
+              className="w-24 h-8 text-xs"
+            />
+            {registrations && (
+              <Badge variant="secondary" className="text-xs">
+                {registrations.total} تسجيل
+              </Badge>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
-          {data.recentStudents.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <Users className="h-10 w-10 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">{t.dashboard.noRegistrations}</p>
+          {regLoading ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-10 w-full rounded-lg" />
+              ))}
             </div>
-          ) : (
-            <div className="space-y-3 max-h-80 overflow-y-auto">
-              {data.recentStudents.map((student) => (
-                <div key={student.id} className="p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors cursor-pointer" onClick={() => onNavigate('students')}>
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-bold text-sm shrink-0">
+          ) : registrations && registrations.students.length > 0 ? (
+            <div className="space-y-4">
+              {/* Monthly summary (when "all months" selected) */}
+              {regMonth === 'all' && registrations.monthLabels && (
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                  {registrations.monthLabels.map((m) => (
+                    <div
+                      key={m.value}
+                      className={cn(
+                        'rounded-lg border p-2 text-center text-xs',
+                        m.count > 0 ? 'border-amber-200 bg-amber-50' : 'border-border bg-muted/20'
+                      )}
+                    >
+                      <p className="font-bold text-sm">{m.count}</p>
+                      <p className="text-muted-foreground">
+                        {['يناير', 'فبراير', 'مارس', 'أبريل', 'ماي', 'يونيو', 'يوليوز', 'غشت', 'شتنبر', 'أكتوبر', 'نونبر', 'دجنبر'][m.value - 1]}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {/* Registrations list */}
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {registrations.students.slice(0, 20).map((student) => (
+                  <div key={student.id} className="flex items-center gap-3 p-2.5 rounded-lg border hover:bg-accent/50 transition-colors cursor-pointer" onClick={() => onNavigate('students')}>
+                    <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-xs shrink-0">
                       {student.fullName.charAt(0)}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm truncate">{student.fullName}</p>
-                      {student.level && (
-                        <p className="text-xs text-muted-foreground truncate mt-0.5">
-                          {student.level.subject?.nameAr} — {student.level.nameAr}
-                        </p>
-                      )}
-                      {student.phone && (
-                        <span className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
-                          <Phone className="h-3 w-3" />
-                          <span dir="ltr">{student.phone}</span>
-                        </span>
-                      )}
+                      <p className="font-medium text-sm truncate">{student.fullName}</p>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        {student.level && (
+                          <span>{student.level.subject?.nameAr} — {student.level.nameAr}</span>
+                        )}
+                      </div>
                     </div>
                     <div className="text-left shrink-0">
-                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Calendar className="h-3 w-3" />
-                        {fmtDate(student.enrollmentDate)}
-                      </span>
+                      <span className="text-xs text-muted-foreground">{fmtDate(student.enrollmentDate)}</span>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <UserPlus className="h-10 w-10 mx-auto mb-3 opacity-30" />
+              <p className="text-sm">{t.dashboard.noRegistrations}</p>
             </div>
           )}
         </CardContent>

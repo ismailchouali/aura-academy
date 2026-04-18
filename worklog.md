@@ -945,3 +945,68 @@ Stage Summary:
 - Student creation now works correctly
 - Prisma client regenerated after temporarily moving .config file
 - Dev server restarted with fresh .next cache
+---
+Task ID: 10
+Agent: Main Agent
+Task: 6 tasks - dialog spacing, add service feature, remove parent signature, dashboard registrations, fix student edit levels
+
+Work Log:
+- Read worklog.md for full project history
+- Analyzed all dialog patterns across 6 view files
+- Identified spacing inconsistencies in payments, teachers, and users views
+
+### Task 1: Fix Dialog Spacing
+Fixed dialog content/spacing in 4 files:
+- **payments-view.tsx**: Changed body from `px-6` to `px-6 py-4`, footer from `pb-6 pt-2 bg-muted/30` to `py-4`
+- **teachers-view.tsx**: Changed add/edit body from `px-6 pb-4` to `px-6 py-4`, detail body from `-mx-6 px-6` (with inner `pb-4`) to `px-6 py-4`
+- **users-view.tsx**: Changed body from `px-6` to `px-6 py-4`
+- Students, schedule, teacher-payments views were already correctly spaced
+
+### Task 2: Add Service Feature
+Created full CRUD for services, subjects, and levels:
+- **POST /api/services/route.ts**: Creates new service with name, nameAr, nameFr, icon, order
+- **POST /api/services/[id]/subjects/route.ts**: Creates new subject linked to service
+- **POST /api/services/[serviceId]/subjects/[subjectId]/levels/route.ts**: Creates new level linked to subject
+- **services-view.tsx**: Complete rewrite with:
+  - "إضافة خدمة" button in header
+  - Add Service dialog (nameAr, nameFr, name, icon fields)
+  - "إضافة مادة" button per service accordion
+  - Add Subject dialog (nameAr, nameFr, name fields)
+  - "إضافة مستوى" button per subject card
+  - Add Level dialog (nameAr, nameFr, name fields)
+  - Empty state with "إضافة خدمة جديدة" button
+
+### Task 3: Remove Parent Signature from Bon
+- Removed the entire `.signatures` section from the bon HTML template in payments-view.tsx
+- Removed `.sig-box`, `.sig-label`, `.sig-line` CSS rules
+- Bon now ends directly with the footer (phone + address), no signature lines
+- "kandiro ghir l cachet rah kafi" (only stamp is enough)
+
+### Task 4: Monthly New Registrations Tracking
+- Created `/api/dashboard/registrations/route.ts` with year/month filters, date range query, monthly counts
+- Enhanced dashboard-view.tsx:
+  - Added `useCallback` import and `Input` import
+  - Added state: regYear, regMonth, registrations, regLoading
+  - Replaced old "New Registrations" card with enhanced version:
+    - Month dropdown filter (كل الأشهر or specific month)
+    - Year input
+    - Total count badge
+    - Monthly summary grid (when "all months" selected) showing count per month
+    - Scrollable list of registrations (max 20 shown)
+
+### Task 5: Fix Student Edit Mode Level Selection
+- Bug: In `handleOpenDialog` (edit mode), `selectedSubject` was constructed with only `[student.level]` in its levels array
+- Fix: Now looks up the full subject from `svc.subjects` to get ALL levels: `const fullSubject = svc?.subjects.find(sub => sub.id === student.level?.subject?.id)`
+- This means when editing a student, all levels for their subject are available for selection, not just the current one
+
+### Quality
+- ESLint passes with zero errors
+- All changes follow existing patterns (RTL Arabic, shadcn/ui, consistent dialog spacing)
+
+Stage Summary:
+- Dialog spacing fixed in 4 files (payments, teachers, users views)
+- Services page now supports full CRUD: add service, add subject, add level
+- Student bon no longer shows parent signature section
+- Dashboard has monthly registrations tracking with year/month filter
+- Student edit mode now shows all levels for the subject, not just the current one
+- ESLint: 0 errors

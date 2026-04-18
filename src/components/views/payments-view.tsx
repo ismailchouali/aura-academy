@@ -366,28 +366,6 @@ export function PaymentsView() {
     .details-table .green { color: #059669; }
     .details-table .red { color: #dc2626; }
     .details-table .amber { color: #d97706; }
-    .signatures {
-      display: flex;
-      justify-content: center;
-      margin-top: 60px;
-      padding-top: 20px;
-    }
-    .sig-box {
-      text-align: center;
-      flex: 1;
-    }
-    .sig-box .sig-label {
-      font-size: 13px;
-      color: #475569;
-      font-weight: 600;
-      margin-bottom: 40px;
-    }
-    .sig-box .sig-line {
-      width: 160px;
-      height: 1px;
-      background: #334155;
-      margin: 0 auto;
-    }
     .bon-footer {
       margin-top: 40px;
       padding-top: 16px;
@@ -479,12 +457,6 @@ export function PaymentsView() {
         </tr>
       </tbody>
     </table>
-    <div class="signatures">
-      <div class="sig-box">
-        <div class="sig-label">${t.payments.bonParentSig}</div>
-        <div class="sig-line"></div>
-      </div>
-    </div>
     <div class="bon-footer">
       <div class="phone-line">${t.payments.bonPhone}</div>
       <div>${t.payments.bonAddress}</div>
@@ -1092,8 +1064,8 @@ export function PaymentsView() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="overflow-y-auto flex-1 min-h-0 px-6">
-            <div className="grid gap-4 py-4">
+          <div className="overflow-y-auto flex-1 min-h-0 px-6 py-4">
+            <div className="grid gap-4">
               {/* ── Student Search ─────────────────────────────────────── */}
               {!editingPayment && !selectedStudent && (
                 <div className="space-y-3">
@@ -1475,7 +1447,7 @@ export function PaymentsView() {
             </div>
           </div>
 
-          <DialogFooter className="shrink-0 px-6 pb-6 pt-2 border-t bg-muted/30">
+          <DialogFooter className="shrink-0 px-6 py-4 border-t">
             <div className="flex items-center justify-between w-full">
               <div className="text-xs text-muted-foreground">
                 {t.common.status}:{' '}

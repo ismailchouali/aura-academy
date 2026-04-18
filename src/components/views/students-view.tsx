@@ -332,12 +332,16 @@ export function StudentsView() {
           (s) => s.id === student.level?.subject?.service?.id
         );
         setSelectedService(svc || null);
+        // Find the full subject from services data to get ALL levels
+        const fullSubject = svc?.subjects.find(
+          (sub) => sub.id === student.level?.subject?.id
+        );
         setSelectedSubject({
           id: student.level.subject.id,
           name: student.level.subject.name,
           nameAr: student.level.subject.nameAr,
-          nameFr: '',
-          levels: student.level ? [student.level] : [],
+          nameFr: student.level.subject.nameFr,
+          levels: fullSubject?.levels || [],
           order: 0,
         });
         setSelectedLevel({
