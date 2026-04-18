@@ -43,7 +43,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ScrollArea } from '@/components/ui/scroll-area';
+// ScrollArea removed - using overflow-y-auto for reliable footer visibility
 import {
   Plus,
   Search,
@@ -1080,8 +1080,8 @@ export function PaymentsView() {
           ADD / EDIT PAYMENT DIALOG
           ═══════════════════════════════════════════════════════════════════ */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-2xl flex flex-col p-0 gap-0 overflow-hidden max-h-[90vh]">
-          <DialogHeader className="px-6 pt-6 pb-2">
+        <DialogContent className="sm:max-w-2xl p-0 gap-0 max-h-[90vh] flex flex-col">
+          <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
             <DialogTitle>
               {editingPayment ? t.payments.editPayment : t.payments.addNew}
             </DialogTitle>
@@ -1092,8 +1092,8 @@ export function PaymentsView() {
             </DialogDescription>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 min-h-0 px-6">
-            <div className="grid gap-4 pb-6 pt-2">
+          <div className="overflow-y-auto flex-1 min-h-0 px-6">
+            <div className="grid gap-4 py-4">
               {/* ── Student Search ─────────────────────────────────────── */}
               {!editingPayment && !selectedStudent && (
                 <div className="space-y-3">
@@ -1473,7 +1473,7 @@ export function PaymentsView() {
                 />
               </div>
             </div>
-          </ScrollArea>
+          </div>
 
           <DialogFooter className="shrink-0 px-6 pb-6 pt-2 border-t bg-muted/30">
             <div className="flex items-center justify-between w-full">
@@ -1515,8 +1515,8 @@ export function PaymentsView() {
           OVERDUE PAYMENTS DIALOG
           ═══════════════════════════════════════════════════════════════════ */}
       <Dialog open={overdueOpen} onOpenChange={setOverdueOpen}>
-        <DialogContent className="sm:max-w-3xl flex flex-col p-0 gap-0 overflow-hidden max-h-[90vh]">
-          <DialogHeader className="px-6 pt-6 pb-2">
+        <DialogContent className="sm:max-w-3xl p-0 gap-0 max-h-[90vh] flex flex-col">
+          <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
             <DialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-amber-500" />
               {t.payments.overdue}
@@ -1553,7 +1553,7 @@ export function PaymentsView() {
                 </span>
               </div>
 
-              <ScrollArea className="flex-1 min-h-0 px-6 pb-6 max-h-[65vh]">
+              <div className="overflow-y-auto flex-1 min-h-0 px-6 pb-6 max-h-[65vh]">
                 <div className="space-y-6">
                   {overdueData.map((service) => (
                     <div key={service.service}>
@@ -1642,7 +1642,7 @@ export function PaymentsView() {
                     </div>
                   ))}
                 </div>
-              </ScrollArea>
+              </div>
             </>
           )}
         </DialogContent>

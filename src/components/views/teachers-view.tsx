@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ScrollArea } from '@/components/ui/scroll-area';
+// ScrollArea removed - using overflow-y-auto for reliable footer visibility
 import { Separator } from '@/components/ui/separator';
 import {
   Dialog,
@@ -695,8 +695,8 @@ export function TeachersView() {
       {/* ── Add / Edit Dialog ──────────────────────────────────────────── */}
       {/* ═══════════════════════════════════════════════════════════════════ */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
-          <DialogHeader className="px-6 pt-6 pb-2">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
             <DialogTitle>
               {editingTeacher ? t.teachers.editTeacher : t.teachers.addNew}
             </DialogTitle>
@@ -992,8 +992,8 @@ export function TeachersView() {
       {/* ── Teacher Detail Dialog ──────────────────────────────────────── */}
       {/* ═══════════════════════════════════════════════════════════════════ */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
             <DialogTitle className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-full bg-primary flex items-center justify-center text-white font-bold text-lg shadow-md">
                 {detailTeacher?.fullName.charAt(0)}
@@ -1015,7 +1015,7 @@ export function TeachersView() {
           </DialogHeader>
 
           {detailTeacher && (
-            <ScrollArea className="flex-1 min-h-0 -mx-6 px-6">
+            <div className="overflow-y-auto flex-1 min-h-0 -mx-6 px-6">
               <div className="space-y-6 pb-4">
                 {/* Contact Info */}
                 <div className="space-y-2.5">
@@ -1272,7 +1272,7 @@ export function TeachersView() {
                   </>
                 )}
               </div>
-            </ScrollArea>
+            </div>
           )}
         </DialogContent>
       </Dialog>

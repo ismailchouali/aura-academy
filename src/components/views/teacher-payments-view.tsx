@@ -936,8 +936,8 @@ export function TeacherPaymentsView() {
 
       {/* ─── Add/Edit Dialog ──────────────────────────────────────── */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
             <DialogTitle>
               {editingPayment ? t.teacherPayments.editPayment : t.teacherPayments.addNew}
             </DialogTitle>
@@ -948,7 +948,7 @@ export function TeacherPaymentsView() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto -mx-6 px-6 space-y-4">
+          <div className="flex-1 overflow-y-auto min-h-0 -mx-6 px-6 py-4 space-y-4">
             {/* Teacher selection */}
             <div>
               <Label>{t.teacherPayments.selectTeacher}</Label>
@@ -1153,7 +1153,7 @@ export function TeacherPaymentsView() {
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="shrink-0 px-6 py-4 border-t">
             <Button variant="outline" onClick={() => setFormOpen(false)} disabled={submitting}>
               {t.common.cancel}
             </Button>

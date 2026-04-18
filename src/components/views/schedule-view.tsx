@@ -1153,8 +1153,8 @@ export function ScheduleView() {
 
         {/* ─── Add/Edit Dialog ──────────────────────────────────────────────── */}
         <Dialog open={formOpen} onOpenChange={(open) => { if (!open) setConflictErrors([]); setFormOpen(open); }}>
-          <DialogContent className="sm:max-w-lg max-h-[90vh]">
-            <DialogHeader>
+          <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col p-0 gap-0">
+            <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
               <DialogTitle>
                 {editingSchedule ? 'تعديل الحصة' : 'إضافة حصة جديدة'}
               </DialogTitle>
@@ -1183,7 +1183,7 @@ export function ScheduleView() {
               </div>
             )}
 
-            <div className="space-y-4 max-h-[60vh] overflow-y-auto -mx-6 px-6">
+            <div className="flex-1 overflow-y-auto min-h-0 -mx-6 px-6 py-4 space-y-4">
               {/* Session Type */}
               <div className="space-y-2">
                 <Label className="text-sm font-medium">نوع الحصة *</Label>
@@ -1501,7 +1501,7 @@ export function ScheduleView() {
               </div>
             </div>
 
-            <DialogFooter className="flex-col sm:flex-row gap-2">
+            <DialogFooter className="shrink-0 px-6 py-4 border-t flex-col sm:flex-row gap-2">
               {editingSchedule && (
                 <Button
                   variant="destructive"

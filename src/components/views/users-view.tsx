@@ -43,7 +43,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ScrollArea } from '@/components/ui/scroll-area';
+// ScrollArea removed - using overflow-y-auto for reliable footer visibility
 import {
   Plus,
   Search,
@@ -490,8 +490,8 @@ export default function UsersView() {
           ADD / EDIT USER DIALOG
           ═══════════════════════════════════════════════════════════════════ */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-2xl flex flex-col p-0 gap-0 overflow-hidden max-h-[90vh]">
-          <DialogHeader className="px-6 pt-6 pb-2">
+        <DialogContent className="sm:max-w-2xl p-0 gap-0 max-h-[90vh] flex flex-col">
+          <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
             <DialogTitle>
               {editingUser ? 'تعديل المستخدم' : 'إضافة مستخدم جديد'}
             </DialogTitle>
@@ -502,8 +502,8 @@ export default function UsersView() {
             </DialogDescription>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 min-h-0 px-6">
-            <div className="grid gap-5 pb-6 pt-2">
+          <div className="overflow-y-auto flex-1 min-h-0 px-6">
+            <div className="grid gap-5 py-4">
               {/* ── Full Name ─────────────────────────────────────────── */}
               <div className="space-y-2">
                 <Label className="text-sm font-semibold">الاسم الكامل</Label>
@@ -654,7 +654,7 @@ export default function UsersView() {
                 </div>
               </div>
             </div>
-          </ScrollArea>
+          </div>
 
           <div className="shrink-0 border-t px-6 py-4 bg-muted/30 flex flex-col-reverse sm:flex-row items-center gap-2 sm:justify-end">
             <Button

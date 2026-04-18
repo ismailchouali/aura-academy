@@ -1270,7 +1270,7 @@ export function StudentsView() {
           }
         }}
       >
-        <DialogContent className="sm:max-w-lg flex flex-col p-0 gap-0 overflow-hidden max-h-[90vh]">
+        <DialogContent className="sm:max-w-lg flex flex-col p-0 gap-0 max-h-[90vh]">
           {/* Header */}
           <DialogHeader className="px-6 pt-6 pb-2 shrink-0">
             <DialogTitle>
