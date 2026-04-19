@@ -737,24 +737,15 @@ export function TeachersView() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="email">{t.common.name}</Label>
+                    <Label htmlFor="email">{t.common.email}</Label>
                     <Input
                       id="email"
                       type="email"
                       value={form.email}
                       onChange={(e) => setForm({ ...form, email: e.target.value })}
-                      placeholder={t.common.name}
+                      placeholder={t.common.email}
                       dir="ltr"
                       className="text-left"
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <Label htmlFor="address">{t.common.address}</Label>
-                    <Input
-                      id="address"
-                      value={form.address}
-                      onChange={(e) => setForm({ ...form, address: e.target.value })}
-                      placeholder={t.common.address}
                     />
                   </div>
                 </div>
