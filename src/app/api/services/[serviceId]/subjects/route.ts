@@ -3,10 +3,10 @@ import { db } from '@/lib/db';
 
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ serviceId: string }> }
 ) {
   try {
-    const { id } = await params;
+    const { serviceId } = await params;
     const body = await request.json();
     const { name, nameAr, nameFr } = body;
 
@@ -15,20 +15,20 @@ export async function POST(
     }
 
     // Check service exists
-    const service = await db.service.findUnique({ where: { id } });
+    const service = await db.service.findUnique({ where: { id: serviceId } });
     if (!service) {
       return NextResponse.json({ error: 'Service not found' }, { status: 404 });
     }
 
     // Get max order
-    const maxOrder = await db.subject.count({ where: { serviceId: id } });
+    const maxOrder = await db.subject.count({ where: { serviceId } });
 
     const subject = await db.subject.create({
       data: {
         name,
         nameAr,
         nameFr,
-        serviceId: id,
+        serviceId,
         order: maxOrder,
       },
     });
