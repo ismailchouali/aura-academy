@@ -226,10 +226,18 @@ export function StudentsView() {
     return selectedService.subjects || [];
   }, [selectedService]);
 
-  // ── Computed: filtered levels for step 3 ───────────────────────────────
+  // ── Computed: filtered levels for step 3 (deduplicated by name) ───────
   const filteredLevels = useMemo(() => {
     if (!selectedSubject) return [];
-    return selectedSubject.levels || [];
+    const levels = selectedSubject.levels || [];
+    // Deduplicate by name in case of duplicate DB entries
+    const seen = new Map<string, Level>();
+    for (const lvl of levels) {
+      if (!seen.has(lvl.name)) {
+        seen.set(lvl.name, lvl);
+      }
+    }
+    return Array.from(seen.values());
   }, [selectedSubject]);
 
   // ── Computed: filtered teachers for step 4 ─────────────────────────────
@@ -547,7 +555,7 @@ export function StudentsView() {
 
   function StepIndicator() {
     return (
-      <div className="px-6 pt-4 pb-2">
+      <div className="px-8 pt-4 pb-2">
         <div className="flex items-center justify-between">
           {steps.map((step, idx) => {
             const isCompleted = step.num < wizardStep;
@@ -1276,7 +1284,7 @@ export function StudentsView() {
       >
         <DialogContent className="sm:max-w-lg flex flex-col p-0 gap-0 max-h-[90vh]">
           {/* Header */}
-          <DialogHeader className="px-6 pt-6 pb-2 shrink-0">
+          <DialogHeader className="px-8 pt-6 pb-2 shrink-0">
             <DialogTitle>
               {editingStudent ? t.students.editStudent : t.students.addStudent}
             </DialogTitle>
@@ -1289,12 +1297,12 @@ export function StudentsView() {
           {editingStudent ? null : StepIndicator()}
 
           {/* Body - scrollable */}
-          <div className="flex-1 overflow-y-auto px-6 pb-4 min-h-0">
+          <div className="flex-1 overflow-y-auto px-8 pb-4 min-h-0">
             {StepContent()}
           </div>
 
           {/* Footer - sticky */}
-          <DialogFooter className="px-6 py-4 border-t shrink-0">
+          <DialogFooter className="px-8 py-4 border-t shrink-0">
             <div className="flex items-center justify-between w-full gap-2">
               {/* Left side: back or skip */}
               <div>

@@ -1053,7 +1053,7 @@ export function PaymentsView() {
           ═══════════════════════════════════════════════════════════════════ */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-2xl p-0 gap-0 max-h-[90vh] flex flex-col">
-          <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
+          <DialogHeader className="shrink-0 px-8 pt-6 pb-2">
             <DialogTitle>
               {editingPayment ? t.payments.editPayment : t.payments.addNew}
             </DialogTitle>
@@ -1064,7 +1064,7 @@ export function PaymentsView() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="overflow-y-auto flex-1 min-h-0 px-6 py-4">
+          <div className="overflow-y-auto flex-1 min-h-0 px-8 py-4">
             <div className="grid gap-4">
               {/* ── Student Search ─────────────────────────────────────── */}
               {!editingPayment && !selectedStudent && (
@@ -1447,7 +1447,7 @@ export function PaymentsView() {
             </div>
           </div>
 
-          <DialogFooter className="shrink-0 px-6 py-4 border-t">
+          <DialogFooter className="shrink-0 px-8 py-4 border-t">
             <div className="flex items-center justify-between w-full">
               <div className="text-xs text-muted-foreground">
                 {t.common.status}:{' '}
@@ -1488,7 +1488,7 @@ export function PaymentsView() {
           ═══════════════════════════════════════════════════════════════════ */}
       <Dialog open={overdueOpen} onOpenChange={setOverdueOpen}>
         <DialogContent className="sm:max-w-3xl p-0 gap-0 max-h-[90vh] flex flex-col">
-          <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
+          <DialogHeader className="shrink-0 px-8 pt-6 pb-2">
             <DialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-amber-500" />
               {t.payments.overdue}
@@ -1499,7 +1499,7 @@ export function PaymentsView() {
           </DialogHeader>
 
           {overdueLoading ? (
-            <div className="px-6 py-8">
+            <div className="px-8 py-8">
               <div className="space-y-3">
                 {Array.from({ length: 3 }).map((_, i) => (
                   <Skeleton key={i} className="h-16 w-full" />
@@ -1507,7 +1507,7 @@ export function PaymentsView() {
               </div>
             </div>
           ) : overdueData.length === 0 ? (
-            <div className="px-6 py-12 text-center text-muted-foreground">
+            <div className="px-8 py-12 text-center text-muted-foreground">
               <AlertTriangle className="h-12 w-12 mx-auto mb-3 text-emerald-400 opacity-50" />
               <p className="font-medium">{t.common.noData}</p>
               <p className="text-sm mt-1">{t.common.noData}</p>
@@ -1515,7 +1515,7 @@ export function PaymentsView() {
           ) : (
             <>
               {/* Grand total bar */}
-              <div className="mx-6 mt-2 mb-3 p-3 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-between">
+              <div className="mx-8 mt-2 mb-3 p-3 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-between">
                 <span className="text-sm font-semibold text-amber-800">
                   {t.common.total}
                 </span>
@@ -1525,7 +1525,7 @@ export function PaymentsView() {
                 </span>
               </div>
 
-              <div className="overflow-y-auto flex-1 min-h-0 px-6 pb-6 max-h-[65vh]">
+              <div className="overflow-y-auto flex-1 min-h-0 px-8 pb-6 max-h-[65vh]">
                 <div className="space-y-6">
                   {overdueData.map((service) => (
                     <div key={service.service}>
