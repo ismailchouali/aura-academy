@@ -17,7 +17,21 @@ export async function GET() {
       orderBy: { order: 'asc' },
     });
 
-    return NextResponse.json(services);
+    // Deduplicate levels per subject (keep first occurrence by name)
+    const dedupedServices = services.map(service => ({
+      ...service,
+      subjects: service.subjects.map(subject => {
+        const seen = new Set<string>();
+        const uniqueLevels = subject.levels.filter(level => {
+          if (seen.has(level.name)) return false;
+          seen.add(level.name);
+          return true;
+        });
+        return { ...subject, levels: uniqueLevels };
+      }),
+    }));
+
+    return NextResponse.json(dedupedServices);
   } catch (error) {
     console.error('Error fetching services:', error);
     return NextResponse.json({ error: 'Failed to fetch services' }, { status: 500 });
