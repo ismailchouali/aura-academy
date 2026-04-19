@@ -1010,3 +1010,23 @@ Stage Summary:
 - Dashboard has monthly registrations tracking with year/month filter
 - Student edit mode now shows all levels for the subject, not just the current one
 - ESLint: 0 errors
+
+---
+Task ID: 1-6
+Agent: Main
+Task: Fix duplicate levels, dialog spacing, git config, and push to GitHub
+
+Work Log:
+- Analyzed uploaded Vercel screenshot: "Deployment Blocked" due to "invalid commit author email" (z@container)
+- Fixed git config: set user.email to ismailchouali97@gmail.com
+- Fixed duplicate language levels: added deduplication in students-view.tsx filteredLevels useMemo
+- Fixed dialog spacing: increased px-6 → px-8 in payments-view.tsx, students-view.tsx, schedule-view.tsx
+- Fixed Next.js routing conflict: merged [id]/subjects and [serviceId]/subjects into single [serviceId]/subjects path
+- Committed and pushed 2 new commits to GitHub with correct email
+- Verified lint passes cleanly
+
+Stage Summary:
+- 3 of 5 original tasks (services CRUD, DOB removal, dashboard registrations) were already implemented
+- 2 remaining tasks completed: level dedup + dialog spacing
+- Git email fixed and pushed - Vercel should now be able to deploy
+- Route conflict resolved (Next.js 16 requires consistent dynamic segment names)
