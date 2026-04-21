@@ -917,21 +917,12 @@ export function ScheduleView() {
         ) : (
           <Card>
             <CardContent className="p-0">
-              <div className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 300px)' }}>
-                <div className="w-full flex flex-col">
+              <div className="w-full flex flex-col">
                   {/* Header Row - Day Names */}
                   <div
                     className="sticky top-0 z-20 bg-background border-b flex w-full shrink-0"
                     style={{ height: '44px' }}
                   >
-                    {/* Time header */}
-                    <div
-                      className="shrink-0 border-l flex items-center justify-center bg-muted/40"
-                      style={{ width: `${TIME_COLUMN_WIDTH}px` }}
-                    >
-                      <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                    </div>
-
                     {/* Day column headers */}
                     {days.map((day) => {
                       const count = dayCounts[day.value] || 0;
@@ -954,41 +945,17 @@ export function ScheduleView() {
                         </div>
                       );
                     })}
+                    {/* Time header - on the left side */}
+                    <div
+                      className="shrink-0 border-r flex items-center justify-center bg-muted/40"
+                      style={{ width: `${TIME_COLUMN_WIDTH}px` }}
+                    >
+                      <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                    </div>
                   </div>
 
                   {/* Grid Body */}
                   <div className="flex w-full">
-                    {/* Time Labels Column - sticky left in RTL (right side) */}
-                    <div
-                      className="shrink-0 border-l border-gray-400 bg-muted/10 sticky right-0 z-10"
-                      style={{ width: `${TIME_COLUMN_WIDTH}px` }}
-                    >
-                      {timeSlots.map((time, index) => (
-                        <div
-                          key={time}
-                          className={cn(
-                            'flex items-start justify-center border-b',
-                            index % 2 === 0
-                              ? 'border-gray-400'
-                              : 'border-gray-200 border-dashed'
-                          )}
-                          style={{ height: `${SLOT_HEIGHT}px` }}
-                        >
-                          <span
-                            dir="ltr"
-                            className={cn(
-                              'font-mono mt-1',
-                              index % 2 === 0
-                                ? 'text-[10px] font-bold text-gray-700'
-                                : 'text-[9px] text-gray-400'
-                            )}
-                          >
-                            {time}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-
                     {/* Day Columns */}
                     {days.map((day) => {
                       const dayData = schedulesByDay[day.value];
@@ -1171,9 +1138,38 @@ export function ScheduleView() {
                         </div>
                       );
                     })}
+                    {/* Time Labels Column - on the left side */}
+                    <div
+                      className="shrink-0 border-r border-gray-400 bg-muted/10"
+                      style={{ width: `${TIME_COLUMN_WIDTH}px` }}
+                    >
+                      {timeSlots.map((time, index) => (
+                        <div
+                          key={time}
+                          className={cn(
+                            'flex items-start justify-center border-b',
+                            index % 2 === 0
+                              ? 'border-gray-400'
+                              : 'border-gray-200 border-dashed'
+                          )}
+                          style={{ height: `${SLOT_HEIGHT}px` }}
+                        >
+                          <span
+                            dir="ltr"
+                            className={cn(
+                              'font-mono mt-1',
+                              index % 2 === 0
+                                ? 'text-[10px] font-bold text-gray-700'
+                                : 'text-[9px] text-gray-400'
+                            )}
+                          >
+                            {time}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </div>
             </CardContent>
           </Card>
         )}
