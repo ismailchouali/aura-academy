@@ -159,7 +159,6 @@ function getDays(t: ReturnType<typeof useT>) {
 
 const SLOT_HEIGHT = 48;
 const FIRST_SLOT_MINUTES = 11 * 60; // 11:00 = 660 min
-const DAY_COLUMN_WIDTH = 200;
 const TIME_COLUMN_WIDTH = 70;
 
 function generateTimeSlots(): string[] {
@@ -823,7 +822,6 @@ export function ScheduleView() {
   // ─── Render ─────────────────────────────────────────────────────────────
 
   const totalGridHeight = timeSlots.length * SLOT_HEIGHT;
-  const totalMinWidth = TIME_COLUMN_WIDTH + 7 * DAY_COLUMN_WIDTH;
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -919,11 +917,11 @@ export function ScheduleView() {
         ) : (
           <Card>
             <CardContent className="p-0">
-              <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 300px)' }}>
-                <div className="inline-block" style={{ minWidth: `${totalMinWidth}px`, width: `${totalMinWidth}px` }}>
+              <div className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 300px)' }}>
+                <div className="w-full flex flex-col">
                   {/* Header Row - Day Names */}
                   <div
-                    className="sticky top-0 z-20 bg-background border-b flex flex-nowrap"
+                    className="sticky top-0 z-20 bg-background border-b flex w-full shrink-0"
                     style={{ height: '44px' }}
                   >
                     {/* Time header */}
@@ -940,8 +938,7 @@ export function ScheduleView() {
                       return (
                         <div
                           key={day.value}
-                          className="shrink-0 border-l last:border-l-0 flex items-center justify-center gap-1.5 px-1"
-                          style={{ width: `${DAY_COLUMN_WIDTH}px` }}
+                          className="flex-1 border-l last:border-l-0 flex items-center justify-center gap-1.5 px-1 min-w-0"
                         >
                           <span className="text-xs font-bold truncate">
                             {day.label}
@@ -960,7 +957,7 @@ export function ScheduleView() {
                   </div>
 
                   {/* Grid Body */}
-                  <div className="flex flex-nowrap">
+                  <div className="flex w-full">
                     {/* Time Labels Column - sticky left in RTL (right side) */}
                     <div
                       className="shrink-0 border-l border-gray-400 bg-muted/10 sticky right-0 z-10"
@@ -998,8 +995,7 @@ export function ScheduleView() {
                       return (
                         <div
                           key={day.value}
-                          className="shrink-0 border-l border-gray-300 last:border-l-0 relative"
-                          style={{ width: `${DAY_COLUMN_WIDTH}px` }}
+                          className="flex-1 border-l border-gray-300 last:border-l-0 relative min-w-0"
                         >
                           {/* Grid lines */}
                           <div style={{ height: `${totalGridHeight}px` }}>
