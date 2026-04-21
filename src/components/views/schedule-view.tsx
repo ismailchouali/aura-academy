@@ -10,7 +10,6 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
@@ -919,7 +918,7 @@ export function ScheduleView() {
         ) : (
           <Card>
             <CardContent className="p-0">
-              <ScrollArea className="w-full" style={{ maxHeight: 'calc(100vh - 300px)' }}>
+              <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 300px)' }}>
                 <div className="inline-block" style={{ minWidth: `${totalMinWidth}px`, width: `${totalMinWidth}px` }}>
                   {/* Header Row - Day Names */}
                   <div
@@ -1177,8 +1176,7 @@ export function ScheduleView() {
                     })}
                   </div>
                 </div>
-                <ScrollBar orientation="horizontal" />
-              </ScrollArea>
+              </div>
             </CardContent>
           </Card>
         )}
@@ -1232,7 +1230,7 @@ export function ScheduleView() {
                     <Label htmlFor="type-fixed" className="cursor-pointer flex-1">
                       <div className="flex items-center gap-2">
                         <CalendarDays className="h-4 w-4 text-teal-500" />
-                        <span className="font-medium text-sm">طبيبة</span>
+                        <span className="font-medium text-sm">طبيعة</span>
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         حصة ثابتة كتبقا فالجدول
