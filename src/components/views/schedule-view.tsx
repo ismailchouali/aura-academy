@@ -8,12 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
   Dialog,
   DialogContent,
@@ -126,9 +124,6 @@ interface Schedule {
 }
 
 interface ScheduleFormData {
-  sessionType: 'fixed' | 'trial';
-  isRecurring: boolean;
-  daysOfWeek: string[];
   dayOfWeek: string;
   startTime: string;
   endTime: string;
@@ -259,9 +254,6 @@ function getSlotCount(startTime: string, endTime: string): number {
 }
 
 const emptyForm: ScheduleFormData = {
-  sessionType: 'fixed',
-  isRecurring: false,
-  daysOfWeek: [],
   dayOfWeek: '',
   startTime: '',
   endTime: '',
@@ -486,32 +478,27 @@ export function ScheduleView() {
 
   function checkClientConflicts(formData: ScheduleFormData, excludeId?: string): ConflictError[] {
     const errors: ConflictError[] = [];
-    const daysToCheck = formData.isRecurring && formData.daysOfWeek.length > 0
-      ? formData.daysOfWeek
-      : formData.dayOfWeek ? [formData.dayOfWeek] : [];
+    if (!formData.dayOfWeek) return errors;
 
-    for (const day of daysToCheck) {
-      const daySchedulesList = schedules.filter((s) => s.dayOfWeek === day);
+    const daySchedulesList = schedules.filter((s) => s.dayOfWeek === formData.dayOfWeek);
+    const dayLabel = days.find((d) => d.value === formData.dayOfWeek)?.label || formData.dayOfWeek;
 
-      for (const existing of daySchedulesList) {
-        if (excludeId && existing.id === excludeId) continue;
-        if (!timesOverlap(formData.startTime, formData.endTime, existing.startTime, existing.endTime)) continue;
+    for (const existing of daySchedulesList) {
+      if (excludeId && existing.id === excludeId) continue;
+      if (!timesOverlap(formData.startTime, formData.endTime, existing.startTime, existing.endTime)) continue;
 
-        if (formData.classroomId && existing.classroomId === formData.classroomId) {
-          const dayLabel = days.find((d) => d.value === day)?.label || day;
-          errors.push({
-            type: 'classroom',
-            message: `هذه القاعة مشغولة في ${dayLabel} من ${existing.startTime} إلى ${existing.endTime} (${existing.subject?.nameAr || existing.subject?.name})`,
-          });
-        }
+      if (formData.classroomId && existing.classroomId === formData.classroomId) {
+        errors.push({
+          type: 'classroom',
+          message: `هذه القاعة مشغولة في ${dayLabel} من ${existing.startTime} إلى ${existing.endTime} (${existing.subject?.nameAr || existing.subject?.name})`,
+        });
+      }
 
-        if (formData.teacherId && existing.teacherId === formData.teacherId) {
-          const dayLabel = days.find((d) => d.value === day)?.label || day;
-          errors.push({
-            type: 'teacher',
-            message: `هذا الأستاذ لديه حصة في ${dayLabel} من ${existing.startTime} إلى ${existing.endTime} (${existing.subject?.nameAr || existing.subject?.name})`,
-          });
-        }
+      if (formData.teacherId && existing.teacherId === formData.teacherId) {
+        errors.push({
+          type: 'teacher',
+          message: `هذا الأستاذ لديه حصة في ${dayLabel} من ${existing.startTime} إلى ${existing.endTime} (${existing.subject?.nameAr || existing.subject?.name})`,
+        });
       }
     }
 
@@ -531,9 +518,6 @@ export function ScheduleView() {
     setEditingSchedule(sched);
     setConflictErrors([]);
     setForm({
-      sessionType: (sched.sessionType === 'trial' ? 'trial' : 'fixed') as 'fixed' | 'trial',
-      isRecurring: sched.isRecurring || false,
-      daysOfWeek: [],
       dayOfWeek: sched.dayOfWeek,
       startTime: sched.startTime,
       endTime: sched.endTime,
@@ -546,34 +530,12 @@ export function ScheduleView() {
     setFormOpen(true);
   };
 
-  const handleSessionTypeChange = (val: string) => {
-    setForm({
-      ...form,
-      sessionType: val as 'fixed' | 'trial',
-      isRecurring: val === 'fixed' ? form.isRecurring : false,
-      daysOfWeek: val === 'trial' ? [] : form.daysOfWeek,
-    });
-  };
-
-  const toggleDay = (dayVal: string) => {
-    setForm((prev) => ({
-      ...prev,
-      daysOfWeek: prev.daysOfWeek.includes(dayVal)
-        ? prev.daysOfWeek.filter((d) => d !== dayVal)
-        : [...prev.daysOfWeek, dayVal],
-    }));
-  };
-
   const handleSubmit = async () => {
     setConflictErrors([]);
 
     // Validation
-    if (form.sessionType === 'trial' && !form.dayOfWeek) {
+    if (!form.dayOfWeek) {
       toast.error('يرجى اختيار يوم الأسبوع');
-      return;
-    }
-    if (form.sessionType === 'fixed' && form.isRecurring && form.daysOfWeek.length === 0) {
-      toast.error('يرجى اختيار يوم واحد على الأقل للتكرار');
       return;
     }
     if (!form.startTime || !form.endTime) {
@@ -607,20 +569,10 @@ export function ScheduleView() {
 
     setSubmitting(true);
     try {
-      const isRecurring = form.sessionType === 'fixed' && form.isRecurring;
-      const daysOfWeek = isRecurring ? form.daysOfWeek : [form.dayOfWeek];
-
-      if (!daysOfWeek[0]) {
-        toast.error('يرجى اختيار يوم');
-        setSubmitting(false);
-        return;
-      }
-
       const body = {
-        sessionType: form.sessionType,
-        isRecurring,
-        daysOfWeek: isRecurring ? form.daysOfWeek : undefined,
-        dayOfWeek: daysOfWeek[0],
+        sessionType: 'fixed',
+        isRecurring: false,
+        dayOfWeek: form.dayOfWeek,
         startTime: form.startTime,
         endTime: form.endTime,
         classroomId: form.classroomId,
@@ -1184,139 +1136,25 @@ export function ScheduleView() {
             )}
 
             <div className="flex-1 overflow-y-auto min-h-0 px-8 py-4 space-y-4">
-              {/* Session Type */}
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">نوع الحصة *</Label>
-                <RadioGroup
-                  value={form.sessionType}
-                  onValueChange={handleSessionTypeChange}
-                  className="flex gap-3"
-                  dir="rtl"
-                >
-                  <div className="flex items-center gap-2 rounded-lg border p-3 flex-1 cursor-pointer hover:bg-muted/50 transition-colors">
-                    <RadioGroupItem value="fixed" id="type-fixed" />
-                    <Label htmlFor="type-fixed" className="cursor-pointer flex-1">
-                      <div className="flex items-center gap-2">
-                        <CalendarDays className="h-4 w-4 text-teal-500" />
-                        <span className="font-medium text-sm">ثابتة (مكررة)</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        حصة تتكرر أسبوعياً
-                      </p>
-                    </Label>
-                  </div>
-                  <div className="flex items-center gap-2 rounded-lg border p-3 flex-1 cursor-pointer hover:bg-muted/50 transition-colors">
-                    <RadioGroupItem value="trial" id="type-trial" />
-                    <Label htmlFor="type-trial" className="cursor-pointer flex-1">
-                      <div className="flex items-center gap-2">
-                        <Zap className="h-4 w-4 text-amber-500" />
-                        <span className="font-medium text-sm">تجريبية</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        حصة تجريبية واحدة
-                      </p>
-                    </Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              <Separator />
-
               {/* Day selection */}
-              {form.sessionType === 'trial' ? (
-                <div>
-                  <Label>يوم الأسبوع *</Label>
-                  <Select
-                    value={form.dayOfWeek}
-                    onValueChange={(val) => setForm({ ...form, dayOfWeek: val })}
-                  >
-                    <SelectTrigger className="w-full mt-1.5">
-                      <SelectValue placeholder="اختر اليوم" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {days.map((d) => (
-                        <SelectItem key={d.value} value={d.value}>
-                          {d.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {/* Recurring checkbox */}
-                  <div className="flex items-center gap-3 rounded-lg border p-3">
-                    <Checkbox
-                      id="recurring"
-                      checked={form.isRecurring}
-                      onCheckedChange={(checked) =>
-                        setForm({
-                          ...form,
-                          isRecurring: !!checked,
-                          daysOfWeek: !!checked ? form.daysOfWeek : [],
-                        })
-                      }
-                    />
-                    <div className="flex-1">
-                      <Label
-                        htmlFor="recurring"
-                        className="cursor-pointer font-medium text-sm"
-                      >
-                        ثابت (مكرر أسبوعياً)
-                      </Label>
-                      <p className="text-xs text-muted-foreground">
-                        سيتم إنشاء حصة لكل يوم محدد
-                      </p>
-                    </div>
-                  </div>
-
-                  {form.isRecurring ? (
-                    <div>
-                      <Label className="text-sm mb-2 block">أيام التكرار *</Label>
-                      <div className="grid grid-cols-4 gap-2">
-                        {days.map((d) => (
-                          <div
-                            key={d.value}
-                            className={cn(
-                              'flex items-center gap-2 rounded-md border p-2 cursor-pointer transition-colors',
-                              form.daysOfWeek.includes(d.value)
-                                ? 'bg-primary/10 border-primary text-primary'
-                                : 'hover:bg-muted/50'
-                            )}
-                            onClick={() => toggleDay(d.value)}
-                          >
-                            <Checkbox
-                              checked={form.daysOfWeek.includes(d.value)}
-                              onCheckedChange={() => toggleDay(d.value)}
-                              className="pointer-events-none"
-                            />
-                            <span className="text-xs font-medium">{d.short}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <div>
-                      <Label>يوم الأسبوع *</Label>
-                      <Select
-                        value={form.dayOfWeek}
-                        onValueChange={(val) => setForm({ ...form, dayOfWeek: val })}
-                      >
-                        <SelectTrigger className="w-full mt-1.5">
-                          <SelectValue placeholder="اختر اليوم" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {days.map((d) => (
-                            <SelectItem key={d.value} value={d.value}>
-                              {d.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                </div>
-              )}
+              <div>
+                <Label>يوم الأسبوع *</Label>
+                <Select
+                  value={form.dayOfWeek}
+                  onValueChange={(val) => setForm({ ...form, dayOfWeek: val })}
+                >
+                  <SelectTrigger className="w-full mt-1.5">
+                    <SelectValue placeholder="اختر اليوم" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {days.map((d) => (
+                      <SelectItem key={d.value} value={d.value}>
+                        {d.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
               {/* Time selection */}
               <div className="grid grid-cols-2 gap-3">
