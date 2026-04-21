@@ -1183,7 +1183,7 @@ export function ScheduleView() {
               </div>
             )}
 
-            <div className="flex-1 overflow-y-auto min-h-0 -mx-8 px-8 py-4 space-y-4">
+            <div className="flex-1 overflow-y-auto min-h-0 px-8 py-4 space-y-4">
               {/* Session Type */}
               <div className="space-y-2">
                 <Label className="text-sm font-medium">نوع الحصة *</Label>

@@ -696,7 +696,7 @@ export function TeachersView() {
       {/* ═══════════════════════════════════════════════════════════════════ */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0">
-          <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
+          <DialogHeader className="shrink-0 px-8 pt-6 pb-2">
             <DialogTitle>
               {editingTeacher ? t.teachers.editTeacher : t.teachers.addNew}
             </DialogTitle>
@@ -707,7 +707,7 @@ export function TeachersView() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto min-h-0 px-6 py-4">
+          <div className="flex-1 overflow-y-auto min-h-0 px-8 py-4">
             <div className="space-y-6">
               {/* Personal Info */}
               <div>
@@ -941,7 +941,7 @@ export function TeachersView() {
             </div>
           </div>
 
-          <DialogFooter className="px-6 py-4 border-t shrink-0">
+          <DialogFooter className="px-8 py-4 border-t shrink-0">
             <Button variant="outline" onClick={() => setFormOpen(false)} disabled={submitting}>
               {t.common.cancel}
             </Button>
@@ -984,7 +984,7 @@ export function TeachersView() {
       {/* ═══════════════════════════════════════════════════════════════════ */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0">
-          <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
+          <DialogHeader className="shrink-0 px-8 pt-6 pb-2">
             <DialogTitle className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-full bg-primary flex items-center justify-center text-white font-bold text-lg shadow-md">
                 {detailTeacher?.fullName.charAt(0)}
@@ -1006,7 +1006,7 @@ export function TeachersView() {
           </DialogHeader>
 
           {detailTeacher && (
-            <div className="overflow-y-auto flex-1 min-h-0 px-6 py-4">
+            <div className="overflow-y-auto flex-1 min-h-0 px-8 py-4">
               <div className="space-y-6">
                 {/* Contact Info */}
                 <div className="space-y-2.5">

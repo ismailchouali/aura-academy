@@ -948,7 +948,7 @@ export function TeacherPaymentsView() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto min-h-0 -mx-8 px-8 py-4 space-y-4">
+          <div className="flex-1 overflow-y-auto min-h-0 px-8 py-4 space-y-4">
             {/* Teacher selection */}
             <div>
               <Label>{t.teacherPayments.selectTeacher}</Label>
