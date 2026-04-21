@@ -915,14 +915,15 @@ export function ScheduleView() {
             </CardContent>
           </Card>
         ) : (
-          <Card className="!overflow-visible py-0">
-            <CardContent className="p-0 !overflow-visible">
-              <div className="w-full flex flex-col" style={{ overflow: 'visible' }}>
-                  {/* Header Row - Day Names (sticky) */}
-                  <div
-                    className="border-b flex w-full shrink-0"
-                    style={{ position: 'sticky', top: 0, zIndex: 10, height: '44px', backgroundColor: '#ffffff' }}
-                  >
+          <div
+            className="rounded-xl border shadow-sm bg-card text-card-foreground"
+            style={{ overflow: 'visible' }}
+          >
+              {/* Header Row - Day Names (sticky) */}
+              <div
+                className="border-b flex w-full shrink-0"
+                style={{ position: 'sticky', top: 0, zIndex: 20, height: '44px', backgroundColor: '#ffffff' }}
+              >
                     {/* Day column headers */}
                     {days.map((day) => {
                       const count = dayCounts[day.value] || 0;
@@ -1170,8 +1171,7 @@ export function ScheduleView() {
                     </div>
                   </div>
                 </div>
-            </CardContent>
-          </Card>
+          </div>
         )}
 
 
