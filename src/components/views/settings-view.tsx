@@ -12,16 +12,34 @@ import {
   Coins,
   Loader2,
   Sparkles,
+  DatabaseBackup,
+  Download,
+  RotateCcw,
+  Trash2,
+  Shield,
+  AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useT } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useAppStore } from '@/store/store';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface SettingsData {
   center_name: string;
@@ -32,6 +50,13 @@ interface SettingsData {
   center_open_days: string;
   currency: string;
   [key: string]: string;
+}
+
+interface BackupInfo {
+  filename: string;
+  size: number;
+  sizeHuman: string;
+  createdAt: string;
 }
 
 const DEFAULT_SETTINGS: SettingsData = {
@@ -110,8 +135,207 @@ function LoadingSkeleton() {
   );
 }
 
+function BackupSection() {
+  const { lang } = useAppStore();
+  const isAr = lang === 'ar';
+  const [backups, setBackups] = useState<BackupInfo[]>([]);
+  const [loadingBackups, setLoadingBackups] = useState(false);
+  const [creating, setCreating] = useState(false);
+
+  const fetchBackups = async () => {
+    setLoadingBackups(true);
+    try {
+      const res = await fetch('/api/backup');
+      if (!res.ok) return;
+      const data = await res.json();
+      setBackups(data.backups || []);
+    } catch {
+      // ignore
+    } finally {
+      setLoadingBackups(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchBackups();
+  }, []);
+
+  const handleCreateBackup = async () => {
+    setCreating(true);
+    try {
+      const res = await fetch('/api/backup', { method: 'POST' });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      toast.success(isAr ? `✅ تم إنشاء نسخة احتياطية (${data.sizeHuman})` : `✅ Sauvegarde créée (${data.sizeHuman})`);
+      fetchBackups();
+    } catch {
+      toast.error(isAr ? 'فشل إنشاء النسخة الاحتياطية' : 'Échec de la sauvegarde');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleRestore = async (filename: string) => {
+    try {
+      const res = await fetch('/api/backup/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success(isAr ? '✅ تم استعادة النسخة الاحتياطية' : '✅ Sauvegarde restaurée');
+    } catch {
+      toast.error(isAr ? 'فشل استعادة النسخة الاحتياطية' : 'Échec de la restauration');
+    }
+  };
+
+  const formatDate = (dateStr: string) => {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString(isAr ? 'ar-MA' : 'fr-FR', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  return (
+    <Card className="border-0 shadow-sm">
+      <CardHeader className="pb-2">
+        <div className="flex items-center gap-2">
+          <DatabaseBackup className="w-5 h-5 text-blue-600" />
+          <CardTitle className="text-lg">
+            {isAr ? 'النسخ الاحتياطي' : 'Sauvegarde'}
+          </CardTitle>
+        </div>
+        <CardDescription>
+          {isAr
+            ? 'إنشاء نسخ احتياطية لقاعدة البيانات واستعادتها'
+            : 'Créer et restaurer des sauvegardes de la base de données'}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="pt-4 space-y-4">
+        {/* Create Backup Button */}
+        <Button
+          onClick={handleCreateBackup}
+          disabled={creating}
+          className="w-full gap-2 bg-blue-600 hover:bg-blue-700 cursor-pointer"
+        >
+          {creating ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <DatabaseBackup className="w-4 h-4" />
+          )}
+          {isAr ? 'إنشاء نسخة احتياطية الآن' : 'Créer une sauvegarde maintenant'}
+        </Button>
+
+        {/* Backups List */}
+        <div className="space-y-2">
+          <p className="text-sm text-muted-foreground">
+            {isAr ? `النسخ الاحتياطية (${backups.length})` : `Sauvegardes (${backups.length})`}
+          </p>
+          {loadingBackups ? (
+            <Skeleton className="h-12 w-full" />
+          ) : backups.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              {isAr ? 'لا توجد نسخ احتياطية بعد' : 'Aucune sauvegarde disponible'}
+            </p>
+          ) : (
+            <div className="max-h-60 overflow-y-auto space-y-2">
+              {backups.map((backup) => (
+                <div
+                  key={backup.filename}
+                  className="flex items-center justify-between p-3 rounded-lg border bg-muted/30"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium truncate" dir="ltr">
+                      {backup.filename.replace('aura-backup-', '').replace('.db', '')}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatDate(backup.createdAt)} · {backup.sizeHuman}
+                    </p>
+                  </div>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1 shrink-0 ms-2 cursor-pointer"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        {isAr ? 'استعادة' : 'Restaurer'}
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>
+                          {isAr ? 'تأكيد الاستعادة' : 'Confirmer la restauration'}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                          {isAr
+                            ? 'سيتم استبدال جميع البيانات الحالية بهذه النسخة الاحتياطية. هل أنت متأكد؟'
+                            : 'Toutes les données actuelles seront remplacées par cette sauvegarde. Êtes-vous sûr ?'}
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>{isAr ? 'إلغاء' : 'Annuler'}</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => handleRestore(backup.filename)}
+                          className="bg-blue-600 hover:bg-blue-700 cursor-pointer"
+                        >
+                          {isAr ? 'نعم، استعادة' : 'Oui, restaurer'}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SecuritySection() {
+  const { lang } = useAppStore();
+  const isAr = lang === 'ar';
+
+  return (
+    <Card className="border-0 shadow-sm">
+      <CardHeader className="pb-2">
+        <div className="flex items-center gap-2">
+          <Shield className="w-5 h-5 text-emerald-600" />
+          <CardTitle className="text-lg">
+            {isAr ? 'الأمان' : 'Sécurité'}
+          </CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-4 space-y-3">
+        {[
+          { label: isAr ? 'تشفير كلمات المرور' : 'Hachage des mots de passe', value: 'PBKDF2-SHA512', ok: true },
+          { label: isAr ? 'حماية الجلسات' : 'Protection des sessions', value: 'HttpOnly Cookie', ok: true },
+          { label: isAr ? 'تحديد المحاولات' : 'Limitation des tentatives', value: isAr ? '10 محاولات / 15 دقيقة' : '10 tentatives / 15 min', ok: true },
+          { label: isAr ? 'التحقق من المدخلات' : 'Validation des entrées', value: '✓', ok: true },
+          { label: isAr ? 'حماية المسارات' : 'Protection des routes', value: isAr ? 'Middleware' : 'Middleware', ok: true },
+        ].map((item, i) => (
+          <div key={i} className="flex items-center justify-between py-2">
+            <span className="text-sm">{item.label}</span>
+            <span className={cn('text-xs px-2 py-1 rounded-full font-medium', item.ok ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700')} dir="ltr">
+              {item.value}
+            </span>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
 export function SettingsView() {
   const t = useT();
+  const { isAdmin } = useAppStore();
   const [settings, setSettings] = useState<SettingsData>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -259,6 +483,12 @@ export function SettingsView() {
           )}
         </Button>
       </div>
+
+      {/* Backup Section - Admin Only */}
+      {isAdmin && <BackupSection />}
+
+      {/* Security Info */}
+      <SecuritySection />
     </div>
   );
 }
