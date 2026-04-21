@@ -860,7 +860,7 @@ export function ScheduleView() {
             <CardContent className="p-3 text-center">
               <div className="flex items-center justify-center gap-1.5">
                 <CalendarDays className="h-4 w-4 text-teal-500" />
-                <p className="text-xs text-muted-foreground">حصص ثابتة</p>
+                <p className="text-xs text-muted-foreground">حصص طبيعة</p>
               </div>
               <p className="text-lg font-bold text-teal-600 mt-0.5">{fixedCount}</p>
             </CardContent>
@@ -893,7 +893,7 @@ export function ScheduleView() {
             className="text-xs px-3 gap-1"
           >
             <CalendarDays className="h-3 w-3" />
-            ثابتة
+            طبيعة
           </Button>
           <Button
             variant={sessionFilter === 'trial' ? 'default' : 'outline'}
