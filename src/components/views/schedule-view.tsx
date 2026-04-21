@@ -917,10 +917,10 @@ export function ScheduleView() {
         ) : (
           <Card>
             <CardContent className="p-0">
-              <div className="w-full flex flex-col">
+              <div className="w-full flex flex-col overflow-hidden">
                   {/* Header Row - Day Names */}
                   <div
-                    className="sticky top-0 z-20 bg-background border-b flex w-full shrink-0"
+                    className="border-b flex w-full shrink-0"
                     style={{ height: '44px' }}
                   >
                     {/* Day column headers */}
@@ -954,8 +954,8 @@ export function ScheduleView() {
                     </div>
                   </div>
 
-                  {/* Grid Body */}
-                  <div className="flex w-full">
+                  {/* Grid Body - scrollable */}
+                  <div className="flex w-full overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" style={{ maxHeight: 'calc(100vh - 350px)' }}>
                     {/* Day Columns */}
                     {days.map((day) => {
                       const dayData = schedulesByDay[day.value];
