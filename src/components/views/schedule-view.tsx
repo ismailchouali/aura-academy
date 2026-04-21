@@ -159,7 +159,7 @@ function getDays(t: ReturnType<typeof useT>) {
 
 const SLOT_HEIGHT = 48;
 const FIRST_SLOT_MINUTES = 11 * 60; // 11:00 = 660 min
-const DAY_COLUMN_WIDTH = 160;
+const DAY_COLUMN_WIDTH = 200;
 const TIME_COLUMN_WIDTH = 70;
 
 function generateTimeSlots(): string[] {
@@ -421,8 +421,11 @@ export function ScheduleView() {
   const schedulesByDay = useMemo(() => {
     const map: Record<string, {
       schedules: Schedule[];
-      columns: Map<string, number>;
-      totalColumns: number;
+      overlapGroups: {
+        sessionIds: string[];
+        colMap: Map<string, number>;
+        colsInGroup: number;
+      }[];
     }> = {};
 
     days.forEach((d) => {
@@ -431,31 +434,77 @@ export function ScheduleView() {
         dayScheds = dayScheds.filter((s) => s.sessionType === sessionFilter);
       }
 
-      // Compute overlap columns using greedy algorithm
       const sorted = [...dayScheds].sort((a, b) => {
         const startDiff = timeToMinutes(a.startTime) - timeToMinutes(b.startTime);
         if (startDiff !== 0) return startDiff;
         return timeToMinutes(a.endTime) - timeToMinutes(b.endTime);
       });
 
-      const columns = new Map<string, number>();
-      const endTimes: number[] = []; // end time for each column
+      // Build overlap groups using union-find approach
+      // Two sessions overlap if they share any time
+      const n = sorted.length;
+      const parent = Array.from({ length: n }, (_, i) => i);
 
-      sorted.forEach((sched) => {
-        const startMin = timeToMinutes(sched.startTime);
-        let col = 0;
-        while (col < endTimes.length && endTimes[col] > startMin) {
-          col++;
+      function find(x: number): number {
+        if (parent[x] !== x) parent[x] = find(parent[x]);
+        return parent[x];
+      }
+      function union(a: number, b: number) {
+        parent[find(a)] = find(b);
+      }
+
+      // Group sessions that overlap
+      for (let i = 0; i < n; i++) {
+        for (let j = i + 1; j < n; j++) {
+          if (timesOverlap(sorted[i].startTime, sorted[i].endTime, sorted[j].startTime, sorted[j].endTime)) {
+            union(i, j);
+          }
         }
-        columns.set(sched.id, col);
-        if (col >= endTimes.length) {
-          endTimes.push(0);
-        }
-        endTimes[col] = timeToMinutes(sched.endTime);
+      }
+
+      // Collect groups
+      const groupMap = new Map<number, number[]>();
+      for (let i = 0; i < n; i++) {
+        const root = find(i);
+        if (!groupMap.has(root)) groupMap.set(root, []);
+        groupMap.get(root)!.push(i);
+      }
+
+      const overlapGroups = Array.from(groupMap.values()).map((indices) => {
+        const groupSessions = indices.map((i) => sorted[i]);
+        const sessionIds = groupSessions.map((s) => s.id);
+
+        // Greedy column assignment within this group
+        const colMap = new Map<string, number>();
+        const endTimes: number[] = [];
+        // Sort by start time
+        const groupSorted = [...groupSessions].sort((a, b) => {
+          const startDiff = timeToMinutes(a.startTime) - timeToMinutes(b.startTime);
+          if (startDiff !== 0) return startDiff;
+          return timeToMinutes(a.endTime) - timeToMinutes(b.endTime);
+        });
+
+        groupSorted.forEach((sched) => {
+          const startMin = timeToMinutes(sched.startTime);
+          let col = 0;
+          while (col < endTimes.length && endTimes[col] > startMin) {
+            col++;
+          }
+          colMap.set(sched.id, col);
+          if (col >= endTimes.length) {
+            endTimes.push(0);
+          }
+          endTimes[col] = timeToMinutes(sched.endTime);
+        });
+
+        return {
+          sessionIds,
+          colMap,
+          colsInGroup: Math.max(1, endTimes.length),
+        };
       });
 
-      const totalColumns = Math.max(1, endTimes.length);
-      map[d.value] = { schedules: dayScheds, columns, totalColumns };
+      map[d.value] = { schedules: dayScheds, overlapGroups };
     });
     return map;
   }, [schedules, sessionFilter, days]);
@@ -975,121 +1024,150 @@ export function ScheduleView() {
                               const isTrial = sched.sessionType === 'trial';
                               const slotCount = getSlotCount(sched.startTime, sched.endTime);
 
-                              // Overlap positioning
-                              const colIndex = dayData.columns.get(sched.id) || 0;
-                              const totalCols = dayData.totalColumns;
-                              const widthPercent = 100 / totalCols;
-                              const rightOffset = colIndex * widthPercent;
+                              // Find which overlap group this session belongs to
+                              const group = dayData.overlapGroups.find((g) => g.sessionIds.includes(sched.id));
+                              const colsInGroup = group?.colsInGroup || 1;
+                              const colIndex = group?.colMap.get(sched.id) || 0;
+                              const isOverlapping = colsInGroup > 1;
+
+                              // Width calculation: overlapping sessions share the column, standalone gets full width
+                              const widthPercent = isOverlapping ? 100 / colsInGroup : 100;
+                              const rightOffset = isOverlapping ? colIndex * widthPercent : 0;
+                              const gapPx = isOverlapping ? 3 : 0;
 
                               return (
                                 <div
                                   key={sched.id}
                                   className={cn(
-                                    'absolute rounded-md border-2 px-1.5 py-1 cursor-pointer hover:shadow-md transition-all group overflow-hidden',
-                                    cell
+                                    'absolute rounded-md border-2 cursor-pointer hover:shadow-lg transition-all group',
+                                    cell,
+                                    isOverlapping ? 'px-1 py-0.5 border' : 'px-1.5 py-1'
                                   )}
                                   style={{
                                     top: `${top}px`,
                                     height: `${height}px`,
-                                    width: `calc(${widthPercent}% - 4px)`,
-                                    right: `calc(${rightOffset}% + 2px)`,
+                                    width: `calc(${widthPercent}% - ${gapPx}px)`,
+                                    right: `calc(${rightOffset}% + ${isOverlapping ? 1 : 0}px)`,
                                   }}
                                   onClick={() => openEditDialog(sched)}
                                 >
-                                  {/* Session type badge */}
-                                  <Badge
-                                    variant="outline"
-                                    className={cn(
-                                      'text-[7px] px-1 py-0 h-3 mb-0.5 leading-none',
-                                      badge
-                                    )}
-                                  >
-                                    {isTrial ? '⚡' : '📌'}
-                                  </Badge>
-
-                                  {/* Subject + Level */}
-                                  <p className="text-[10px] font-bold leading-tight truncate">
-                                    {sched.subject?.nameAr || sched.subject?.name}
-                                    {sched.level && (
-                                      <span className="font-normal opacity-80 mr-0.5">
-                                        — {sched.level?.nameAr || sched.level?.name}
-                                      </span>
-                                    )}
-                                  </p>
-
-                                  {/* Classroom badge */}
-                                  {sched.classroom && (
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <span
+                                  {/* Tooltip with full details on hover */}
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div className="relative w-full h-full overflow-hidden">
+                                        {/* Session type badge */}
+                                        <Badge
+                                          variant="outline"
                                           className={cn(
-                                            'inline-block text-[7px] px-1 py-0 rounded border leading-none mt-0.5 truncate max-w-full',
-                                            classroomColorLookup[sched.classroomId] || 'bg-slate-100 text-slate-600 border-slate-200'
+                                            'text-[7px] px-1 py-0 h-3 mb-0.5 leading-none shrink-0',
+                                            badge
                                           )}
                                         >
-                                          📍 {sched.classroom.nameAr || sched.classroom.name}
-                                        </span>
-                                      </TooltipTrigger>
-                                      <TooltipContent side="top">
-                                        <p>{sched.classroom.nameAr || sched.classroom.name}</p>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  )}
+                                          {isTrial ? '⚡' : '📌'}
+                                        </Badge>
 
-                                  {/* Teacher */}
-                                  {sched.teacher && (
-                                    <p className="text-[9px] leading-tight truncate opacity-75 mt-0.5">
-                                      👨‍🏫 {sched.teacher.fullName}
-                                    </p>
-                                  )}
+                                        {/* Subject + Level */}
+                                        <p className={cn(
+                                          'font-bold leading-tight truncate',
+                                          isOverlapping ? 'text-[9px]' : 'text-[10px]'
+                                        )}>
+                                          {sched.subject?.nameAr || sched.subject?.name}
+                                          {sched.level && !isOverlapping && (
+                                            <span className="font-normal opacity-80 mr-0.5">
+                                              — {sched.level?.nameAr || sched.level?.name}
+                                            </span>
+                                          )}
+                                        </p>
 
-                                  {/* Time range */}
-                                  {slotCount >= 2 && (
-                                    <div className="flex items-center mt-0.5">
-                                      <span
-                                        className="text-[8px] opacity-50 font-mono"
-                                        dir="ltr"
-                                      >
-                                        {sched.startTime}-{sched.endTime}
-                                      </span>
-                                      {sched.group && (
-                                        <span className="text-[8px] opacity-60 truncate mr-1">
-                                          👥 {sched.group}
-                                        </span>
-                                      )}
-                                    </div>
-                                  )}
+                                        {/* Classroom badge */}
+                                        {sched.classroom && (
+                                          <span
+                                            className={cn(
+                                              'inline-block text-[7px] px-1 py-0 rounded border leading-none mt-0.5 truncate max-w-full shrink-0',
+                                              classroomColorLookup[sched.classroomId] || 'bg-slate-100 text-slate-600 border-slate-200'
+                                            )}
+                                          >
+                                            📍 {sched.classroom.nameAr || sched.classroom.name}
+                                          </span>
+                                        )}
 
-                                  {/* Group name for short sessions */}
-                                  {slotCount < 2 && sched.group && (
-                                    <p className="text-[8px] leading-tight truncate opacity-60 mt-0.5">
-                                      👥 {sched.group}
-                                    </p>
-                                  )}
+                                        {/* Teacher - show only if not overlapping or enough height */}
+                                        {sched.teacher && (slotCount >= 3 || !isOverlapping) && (
+                                          <p className="text-[9px] leading-tight truncate opacity-75 mt-0.5">
+                                            👨‍🏫 {sched.teacher.fullName}
+                                          </p>
+                                        )}
 
-                                  {/* Hover overlay with actions */}
-                                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors rounded-md" />
+                                        {/* Time range - show if enough height */}
+                                        {slotCount >= 2 && !isOverlapping && (
+                                          <div className="flex items-center mt-0.5">
+                                            <span
+                                              className="text-[8px] opacity-50 font-mono"
+                                              dir="ltr"
+                                            >
+                                              {sched.startTime}-{sched.endTime}
+                                            </span>
+                                            {sched.group && (
+                                              <span className="text-[8px] opacity-60 truncate mr-1">
+                                                👥 {sched.group}
+                                              </span>
+                                            )}
+                                          </div>
+                                        )}
 
-                                  {/* Action buttons on hover */}
-                                  <div className="absolute top-0.5 left-0.5 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <Button
-                                      variant="destructive"
-                                      size="icon"
-                                      className="h-4 w-4 rounded-sm"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setDeletingSchedule(sched);
-                                        setDeleteOpen(true);
-                                      }}
-                                    >
-                                      <Trash2 className="h-2 w-2" />
-                                    </Button>
-                                  </div>
+                                        {/* Group name for short sessions */}
+                                        {slotCount < 2 && sched.group && (
+                                          <p className="text-[8px] leading-tight truncate opacity-60 mt-0.5">
+                                            👥 {sched.group}
+                                          </p>
+                                        )}
 
-                                  {/* Edit icon on hover */}
-                                  <div className="absolute top-0.5 left-5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <Edit2 className="h-2.5 w-2.5 opacity-40" />
-                                  </div>
+                                        {/* Overlap indicator: show time range compactly */}
+                                        {isOverlapping && (
+                                          <p className="text-[7px] opacity-50 font-mono mt-0.5 leading-tight" dir="ltr">
+                                            {sched.startTime}-{sched.endTime}
+                                          </p>
+                                        )}
+
+                                        {/* Hover overlay */}
+                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors rounded-md" />
+
+                                        {/* Action buttons on hover */}
+                                        <div className="absolute top-0.5 left-0.5 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                                          <Button
+                                            variant="destructive"
+                                            size="icon"
+                                            className="h-4 w-4 rounded-sm"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setDeletingSchedule(sched);
+                                              setDeleteOpen(true);
+                                            }}
+                                          >
+                                            <Trash2 className="h-2 w-2" />
+                                          </Button>
+                                        </div>
+
+                                        {/* Edit icon on hover */}
+                                        <div className="absolute top-0.5 left-5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                                          <Edit2 className="h-2.5 w-2.5 opacity-40" />
+                                        </div>
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="left" className="max-w-[200px] text-xs">
+                                      <div className="space-y-1">
+                                        <p className="font-bold">{sched.subject?.nameAr || sched.subject?.name}</p>
+                                        {sched.level && (
+                                          <p>المستوى: {sched.level?.nameAr || sched.level?.name}</p>
+                                        )}
+                                        <p className="opacity-75" dir="ltr">{sched.startTime} - {sched.endTime}</p>
+                                        {sched.teacher && <p>👨‍🏫 {sched.teacher.fullName}</p>}
+                                        {sched.classroom && <p>📍 {sched.classroom.nameAr || sched.classroom.name}</p>}
+                                        {sched.group && <p>👥 {sched.group}</p>}
+                                        <p>{isTrial ? '⚡ تجريبية' : '📌 طبيبة'}</p>
+                                      </div>
+                                    </TooltipContent>
+                                  </Tooltip>
                                 </div>
                               );
                             })}
