@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { requireAuth } from '@/lib/session';
 
 export async function GET(request: NextRequest) {
-  const auth = await requireAuth(request);
-  if (auth instanceof NextResponse) return auth;
-
   try {
     const teachers = await db.teacher.findMany({
       include: {

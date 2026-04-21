@@ -1,14 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { requireAuth } from '@/lib/session';
-
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireAuth(request);
-  if (auth instanceof NextResponse) return auth;
-
   try {
     const { id } = await params;
     const classroom = await db.classroom.findUnique({
@@ -43,9 +38,6 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireAuth(request);
-  if (auth instanceof NextResponse) return auth;
-
   try {
     const { id } = await params;
     const body = await request.json();
@@ -73,9 +65,6 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireAuth(request);
-  if (auth instanceof NextResponse) return auth;
-
   try {
     const { id } = await params;
     await db.classroom.delete({ where: { id } });

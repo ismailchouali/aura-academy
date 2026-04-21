@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { requireAuth } from '@/lib/session';
 
 export async function GET(request: NextRequest) {
-  const auth = await requireAuth(request);
-  if (auth instanceof NextResponse) return auth;
-
   try {
     const classrooms = await db.classroom.findMany({
       include: {
@@ -28,9 +24,6 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireAuth(request);
-  if (auth instanceof NextResponse) return auth;
-
   try {
     const body = await request.json();
     const classroom = await db.classroom.create({
