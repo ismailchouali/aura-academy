@@ -241,14 +241,14 @@ export default function Home() {
   const dir = lang === 'ar' ? 'rtl' : 'ltr';
 
   return (
-    <div className="flex h-screen overflow-hidden bg-bg-main" dir={dir}>
+    <div className="flex h-screen overflow-clip bg-bg-main" dir={dir}>
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex w-64 shrink-0 shadow-xl">
         <SidebarContent currentView={currentView} onNavigate={setCurrentView} navKeys={filteredNavKeys} />
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <main className="flex-1 flex flex-col">
         {/* Top Bar (Mobile) */}
         <header className="lg:hidden flex items-center gap-3 px-4 py-3 bg-white border-b sticky top-0 z-40">
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
