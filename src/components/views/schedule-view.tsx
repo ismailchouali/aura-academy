@@ -1167,7 +1167,7 @@ export function ScheduleView() {
 
             {/* Conflict errors */}
             {conflictErrors.length > 0 && (
-              <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 space-y-1.5">
+              <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 mx-8 space-y-1.5">
                 <div className="flex items-center gap-2 text-destructive text-sm font-bold">
                   <AlertTriangle className="h-4 w-4 shrink-0" />
                   <span>يوجد تعارض في الجدول!</span>

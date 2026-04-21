@@ -20,14 +20,6 @@ export async function GET(request: NextRequest) {
         studentWhere.teacherId = specificTeacherId;
       }
 
-      // Determine if we should filter by a specific month/year
-      const filterMonth = month ? parseInt(month) : null;
-      const filterYear = year ? parseInt(year) : null;
-      const hasMonthFilter = filterMonth !== null && filterYear !== null;
-
-      // Helper: convert (month, year) to absolute month index for cross-year comparison
-      const toMonthIndex = (m: number, y: number) => y * 12 + m;
-
       // Fetch all relevant students with their levels and payments
       const students = await db.student.findMany({
         where: Object.keys(studentWhere).length > 0 ? studentWhere : undefined,
@@ -77,43 +69,16 @@ export async function GET(request: NextRequest) {
         const totalStudents = teacherStudents.length;
 
         // Sum paid amounts from these students' payments
-        // For Langues service, divide by packMonths to get per-month equivalent
-        // When a month/year filter is active, only include payments relevant to that month:
-        //   - Regular (packMonths=1): payment.month/year must match the filter
-        //   - Pack (packMonths>1): the filter month must fall within the pack's coverage period
+        // Always sum ALL payments (no month filter) to give the teacher their full share
+        // For pack payments (packMonths > 1), use the full paid amount
         const totalCollected = teacherStudents.reduce(
           (sum, student) =>
             sum +
             student.payments.reduce(
               (pSum, p) => {
                 const rawAmount = p.paidAmount || 0;
-                const packMonths = p.packMonths || 1;
-                const serviceId = student.level?.subject?.serviceId || '';
-                const isLangues = serviceId === 'service_langues';
-
-                // If month filter is active, check whether this payment applies to the filter month
-                if (hasMonthFilter && filterMonth !== null && filterYear !== null) {
-                  const pMonth = parseInt(p.month);
-                  const pYear = p.year;
-
-                  if (packMonths > 1) {
-                    // Pack payment: check if the filter month falls within the coverage period
-                    const packStart = toMonthIndex(pMonth, pYear);
-                    const packEnd = toMonthIndex(pMonth, pYear) + packMonths;
-                    const filterIdx = toMonthIndex(filterMonth, filterYear);
-                    if (filterIdx < packStart || filterIdx >= packEnd) {
-                      return pSum; // Filter month is outside the pack's coverage
-                    }
-                  } else {
-                    // Regular payment: must match the filter month/year exactly
-                    if (pMonth !== filterMonth || pYear !== filterYear) {
-                      return pSum;
-                    }
-                  }
-                }
-
-                // For Langues packs, divide by packMonths to get monthly equivalent
-                return pSum + (isLangues && packMonths > 1 ? rawAmount / packMonths : rawAmount);
+                if (rawAmount <= 0) return pSum;
+                return pSum + rawAmount;
               },
               0
             ),
