@@ -917,10 +917,10 @@ export function ScheduleView() {
         ) : (
           <Card>
             <CardContent className="p-0">
-              <div className="w-full flex flex-col overflow-hidden">
-                  {/* Header Row - Day Names */}
+              <div className="w-full flex flex-col">
+                  {/* Header Row - Day Names (sticky) */}
                   <div
-                    className="border-b flex w-full shrink-0"
+                    className="sticky top-0 z-10 border-b flex w-full shrink-0 bg-background"
                     style={{ height: '44px' }}
                   >
                     {/* Day column headers */}
@@ -954,8 +954,8 @@ export function ScheduleView() {
                     </div>
                   </div>
 
-                  {/* Grid Body - scrollable */}
-                  <div className="flex w-full overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" style={{ maxHeight: 'calc(100vh - 350px)' }}>
+                  {/* Grid Body */}
+                  <div className="flex w-full border-b border-gray-400">
                     {/* Day Columns */}
                     {days.map((day) => {
                       const dayData = schedulesByDay[day.value];
@@ -1127,7 +1127,7 @@ export function ScheduleView() {
                                         {sched.teacher && <p>👨‍🏫 {sched.teacher.fullName}</p>}
                                         {sched.classroom && <p>📍 {sched.classroom.nameAr || sched.classroom.name}</p>}
                                         {sched.group && <p>👥 {sched.group}</p>}
-                                        <p>{isTrial ? '⚡ تجريبية' : '📌 طبيبة'}</p>
+                                        <p>{isTrial ? '⚡ تجريبية' : '📌 تابتةٌ'}</p>
                                       </div>
                                     </TooltipContent>
                                   </Tooltip>
