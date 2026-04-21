@@ -915,9 +915,9 @@ export function ScheduleView() {
             </CardContent>
           </Card>
         ) : (
-          <Card>
-            <CardContent className="p-0">
-              <div className="w-full flex flex-col">
+          <Card className="overflow-visible py-0">
+            <CardContent className="p-0 overflow-visible">
+              <div className="w-full flex flex-col overflow-visible">
                   {/* Header Row - Day Names (sticky) */}
                   <div
                     className="sticky top-0 z-10 border-b flex w-full shrink-0 bg-background"
@@ -955,14 +955,14 @@ export function ScheduleView() {
                   </div>
 
                   {/* Grid Body */}
-                  <div className="flex w-full border-b border-gray-400">
+                  <div className="flex w-full border-b border-gray-400 overflow-visible">
                     {/* Day Columns */}
                     {days.map((day) => {
                       const dayData = schedulesByDay[day.value];
                       return (
                         <div
                           key={day.value}
-                          className="flex-1 border-l border-gray-300 last:border-l-0 relative min-w-0"
+                          className="flex-1 border-l border-gray-300 last:border-l-0 relative min-w-0 overflow-visible"
                         >
                           {/* Grid lines */}
                           <div style={{ height: `${totalGridHeight}px` }}>
