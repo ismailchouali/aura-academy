@@ -12,6 +12,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
   Dialog,
   DialogContent,
@@ -124,6 +125,7 @@ interface Schedule {
 }
 
 interface ScheduleFormData {
+  sessionType: 'fixed' | 'trial';
   dayOfWeek: string;
   startTime: string;
   endTime: string;
@@ -254,6 +256,7 @@ function getSlotCount(startTime: string, endTime: string): number {
 }
 
 const emptyForm: ScheduleFormData = {
+  sessionType: 'fixed',
   dayOfWeek: '',
   startTime: '',
   endTime: '',
@@ -518,6 +521,7 @@ export function ScheduleView() {
     setEditingSchedule(sched);
     setConflictErrors([]);
     setForm({
+      sessionType: sched.sessionType === 'trial' ? 'trial' : 'fixed',
       dayOfWeek: sched.dayOfWeek,
       startTime: sched.startTime,
       endTime: sched.endTime,
@@ -570,8 +574,8 @@ export function ScheduleView() {
     setSubmitting(true);
     try {
       const body = {
-        sessionType: 'fixed',
-        isRecurring: false,
+        sessionType: form.sessionType,
+        isRecurring: form.sessionType === 'fixed',
         dayOfWeek: form.dayOfWeek,
         startTime: form.startTime,
         endTime: form.endTime,
@@ -1136,6 +1140,44 @@ export function ScheduleView() {
             )}
 
             <div className="flex-1 overflow-y-auto min-h-0 px-8 py-4 space-y-4">
+              {/* Session Type */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">نوع الحصة *</Label>
+                <RadioGroup
+                  value={form.sessionType}
+                  onValueChange={(val) => setForm({ ...form, sessionType: val as 'fixed' | 'trial' })}
+                  className="flex gap-3"
+                  dir="rtl"
+                >
+                  <div className="flex items-center gap-2 rounded-lg border p-3 flex-1 cursor-pointer hover:bg-muted/50 transition-colors">
+                    <RadioGroupItem value="fixed" id="type-fixed" />
+                    <Label htmlFor="type-fixed" className="cursor-pointer flex-1">
+                      <div className="flex items-center gap-2">
+                        <CalendarDays className="h-4 w-4 text-teal-500" />
+                        <span className="font-medium text-sm">طبيبة</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        حصة ثابتة كتبقا فالجدول
+                      </p>
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-2 rounded-lg border p-3 flex-1 cursor-pointer hover:bg-muted/50 transition-colors">
+                    <RadioGroupItem value="trial" id="type-trial" />
+                    <Label htmlFor="type-trial" className="cursor-pointer flex-1">
+                      <div className="flex items-center gap-2">
+                        <Zap className="h-4 w-4 text-amber-500" />
+                        <span className="font-medium text-sm">تجريبية</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        كتحيد من الجدول بعد ما تعدي
+                      </p>
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
+
+              <Separator />
+
               {/* Day selection */}
               <div>
                 <Label>يوم الأسبوع *</Label>
