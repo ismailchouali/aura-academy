@@ -1170,7 +1170,6 @@ export function ScheduleView() {
                       ))}
                     </div>
                   </div>
-                </div>
           </div>
         )}
 
