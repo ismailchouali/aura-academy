@@ -241,9 +241,9 @@ export default function Home() {
   const dir = lang === 'ar' ? 'rtl' : 'ltr';
 
   return (
-    <div className="flex h-screen bg-bg-main" dir={dir}>
+    <div className="flex min-h-screen bg-bg-main" dir={dir}>
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex w-64 shrink-0 shadow-xl">
+      <aside className="hidden lg:flex w-64 shrink-0 shadow-xl lg:sticky lg:top-0 lg:h-screen lg:self-start">
         <SidebarContent currentView={currentView} onNavigate={setCurrentView} navKeys={filteredNavKeys} />
       </aside>
 
@@ -274,7 +274,7 @@ export default function Home() {
         </header>
 
         {/* Desktop Header */}
-        <header className="hidden lg:flex items-center justify-between px-6 py-3 bg-white border-b">
+        <header className="hidden lg:flex items-center justify-between px-6 py-3 bg-white border-b lg:sticky lg:top-0 lg:z-30">
           <div>
             <h2 className="text-lg font-bold text-foreground">
               {getNavLabel(t, currentView)}
@@ -299,7 +299,7 @@ export default function Home() {
         </header>
 
         {/* Page Content */}
-        <div className="flex-1 overflow-y-auto p-4 lg:p-6">
+        <div className="flex-1 p-4 lg:p-6">
           <div className="max-w-7xl mx-auto">
             <ErrorBoundary>
               {renderView()}
