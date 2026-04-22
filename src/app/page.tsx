@@ -241,7 +241,7 @@ export default function Home() {
   const dir = lang === 'ar' ? 'rtl' : 'ltr';
 
   return (
-    <div className="flex h-screen bg-bg-main" style={{ overflow: 'clip' }} dir={dir}>
+    <div className="flex h-screen bg-bg-main" dir={dir}>
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex w-64 shrink-0 shadow-xl">
         <SidebarContent currentView={currentView} onNavigate={setCurrentView} navKeys={filteredNavKeys} />

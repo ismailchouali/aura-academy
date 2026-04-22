@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useT } from '@/hooks/use-translation';
@@ -275,8 +275,72 @@ export function ScheduleView() {
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [loading, setLoading] = useState(true);
+  const headerRef = useRef<HTMLDivElement>(null);
 
   const days = useMemo(() => getDays(t), [t]);
+
+  // ─── Sticky Header via JS using position:fixed (bypasses CSS overflow issues) ──
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+
+    // Find the nearest scrollable parent
+    let scrollEl: HTMLElement | null = header.parentElement;
+    while (scrollEl && scrollEl !== document.body) {
+      const { overflowY } = getComputedStyle(scrollEl);
+      if (overflowY === 'auto' || overflowY === 'scroll') break;
+      scrollEl = scrollEl.parentElement;
+    }
+    if (!scrollEl) return;
+
+    let spacer: HTMLDivElement | null = null;
+
+    const pinHeader = () => {
+      const headerRect = header.getBoundingClientRect();
+      const scrollRect = scrollEl.getBoundingClientRect();
+      const scrollStyle = getComputedStyle(scrollEl);
+      const paddingLeft = parseFloat(scrollStyle.paddingLeft) || 0;
+      const paddingRight = parseFloat(scrollStyle.paddingRight) || 0;
+
+      if (headerRect.top < scrollRect.top) {
+        // Header scrolled above visible area → fix it
+        if (!spacer) {
+          spacer = document.createElement('div');
+          spacer.style.height = headerRect.height + 'px';
+          spacer.style.width = '100%';
+          spacer.style.flexShrink = '0';
+          header.parentElement!.insertBefore(spacer, header);
+        }
+        header.style.position = 'fixed';
+        header.style.top = scrollRect.top + 'px';
+        header.style.left = scrollRect.left + paddingLeft + 'px';
+        header.style.width = (scrollRect.width - paddingLeft - paddingRight) + 'px';
+        header.style.zIndex = '20';
+        header.style.backgroundColor = '#ffffff';
+      } else {
+        // Header visible → reset
+        if (spacer) {
+          spacer.remove();
+          spacer = null;
+        }
+        header.style.position = '';
+        header.style.top = '';
+        header.style.left = '';
+        header.style.width = '';
+        header.style.zIndex = '';
+      }
+    };
+
+    scrollEl.addEventListener('scroll', pinHeader, { passive: true });
+    window.addEventListener('resize', pinHeader);
+    pinHeader();
+
+    return () => {
+      scrollEl.removeEventListener('scroll', pinHeader);
+      window.removeEventListener('resize', pinHeader);
+      if (spacer) spacer.remove();
+    };
+  }, [loading]);
 
   // View state
   const [sessionFilter, setSessionFilter] = useState<'all' | 'fixed' | 'trial'>('all');
@@ -919,10 +983,11 @@ export function ScheduleView() {
             className="rounded-xl border shadow-sm bg-card text-card-foreground"
             style={{ overflow: 'visible' }}
           >
-              {/* Header Row - Day Names (sticky) */}
+              {/* Header Row - Day Names (sticky via JS) */}
               <div
+                ref={headerRef}
                 className="border-b flex w-full shrink-0"
-                style={{ position: 'sticky', top: 0, zIndex: 20, height: '44px', backgroundColor: '#ffffff' }}
+                style={{ height: '44px', backgroundColor: '#ffffff' }}
               >
                     {/* Day column headers */}
                     {days.map((day) => {
