@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
-const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December'];
-
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -57,7 +54,6 @@ export async function GET(request: NextRequest) {
       // The month/year being calculated (from form selection, defaults to current)
       const calcMonth = month ? parseInt(month) : new Date().getMonth() + 1;
       const calcYear = year ? parseInt(year) : new Date().getFullYear();
-      const calcMonthName = MONTH_NAMES[calcMonth - 1] || '';
 
       /**
        * Determine if a student is "active" in a given month based on enrollment date.
@@ -99,29 +95,6 @@ export async function GET(request: NextRequest) {
         return true;
       }
 
-      // Pre-fetch ALL payments for the target month/year (single DB query)
-      // Match both month name format ("April") and number format ("4")
-      const allPayments = await db.payment.findMany({
-        where: {
-          year: calcYear,
-          OR: [
-            { month: calcMonthName },
-            { month: String(calcMonth) },
-          ],
-        },
-        select: {
-          studentId: true,
-          paidAmount: true,
-        },
-      });
-
-      // Build a map: studentId → total paidAmount for the target month/year
-      const paidByStudent = new Map<string, number>();
-      for (const p of allPayments) {
-        const current = paidByStudent.get(p.studentId) || 0;
-        paidByStudent.set(p.studentId, current + (p.paidAmount || 0));
-      }
-
       // Calculate data for each teacher
       const calculations = teachers.map((teacher) => {
         const teacherStudents = students.filter(
@@ -137,9 +110,13 @@ export async function GET(request: NextRequest) {
 
         const totalStudents = activeStudents.length;
 
-        // Sum actual paid amounts from the pre-built map
+        // Calculate total based on monthlyFee / packMonths for each active student
+        // Example: 750dh / 3 months = 250dh/month per student
         const totalCollected = activeStudents.reduce((sum, student) => {
-          return sum + (paidByStudent.get(student.id) || 0);
+          const totalPack = student.monthlyFee || 0;
+          const pack = student.packMonths || 1;
+          const monthlyAmount = pack > 0 ? totalPack / pack : totalPack;
+          return sum + monthlyAmount;
         }, 0);
 
         // Teacher share calculation
