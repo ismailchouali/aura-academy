@@ -119,14 +119,16 @@ export async function GET(request: NextRequest) {
 
         const totalStudents = activeStudents.length;
 
-        // Sum monthly amounts for active students
-        // Monthly amount = total pack (monthlyFee) / packMonths
-        // Teacher % is calculated from this monthly amount
+        // Sum actual paid amounts from students' payments for the target month/year
         const totalCollected = activeStudents.reduce((sum, student) => {
-          const totalPack = student.monthlyFee || 0;
-          const pack = student.packMonths || 1;
-          const monthlyAmount = pack > 0 ? totalPack / pack : totalPack;
-          return sum + monthlyAmount;
+          const monthPayments = student.payments.filter(
+            (p) => p.month === String(calcMonth) && p.year === calcYear
+          );
+          const paidThisMonth = monthPayments.reduce(
+            (s, p) => s + (p.paidAmount || 0),
+            0
+          );
+          return sum + paidThisMonth;
         }, 0);
 
         // Teacher share calculation
