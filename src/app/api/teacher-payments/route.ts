@@ -120,9 +120,14 @@ export async function GET(request: NextRequest) {
         const totalStudents = activeStudents.length;
 
         // Sum actual paid amounts from students' payments for the target month/year
+        // Payments store month as name ("April") but calcMonth is an int (4)
+        const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
+          'July', 'August', 'September', 'October', 'November', 'December'];
+        const calcMonthName = MONTH_NAMES[calcMonth - 1] || '';
+
         const totalCollected = activeStudents.reduce((sum, student) => {
           const monthPayments = student.payments.filter(
-            (p) => p.month === String(calcMonth) && p.year === calcYear
+            (p) => p.month === calcMonthName && p.year === calcYear
           );
           const paidThisMonth = monthPayments.reduce(
             (s, p) => s + (p.paidAmount || 0),
