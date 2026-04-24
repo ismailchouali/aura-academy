@@ -60,30 +60,74 @@ export async function GET(request: NextRequest) {
         orderBy: { createdAt: 'desc' },
       });
 
+      // The month/year being calculated (from form selection, defaults to current)
+      const calcMonth = month ? parseInt(month) : new Date().getMonth() + 1;
+      const calcYear = year ? parseInt(year) : new Date().getFullYear();
+
+      /**
+       * Determine if a student is "active" in a given month based on enrollment date.
+       * - Enrolled before or on 15th → start counting from that month
+       * - Enrolled after 15th → start counting from next month
+       * - The student counts for `packMonths` consecutive months
+       */
+      function isStudentActiveInMonth(
+        enrollmentDate: Date,
+        packMonths: number,
+        targetMonth: number,
+        targetYear: number
+      ): boolean {
+        const enrollDay = enrollmentDate.getDate();
+        let startMonth = enrollmentDate.getMonth() + 1; // 1-12
+        let startYear = enrollmentDate.getFullYear();
+
+        // If enrolled after the 15th, start from next month
+        if (enrollDay > 15) {
+          startMonth += 1;
+          if (startMonth > 12) {
+            startMonth = 1;
+            startYear += 1;
+          }
+        }
+
+        // Calculate the end month (after packMonths months)
+        let endMonth = startMonth + packMonths - 1;
+        let endYear = startYear;
+        while (endMonth > 12) {
+          endMonth -= 12;
+          endYear += 1;
+        }
+
+        // Check if target month/year falls within [start, end]
+        if (targetYear < startYear || targetYear > endYear) return false;
+        if (targetYear === startYear && targetMonth < startMonth) return false;
+        if (targetYear === endYear && targetMonth > endMonth) return false;
+        return true;
+      }
+
       // Calculate data for each teacher
       const calculations = teachers.map((teacher) => {
         const teacherStudents = students.filter(
           (s) => s.teacherId === teacher.id
         );
 
-        const totalStudents = teacherStudents.length;
+        // Filter to students who are active in the target month
+        const activeStudents = teacherStudents.filter((student) => {
+          const enrollDate = new Date(student.enrollmentDate);
+          const pack = student.packMonths || 1;
+          return isStudentActiveInMonth(enrollDate, pack, calcMonth, calcYear);
+        });
 
-        // Sum paid amounts from these students' payments
-        // Always sum ALL payments (no month filter) to give the teacher their full share
-        // For pack payments (packMonths > 1), use the full paid amount
-        const totalCollected = teacherStudents.reduce(
-          (sum, student) =>
-            sum +
-            student.payments.reduce(
-              (pSum, p) => {
-                const rawAmount = p.paidAmount || 0;
-                if (rawAmount <= 0) return pSum;
-                return pSum + rawAmount;
-              },
-              0
-            ),
-          0
-        );
+        const totalStudents = activeStudents.length;
+
+        // Sum monthly amounts for active students
+        // Monthly amount = total pack (monthlyFee) / packMonths
+        // Teacher % is calculated from this monthly amount
+        const totalCollected = activeStudents.reduce((sum, student) => {
+          const totalPack = student.monthlyFee || 0;
+          const pack = student.packMonths || 1;
+          const monthlyAmount = pack > 0 ? totalPack / pack : totalPack;
+          return sum + monthlyAmount;
+        }, 0);
 
         // Teacher share calculation
         const percentage = teacher.percentage || 0;
@@ -102,7 +146,7 @@ export async function GET(request: NextRequest) {
           }
         >();
 
-        teacherStudents.forEach((student) => {
+        activeStudents.forEach((student) => {
           if (student.level) {
             const key = student.level.id;
             const existing = groupsMap.get(key);
@@ -144,8 +188,8 @@ export async function GET(request: NextRequest) {
           teacherPhone: teacher.phone,
           teacherPercentage: percentage,
           totalStudents,
-          totalCollected,
-          teacherShare,
+          totalCollected: Math.round(totalCollected * 100) / 100,
+          teacherShare: Math.round(teacherShare * 100) / 100,
           groups,
         };
       });

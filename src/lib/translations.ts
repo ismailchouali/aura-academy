@@ -198,6 +198,7 @@ const ar = {
     parentNamePlaceholder: 'اسم ولي الأمر',
     parentPhone: 'هاتف الولي',
     parentPhonePlaceholder: 'رقم هاتف ولي الأمر',
+    enrollmentDateLabel: 'تاريخ التسجيل',
     // Monthly fee
     monthlyFeeSection: 'القسط الشهري',
     monthlyFeeLabel: 'المبلغ (درهم)',
@@ -757,6 +758,7 @@ const fr: typeof ar = {
     parentNamePlaceholder: 'Nom du tuteur',
     parentPhone: 'Téléphone du tuteur',
     parentPhonePlaceholder: 'Numéro du tuteur',
+    enrollmentDateLabel: "Date d'inscription",
     monthlyFeeSection: 'Mensualité',
     monthlyFeeLabel: 'Montant (DH)',
     personalInfo: 'Informations personnelles',

@@ -131,6 +131,7 @@ interface FormState {
   parentPhone: string;
   monthlyFee: string;
   packMonths: number;
+  enrollmentDate: string;
 }
 
 type WizardStep = 1 | 2 | 3 | 4 | 5;
@@ -142,6 +143,7 @@ const initialForm: FormState = {
   parentPhone: '',
   monthlyFee: '',
   packMonths: 1,
+  enrollmentDate: new Date().toISOString().split('T')[0],
 };
 
 // ── Service icons map ──────────────────────────────────────────────────────
@@ -333,6 +335,9 @@ export function StudentsView() {
         parentPhone: student.parentPhone || '',
         monthlyFee: student.monthlyFee ? String(student.monthlyFee) : '',
         packMonths: student.packMonths || 1,
+        enrollmentDate: student.enrollmentDate
+          ? new Date(student.enrollmentDate).toISOString().split('T')[0]
+          : new Date().toISOString().split('T')[0],
       });
       // Pre-select service, subject, level, teacher from student data
       if (student.level?.subject) {
@@ -458,7 +463,7 @@ export function StudentsView() {
         levelId: selectedLevel.id,
         teacherId: noTeacher ? null : (selectedTeacher?.id || null),
         status: editingStudent?.status || 'active',
-        enrollmentDate: editingStudent?.enrollmentDate || new Date().toISOString(),
+        enrollmentDate: form.enrollmentDate || new Date().toISOString(),
       };
 
       const url = editingStudent ? `/api/students/${editingStudent.id}` : '/api/students';
@@ -1022,6 +1027,26 @@ export function StudentsView() {
                     dir="ltr"
                   />
                 </div>
+              </div>
+            </div>
+
+            {/* Enrollment Date */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold flex items-center gap-2">
+                <UserCheck className="h-4 w-4 text-teal-600" />
+                {t.students.enrollmentDateLabel}
+              </h4>
+              <div className="space-y-1.5">
+                <Label htmlFor="enrollmentDate">{t.students.enrollmentDateLabel}</Label>
+                <Input
+                  id="enrollmentDate"
+                  type="date"
+                  value={form.enrollmentDate}
+                  onChange={(e) => setForm((prev) => ({ ...prev, enrollmentDate: e.target.value }))}
+                  max={new Date().toISOString().split('T')[0]}
+                  dir="ltr"
+                  className="text-left"
+                />
               </div>
             </div>
 
