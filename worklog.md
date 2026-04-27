@@ -1030,3 +1030,26 @@ Stage Summary:
 - 2 remaining tasks completed: level dedup + dialog spacing
 - Git email fixed and pushed - Vercel should now be able to deploy
 - Route conflict resolved (Next.js 16 requires consistent dynamic segment names)
+---
+Task ID: 2
+Agent: Main Agent
+Task: Implement teacher payment period logic (1-15 → next month, 16-end → month after next)
+
+Work Log:
+- Read Prisma schema: Payment has paymentDate field (DateTime) which determines when student actually paid
+- Implemented period logic in src/app/api/teacher-payments/route.ts:
+  - Period 1: Student pays 1st-15th of month M → teacher gets paid at beginning of M+1
+  - Period 2: Student pays 16th-end of month M → teacher gets paid at beginning of M+2
+  - For calculation month M: query payments from M-1 (day 1-15) + M-2 (day 16-end)
+- Added getPrevMonth() and getLastDayOfMonth() helper functions for year boundary handling
+- Added periodInfo to API response showing which periods are included in calculation
+- totalStudents now only counts students with qualifying payments (not all assigned students)
+- Groups now include collected amount per group
+- Fixed bug: changed activeStudents → teacherStudents (from previous session)
+- Build passed, pushed to GitHub, Vercel auto-deployed
+
+Stage Summary:
+- API /api/teacher-payments?calculate=true&month=5&year=2026 returns correct data
+- majda bou-louidane: 7 students, 4600 MAD, teacher share 2760 MAD (60%)
+- All teachers show correct period-based calculations
+- periodInfo field included in response for frontend display
