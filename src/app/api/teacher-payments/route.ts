@@ -62,46 +62,6 @@ export async function GET(request: NextRequest) {
       ];
       const monthName = MONTH_NAMES_EN[calcMonth - 1] || '';
 
-      /**
-       * Determine if a student is "active" in a given month based on enrollment date.
-       * - Enrolled before or on 15th → start counting from that month
-       * - Enrolled after 15th → start counting from next month
-       * - The student counts for `packMonths` consecutive months
-       */
-      function isStudentActiveInMonth(
-        enrollmentDate: Date,
-        packMonths: number,
-        targetMonth: number,
-        targetYear: number
-      ): boolean {
-        const enrollDay = enrollmentDate.getDate();
-        let startMonth = enrollmentDate.getMonth() + 1; // 1-12
-        let startYear = enrollmentDate.getFullYear();
-
-        // If enrolled after the 15th, start from next month
-        if (enrollDay > 15) {
-          startMonth += 1;
-          if (startMonth > 12) {
-            startMonth = 1;
-            startYear += 1;
-          }
-        }
-
-        // Calculate the end month (after packMonths months)
-        let endMonth = startMonth + packMonths - 1;
-        let endYear = startYear;
-        while (endMonth > 12) {
-          endMonth -= 12;
-          endYear += 1;
-        }
-
-        // Check if target month/year falls within [start, end]
-        if (targetYear < startYear || targetYear > endYear) return false;
-        if (targetYear === startYear && targetMonth < startMonth) return false;
-        if (targetYear === endYear && targetMonth > endMonth) return false;
-        return true;
-      }
-
       // Pre-fetch all payments for the target month/year from ALL active students
       // Payment table stores month as name string ("January", "April", etc.)
       const allStudentIds = students.map((s) => s.id);
@@ -124,21 +84,15 @@ export async function GET(request: NextRequest) {
 
       // Calculate data for each teacher
       const calculations = teachers.map((teacher) => {
+        // All students assigned to this teacher (no enrollment/pack filter)
         const teacherStudents = students.filter(
           (s) => s.teacherId === teacher.id
         );
 
-        // Filter to students who are active in the target month
-        const activeStudents = teacherStudents.filter((student) => {
-          const enrollDate = new Date(student.enrollmentDate);
-          const pack = student.packMonths || 1;
-          return isStudentActiveInMonth(enrollDate, pack, calcMonth, calcYear);
-        });
+        const totalStudents = teacherStudents.length;
 
-        const totalStudents = activeStudents.length;
-
-        // Sum the actual paidAmount from Payment records for this teacher's active students
-        const totalCollected = activeStudents.reduce((sum, student) => {
+        // Sum the actual paidAmount from Payment records for this teacher's students
+        const totalCollected = teacherStudents.reduce((sum, student) => {
           return sum + (paidByStudent.get(student.id) || 0);
         }, 0);
 
