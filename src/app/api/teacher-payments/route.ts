@@ -113,7 +113,7 @@ export async function GET(request: NextRequest) {
           }
         >();
 
-        activeStudents.forEach((student) => {
+        teacherStudents.forEach((student) => {
           if (student.level) {
             const key = student.level.id;
             const existing = groupsMap.get(key);
