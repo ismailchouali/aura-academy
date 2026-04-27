@@ -173,7 +173,7 @@ export default function Home() {
   const isAdmin = userRole === 'ADMIN';
 
   // Filter nav items by role and accessPages
-  const hiddenForSecretary = new Set<ViewType>(['user-management', 'financial-reports', 'teacher-payments']);
+  const hiddenForSecretary = new Set<ViewType>(['user-management', 'financial-reports']);
   const filteredNavKeys = navKeys.filter(k => {
     if (isAdmin) return true; // Admin sees everything
     if (hiddenForSecretary.has(k)) return false; // Secretary can never see these
