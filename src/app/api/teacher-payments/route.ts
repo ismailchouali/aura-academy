@@ -7,6 +7,29 @@ function getPrevMonth(month: number, year: number): { month: number; year: numbe
   return { month: month - 1, year };
 }
 
+// Helper: get next month number and year (handles year boundary)
+function getNextMonth(month: number, year: number): { month: number; year: number } {
+  if (month === 12) return { month: 1, year: year + 1 };
+  return { month: month + 1, year };
+}
+
+// Helper: add N months to a given month/year (handles year boundaries)
+function addMonths(month: number, year: number, n: number): { month: number; year: number } {
+  let m = month;
+  let y = year;
+  for (let i = 0; i < n; i++) {
+    const next = getNextMonth(m, y);
+    m = next.month;
+    y = next.year;
+  }
+  return { month: m, year: y };
+}
+
+// Helper: check if two month/year pairs are equal
+function isSameMonth(a: { month: number; year: number }, b: { month: number; year: number }): boolean {
+  return a.month === b.month && a.year === b.year;
+}
+
 // Helper: get the last day of a given month
 function getLastDayOfMonth(month: number, year: number): number {
   return new Date(year, month, 0).getDate();
@@ -25,13 +48,12 @@ export async function GET(request: NextRequest) {
     if (calculate) {
       const specificTeacherId = teacherId;
 
-      // Build where clause for students
+      // Fetch ALL active students with their levels and teachers
       const studentWhere: Record<string, unknown> = { status: 'active' };
       if (specificTeacherId) {
         studentWhere.teacherId = specificTeacherId;
       }
 
-      // Fetch all relevant students with their levels
       const students = await db.student.findMany({
         where: Object.keys(studentWhere).length > 0 ? studentWhere : undefined,
         include: {
@@ -44,7 +66,7 @@ export async function GET(request: NextRequest) {
         },
       });
 
-      // Fetch all teachers (or specific one)
+      // Fetch all active teachers (or specific one)
       const teacherWhere: Record<string, unknown> = { status: 'active' };
       if (specificTeacherId) {
         teacherWhere.id = specificTeacherId;
@@ -62,43 +84,45 @@ export async function GET(request: NextRequest) {
         orderBy: { createdAt: 'desc' },
       });
 
-      // The month/year being calculated (from form selection, defaults to current)
+      // The month/year being calculated (from form selection)
       const calcMonth = month ? parseInt(month) : new Date().getMonth() + 1;
       const calcYear = year ? parseInt(year) : new Date().getFullYear();
 
       // =============================================
-      // TEACHER PAYMENT PERIOD LOGIC:
-      // When a student pays between 1st-15th → teacher gets paid next month
-      // When a student pays between 16th-end → teacher gets paid the month after next
+      // NEW ALGORITHM:
       //
-      // So for calcMonth/calcYear, we need:
-      //   Period 1: payments from (calcMonth-1) where paymentDate day is 1-15
-      //   Period 2: payments from (calcMonth-2) where paymentDate day is 16-end
+      // 1. totalStudents = ALL active students assigned to teacher
+      //    (regardless of whether they have payments or not)
+      //
+      // 2. For each student's payment:
+      //    monthlyAmount = paidAmount / packMonths
+      //    effectiveStartMonth = based on paymentDate:
+      //      - day 1-15 → start of next month
+      //      - day 16-end → start of month after next
+      //    The pack covers 'packMonths' consecutive months
+      //    starting from effectiveStartMonth
+      //
+      // 3. If calcMonth falls within the pack's coverage period,
+      //    add monthlyAmount to totalCollected
+      //
+      // Example: Hafsa paid 6300 DH for 9-month pack on April 5
+      //   monthlyAmount = 6300/9 = 700 DH/month
+      //   effectiveStartMonth = May (day 5 is in 1-15 range)
+      //   Pack covers: May, Jun, Jul, Aug, Sep, Oct, Nov, Dec, Jan
+      //   So for calcMonth = May: totalCollected += 700
+      //   For calcMonth = June: totalCollected += 700 (etc.)
       // =============================================
 
-      const prev = getPrevMonth(calcMonth, calcYear);           // M-1
-      const prevPrev = getPrevMonth(prev.month, prev.year);     // M-2
-
-      // Period 1 date range: 1st to 15th of previous month
-      const period1Start = new Date(prev.year, prev.month - 1, 1, 0, 0, 0, 0);
-      const period1End = new Date(prev.year, prev.month - 1, 15, 23, 59, 59, 999);
-
-      // Period 2 date range: 16th to end of month before previous
-      const period2Start = new Date(prevPrev.year, prevPrev.month - 1, 16, 0, 0, 0, 0);
-      const lastDayPrevPrev = getLastDayOfMonth(prevPrev.month, prevPrev.year);
-      const period2End = new Date(prevPrev.year, prevPrev.month - 1, lastDayPrevPrev, 23, 59, 59, 999);
-
-      // Pre-fetch all qualifying payments from ALL active students
+      // Fetch ALL payments for these students (no date range limit)
+      // We need all payments because a 9-month pack paid months ago
+      // could still be covering the current calculation month
       const allStudentIds = students.map((s) => s.id);
       const studentPayments = allStudentIds.length > 0
         ? await db.payment.findMany({
             where: {
               studentId: { in: allStudentIds },
               status: { in: ['paid', 'partial'] },
-              paymentDate: {
-                gte: period2Start,
-                lte: period1End,
-              },
+              paidAmount: { gt: 0 },
             },
             include: {
               student: {
@@ -108,57 +132,93 @@ export async function GET(request: NextRequest) {
           })
         : [];
 
-      // Classify each payment into its period and build map
-      // Map: studentId → { totalPaid, period1Paid, period2Paid, paymentCount }
-      const paidByStudent = new Map<string, {
-        totalPaid: number;
-        period1Paid: number;
-        period2Paid: number;
-        period: 'period1' | 'period2' | 'both';
-        paymentDate: Date | null;
-      }>();
+      // Build a map: studentId → monthly contribution for calcMonth
+      // Each payment contributes monthlyAmount if calcMonth falls in its coverage
+      const monthlyContributionByStudent = new Map<string, number>();
 
       for (const p of studentPayments) {
-        const existing = paidByStudent.get(p.studentId);
         const pDate = p.paymentDate ? new Date(p.paymentDate) : null;
+        if (!pDate) continue;
 
-        if (existing && pDate) {
-          existing.totalPaid += (p.paidAmount || 0);
-          if (pDate >= period1Start && pDate <= period1End) {
-            existing.period1Paid += (p.paidAmount || 0);
-          }
-          if (pDate >= period2Start && pDate <= period2End) {
-            existing.period2Paid += (p.paidAmount || 0);
-          }
-          // Determine overall period
-          if (existing.period1Paid > 0 && existing.period2Paid > 0) {
-            existing.period = 'both';
-          }
-        } else if (pDate) {
-          const isPeriod1 = pDate >= period1Start && pDate <= period1End;
-          const isPeriod2 = pDate >= period2Start && pDate <= period2End;
-          paidByStudent.set(p.studentId, {
-            totalPaid: p.paidAmount || 0,
-            period1Paid: isPeriod1 ? (p.paidAmount || 0) : 0,
-            period2Paid: isPeriod2 ? (p.paidAmount || 0) : 0,
-            period: isPeriod1 ? 'period1' : 'period2',
-            paymentDate: pDate,
-          });
+        const packMonths = p.packMonths || 1;
+        const monthlyAmount = (p.paidAmount || 0) / packMonths;
+
+        // Determine effective start month based on payment date
+        const payMonth = pDate.getMonth() + 1;
+        const payYear = pDate.getFullYear();
+        const payDay = pDate.getDate();
+
+        let effectiveStart: { month: number; year: number };
+        if (payDay >= 1 && payDay <= 15) {
+          // Paid 1st-15th → teacher gets paid starting next month
+          effectiveStart = getNextMonth(payMonth, payYear);
+        } else {
+          // Paid 16th-end → teacher gets paid starting month after next
+          const next = getNextMonth(payMonth, payYear);
+          effectiveStart = getNextMonth(next.month, next.year);
         }
+
+        // The pack covers packMonths months starting from effectiveStart
+        // Check if calcMonth falls within this range
+        for (let i = 0; i < packMonths; i++) {
+          const coveredMonth = addMonths(effectiveStart.month, effectiveStart.year, i);
+          if (isSameMonth(coveredMonth, { month: calcMonth, year: calcYear })) {
+            // This payment contributes to this teacher's calcMonth
+            const existing = monthlyContributionByStudent.get(p.studentId) || 0;
+            monthlyContributionByStudent.set(p.studentId, existing + monthlyAmount);
+            break; // A student might have multiple payments, sum them all
+          }
+        }
+      }
+
+      // Build a map: studentId → array of payments for details
+      const paymentsByStudent = new Map<string, { paidAmount: number; monthlyAmount: number; effectiveStart: string; packMonths: number; paymentDate: string }[]>();
+
+      for (const p of studentPayments) {
+        const pDate = p.paymentDate ? new Date(p.paymentDate) : null;
+        if (!pDate) continue;
+
+        const packMonths = p.packMonths || 1;
+        const monthlyAmount = (p.paidAmount || 0) / packMonths;
+
+        const payMonth = pDate.getMonth() + 1;
+        const payYear = pDate.getFullYear();
+        const payDay = pDate.getDate();
+
+        let effectiveStart: { month: number; year: number };
+        if (payDay >= 1 && payDay <= 15) {
+          effectiveStart = getNextMonth(payMonth, payYear);
+        } else {
+          const next = getNextMonth(payMonth, payYear);
+          effectiveStart = getNextMonth(next.month, next.year);
+        }
+
+        const MONTH_NAMES = ['يناير','فبراير','مارس','أبريل','ماي','يونيو','يوليوز','غشت','شتنبر','أكتوبر','نونبر','دجنبر'];
+        const startLabel = `${MONTH_NAMES[effectiveStart.month - 1]} ${effectiveStart.year}`;
+
+        const arr = paymentsByStudent.get(p.studentId) || [];
+        arr.push({
+          paidAmount: p.paidAmount || 0,
+          monthlyAmount: Math.round(monthlyAmount * 100) / 100,
+          effectiveStart: startLabel,
+          packMonths,
+          paymentDate: pDate.toISOString().split('T')[0],
+        });
+        paymentsByStudent.set(p.studentId, arr);
       }
 
       // Calculate data for each teacher
       const calculations = teachers.map((teacher) => {
-        // Students assigned to this teacher who have qualifying payments
-        const teacherStudentsWithPayments = students.filter(
-          (s) => s.teacherId === teacher.id && paidByStudent.has(s.id)
+        // ALL students assigned to this teacher (not just those with payments)
+        const teacherStudents = students.filter(
+          (s) => s.teacherId === teacher.id
         );
 
-        const totalStudents = teacherStudentsWithPayments.length;
+        const totalStudents = teacherStudents.length;
 
-        // Sum the actual paidAmount from qualifying Payment records
-        const totalCollected = teacherStudentsWithPayments.reduce((sum, student) => {
-          return sum + (paidByStudent.get(student.id)?.totalPaid || 0);
+        // Sum monthly contributions from all students whose payments cover calcMonth
+        const totalCollected = teacherStudents.reduce((sum, student) => {
+          return sum + (monthlyContributionByStudent.get(student.id) || 0);
         }, 0);
 
         // Teacher share calculation
@@ -179,14 +239,14 @@ export async function GET(request: NextRequest) {
           }
         >();
 
-        teacherStudentsWithPayments.forEach((student) => {
-          const studentPaid = paidByStudent.get(student.id)?.totalPaid || 0;
+        teacherStudents.forEach((student) => {
+          const studentContribution = monthlyContributionByStudent.get(student.id) || 0;
           if (student.level) {
             const key = student.level.id;
             const existing = groupsMap.get(key);
             if (existing) {
               existing.studentCount += 1;
-              existing.collected += studentPaid;
+              existing.collected += studentContribution;
             } else {
               groupsMap.set(key, {
                 groupName: `${student.level.subject.name} - ${student.level.name}`,
@@ -195,7 +255,7 @@ export async function GET(request: NextRequest) {
                 levelName: student.level.name,
                 levelNameAr: student.level.nameAr || student.level.name,
                 studentCount: 1,
-                collected: studentPaid,
+                collected: studentContribution,
               });
             }
           } else {
@@ -203,7 +263,7 @@ export async function GET(request: NextRequest) {
             const existing = groupsMap.get(key);
             if (existing) {
               existing.studentCount += 1;
-              existing.collected += studentPaid;
+              existing.collected += studentContribution;
             } else {
               groupsMap.set(key, {
                 groupName: 'بدون مستوى',
@@ -212,7 +272,7 @@ export async function GET(request: NextRequest) {
                 levelName: '—',
                 levelNameAr: '—',
                 studentCount: 1,
-                collected: studentPaid,
+                collected: studentContribution,
               });
             }
           }
@@ -229,21 +289,6 @@ export async function GET(request: NextRequest) {
           totalCollected: Math.round(totalCollected * 100) / 100,
           teacherShare: Math.round(teacherShare * 100) / 100,
           groups,
-          // Include period info for display
-          periodInfo: {
-            calcMonth,
-            calcYear,
-            period1: {
-              month: prev.month,
-              year: prev.year,
-              range: `1-${prev.month <= 7 ? [31,28,31,30,31,30,31][prev.month-1] : [31,31,30,31,30,31][prev.month-8]} ${prev.month}`,
-            },
-            period2: {
-              month: prevPrev.month,
-              year: prevPrev.year,
-              range: `16-${lastDayPrevPrev} ${prevPrev.month}`,
-            },
-          },
         };
       });
 
