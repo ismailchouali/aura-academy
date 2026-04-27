@@ -184,6 +184,11 @@ export function StudentsView() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
+  // ── Table filter state (service → subject → level) ────────────────
+  const [filterServiceId, setFilterServiceId] = useState('');
+  const [filterSubjectId, setFilterSubjectId] = useState('');
+  const [filterLevelId, setFilterLevelId] = useState('');
+
   // ── Wizard state ────────────────────────────────────────────────────────
   const [dialogOpen, setDialogOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState<WizardStep>(1);
@@ -221,6 +226,42 @@ export function StudentsView() {
     }
     return map;
   }, [students]);
+
+  // ── Computed: filter subjects dropdown based on selected service ───
+  const filterSubjects = useMemo(() => {
+    if (!filterServiceId) return [];
+    const svc = services.find((s) => s.id === filterServiceId);
+    return svc?.subjects || [];
+  }, [filterServiceId, services]);
+
+  // ── Computed: filter levels dropdown based on selected subject ──────
+  const filterLevels = useMemo(() => {
+    if (!filterSubjectId) return [];
+    const svc = services.find((s) => s.id === filterServiceId);
+    const subj = svc?.subjects.find((sub) => sub.id === filterSubjectId);
+    return subj?.levels || [];
+  }, [filterServiceId, filterSubjectId, services]);
+
+  // ── Computed: displayed students after all filters ──────────────────
+  const displayedStudents = useMemo(() => {
+    return students.filter((s) => {
+      if (filterServiceId && s.level?.subject?.service?.id !== filterServiceId) return false;
+      if (filterSubjectId && s.level?.subject?.id !== filterSubjectId) return false;
+      if (filterLevelId && s.levelId !== filterLevelId) return false;
+      return true;
+    });
+  }, [students, filterServiceId, filterSubjectId, filterLevelId]);
+
+  // Reset child filters when parent changes
+  const handleFilterServiceChange = (v: string) => {
+    setFilterServiceId(v);
+    setFilterSubjectId('');
+    setFilterLevelId('');
+  };
+  const handleFilterSubjectChange = (v: string) => {
+    setFilterSubjectId(v);
+    setFilterLevelId('');
+  };
 
   // ── Computed: filtered subjects for step 2 ─────────────────────────────
   const filteredSubjects = useMemo(() => {
@@ -1117,8 +1158,16 @@ export function StudentsView() {
         <div className="flex items-center gap-2 text-muted-foreground">
           <Users className="h-5 w-5" />
           <span className="text-sm">
-            {students.length} {t.students.studentCount}
+            {displayedStudents.length} {t.students.studentCount}
           </span>
+          {(filterServiceId || filterSubjectId || filterLevelId) && (
+            <button
+              onClick={() => { setFilterServiceId(''); setFilterSubjectId(''); setFilterLevelId(''); }}
+              className="text-xs text-teal-600 hover:text-teal-800 underline"
+            >
+              إعادة تعيين الفلاتر
+            </button>
+          )}
         </div>
         <Button onClick={() => handleOpenDialog()} className="gap-2">
           <Plus className="h-4 w-4" />
@@ -1130,21 +1179,65 @@ export function StudentsView() {
       <Card>
         <CardContent className="p-4">
           <Tabs value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setLoading(true); }}>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="relative flex-1">
-                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder={t.students.searchPlaceholder}
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pr-9"
-                />
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="relative flex-1">
+                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder={t.students.searchPlaceholder}
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="pr-9"
+                  />
+                </div>
+                <TabsList>
+                  <TabsTrigger value="all">{t.common.all}</TabsTrigger>
+                  <TabsTrigger value="active">{t.common.active}</TabsTrigger>
+                  <TabsTrigger value="inactive">{t.common.inactive}</TabsTrigger>
+                </TabsList>
               </div>
-              <TabsList>
-                <TabsTrigger value="all">{t.common.all}</TabsTrigger>
-                <TabsTrigger value="active">{t.common.active}</TabsTrigger>
-                <TabsTrigger value="inactive">{t.common.inactive}</TabsTrigger>
-              </TabsList>
+              {/* Service / Subject / Level filters */}
+              <div className="flex flex-wrap gap-2">
+                <select
+                  value={filterServiceId}
+                  onChange={(e) => handleFilterServiceChange(e.target.value)}
+                  className="h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                >
+                  <option value="">كل الخدمات</option>
+                  {services.map((svc) => (
+                    <option key={svc.id} value={svc.id}>{svc.nameAr}</option>
+                  ))}
+                </select>
+                {filterSubjects.length > 0 && (
+                  <select
+                    value={filterSubjectId}
+                    onChange={(e) => handleFilterSubjectChange(e.target.value)}
+                    className="h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                  >
+                    <option value="">كل المواد</option>
+                    {filterSubjects.map((subj) => (
+                      <option key={subj.id} value={subj.id}>{subj.nameAr}</option>
+                    ))}
+                  </select>
+                )}
+                {filterLevels.length > 0 && (
+                  <select
+                    value={filterLevelId}
+                    onChange={(e) => setFilterLevelId(e.target.value)}
+                    className="h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                  >
+                    <option value="">كل المستويات</option>
+                    {filterLevels.map((lvl) => (
+                      <option key={lvl.id} value={lvl.id}>{lvl.nameAr}</option>
+                    ))}
+                  </select>
+                )}
+                {(filterServiceId || filterSubjectId || filterLevelId) && (
+                  <Badge className="bg-teal-100 text-teal-700 border-teal-200 h-9 px-3 font-medium">
+                    {displayedStudents.length} طالب
+                  </Badge>
+                )}
+              </div>
             </div>
           </Tabs>
         </CardContent>
@@ -1159,7 +1252,7 @@ export function StudentsView() {
                 <Skeleton key={i} className="h-10 w-full" />
               ))}
             </div>
-          ) : students.length === 0 ? (
+          ) : displayedStudents.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <Users className="h-12 w-12 mx-auto mb-3 opacity-30" />
               <p className="font-medium">{t.students.noStudents}</p>
@@ -1181,7 +1274,7 @@ export function StudentsView() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {students.map((student) => (
+                  {displayedStudents.map((student) => (
                     <TableRow key={student.id}>
                       <TableCell className="font-medium text-right">
                         <div className="flex items-center gap-2">
