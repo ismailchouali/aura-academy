@@ -16,146 +16,360 @@ function getMonthIndex(month: string): number {
   return MONTH_ORDER.indexOf(month);
 }
 
-function countMonthsOverdue(
-  month: string,
-  year: number,
-  packMonths?: number | null,
-  isLangues?: boolean,
-  paymentDate?: Date | string | null
-): number {
-  const now = new Date();
-  const curYear = now.getFullYear();
-  const curMonth = now.getMonth(); // 0-indexed
-  const currentYM = curYear * 12 + curMonth;
+/** Convert a Date to year*12 + monthIndex for easy month-level arithmetic */
+function toYM(date: Date): number {
+  return date.getFullYear() * 12 + date.getMonth();
+}
 
-  // For Langues service with a pack, use paymentDate to calculate months since payment
-  if (isLangues && packMonths && packMonths > 1 && paymentDate) {
-    const pDate = new Date(paymentDate);
-    const payYear = pDate.getFullYear();
-    const payMonth = pDate.getMonth(); // 0-indexed
-    const paymentYM = payYear * 12 + payMonth;
-    const monthsSincePayment = Math.max(0, currentYM - paymentYM);
-    // The pack covers (packMonths - 1) additional months beyond the first
-    return Math.max(0, monthsSincePayment - (packMonths - 1));
+/**
+ * Calculate the end month (as YM) of a payment's coverage period.
+ * Uses paymentDate for the start; falls back to month/year string fields.
+ * Pack end = start month + packMonths - 1.
+ */
+function getPaymentEndYM(payment: {
+  paymentDate?: Date | string | null;
+  month: string;
+  year: number;
+  packMonths: number;
+}): number {
+  let startYM: number;
+  if (payment.paymentDate) {
+    const d =
+      payment.paymentDate instanceof Date
+        ? payment.paymentDate
+        : new Date(payment.paymentDate);
+    startYM = toYM(d);
+  } else {
+    startYM = payment.year * 12 + getMonthIndex(payment.month);
+  }
+  return startYM + payment.packMonths - 1;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Per-student overdue calculator                                     */
+/* ------------------------------------------------------------------ */
+
+interface OverduePaymentInfo {
+  id: string;
+  month: string;
+  monthLabel: string;
+  year: number;
+  remainingAmount: number;
+  monthsOverdue: number;
+  type: 'unpaid' | 'expired_pack';
+}
+
+interface OverdueStudent {
+  studentId: string;
+  studentName: string;
+  phone: string | null;
+  parentPhone: string | null;
+  parentName: string | null;
+  monthlyFee: number;
+  totalOverdue: number;
+  monthsOverdue: number;
+  overduePayments: OverduePaymentInfo[];
+}
+
+function calculateStudentOverdue(
+  student: {
+    id: string;
+    fullName: string;
+    phone: string | null;
+    parentName: string | null;
+    parentPhone: string | null;
+    monthlyFee: number;
+    enrollmentDate: Date;
+  },
+  payments: Array<{
+    id: string;
+    remainingAmount: number;
+    month: string;
+    year: number;
+    packMonths: number;
+    paymentDate: Date | string | null;
+  }>
+): OverdueStudent | null {
+  const now = new Date();
+  const currentYM = toYM(now);
+
+  /* ── Case A: No payments at all ─────────────────────────────── */
+
+  if (payments.length === 0) {
+    const enrollmentYM = toYM(new Date(student.enrollmentDate));
+
+    // Give 1 month grace after enrollment
+    if (enrollmentYM >= currentYM - 1) return null;
+
+    const monthsOverdue = currentYM - enrollmentYM - 1;
+    const totalOverdue = monthsOverdue * student.monthlyFee;
+
+    return {
+      studentId: student.id,
+      studentName: student.fullName,
+      phone: student.phone,
+      parentPhone: student.parentPhone,
+      parentName: student.parentName,
+      monthlyFee: student.monthlyFee,
+      totalOverdue,
+      monthsOverdue,
+      overduePayments: [],
+    };
   }
 
-  // Default: use month/year fields
-  const mIdx = getMonthIndex(month);
-  const paymentYM = year * 12 + mIdx;
-  const rawOverdue = Math.max(0, currentYM - paymentYM);
-  return rawOverdue;
+  /* ── Case B: Student has payments ───────────────────────────── */
+
+  // Sort by paymentDate descending (fallback to month/year), then id as tiebreaker
+  const sorted = [...payments].sort((a, b) => {
+    const aTime = a.paymentDate
+      ? new Date(a.paymentDate).getTime()
+      : new Date(a.year, getMonthIndex(a.month), 1).getTime();
+    const bTime = b.paymentDate
+      ? new Date(b.paymentDate).getTime()
+      : new Date(b.year, getMonthIndex(b.month), 1).getTime();
+    if (bTime !== aTime) return bTime - aTime;
+    return b.id.localeCompare(a.id);
+  });
+
+  // Build a set of every month-YM covered by ANY payment record (paid or unpaid).
+  // This prevents double-counting: if an unpaid record exists for a month,
+  // the expired-pack logic will skip that month.
+  const coveredMonths = new Set<number>();
+  for (const p of payments) {
+    let startYM: number;
+    if (p.paymentDate) {
+      const d =
+        p.paymentDate instanceof Date ? p.paymentDate : new Date(p.paymentDate);
+      startYM = toYM(d);
+    } else {
+      startYM = p.year * 12 + getMonthIndex(p.month);
+    }
+    for (let m = 0; m < p.packMonths; m++) {
+      coveredMonths.add(startYM + m);
+    }
+  }
+
+  /* Step 1 — Unpaid payments whose coverage period has passed */
+  let unpaidOverdue = 0;
+  let maxMonthsOverdue = 0;
+  const overduePayments: OverduePaymentInfo[] = [];
+
+  for (const p of payments) {
+    if (p.remainingAmount > 0) {
+      const endYM = getPaymentEndYM(p);
+      if (currentYM > endYM) {
+        const monthsLate = currentYM - endYM;
+        unpaidOverdue += p.remainingAmount;
+        maxMonthsOverdue = Math.max(maxMonthsOverdue, monthsLate);
+
+        overduePayments.push({
+          id: p.id,
+          month: p.month,
+          monthLabel: MONTH_LABELS[p.month] || p.month,
+          year: p.year,
+          remainingAmount: p.remainingAmount,
+          monthsOverdue: monthsLate,
+          type: 'unpaid',
+        });
+      }
+    }
+  }
+
+  /* Step 2 — Expired pack (latest fully-paid payment) */
+  let packOverdue = 0;
+  let packMonthsExpired = 0;
+  const latestPaid = sorted.find((p) => p.remainingAmount === 0);
+
+  if (latestPaid) {
+    const packEndYM = getPaymentEndYM(latestPaid);
+
+    if (currentYM > packEndYM) {
+      // Count months between (pack end + 1) and current month (inclusive)
+      // that do NOT already have a payment record.
+      for (let m = packEndYM + 1; m <= currentYM; m++) {
+        if (!coveredMonths.has(m)) {
+          packOverdue += student.monthlyFee;
+          packMonthsExpired++;
+        }
+      }
+
+      if (packMonthsExpired > 0) {
+        maxMonthsOverdue = Math.max(maxMonthsOverdue, packMonthsExpired);
+
+        // Derive the pack's end month name for the summary entry
+        let packStartDate: Date;
+        if (latestPaid.paymentDate) {
+          packStartDate =
+            latestPaid.paymentDate instanceof Date
+              ? latestPaid.paymentDate
+              : new Date(latestPaid.paymentDate);
+        } else {
+          packStartDate = new Date(
+            latestPaid.year,
+            getMonthIndex(latestPaid.month),
+            1
+          );
+        }
+        const endMonthDate = new Date(
+          packStartDate.getFullYear(),
+          packStartDate.getMonth() + latestPaid.packMonths - 1
+        );
+        const endMonthName = MONTH_ORDER[endMonthDate.getMonth()];
+
+        overduePayments.push({
+          id: `pack_expired_${latestPaid.id}`,
+          month: endMonthName,
+          monthLabel: MONTH_LABELS[endMonthName] || endMonthName,
+          year: endMonthDate.getFullYear(),
+          remainingAmount: packOverdue,
+          monthsOverdue: packMonthsExpired,
+          type: 'expired_pack',
+        });
+      }
+    }
+  }
+
+  /* Combine & return */
+
+  const totalOverdue = unpaidOverdue + packOverdue;
+  if (totalOverdue <= 0) return null;
+
+  return {
+    studentId: student.id,
+    studentName: student.fullName,
+    phone: student.phone,
+    parentPhone: student.parentPhone,
+    parentName: student.parentName,
+    monthlyFee: student.monthlyFee,
+    totalOverdue,
+    monthsOverdue: maxMonthsOverdue,
+    overduePayments,
+  };
 }
 
-function isOverdue(month: string, year: number, packMonths?: number | null, isLangues?: boolean, paymentDate?: Date | string | null): boolean {
-  return countMonthsOverdue(month, year, packMonths, isLangues, paymentDate) >= 1;
-}
+/* ------------------------------------------------------------------ */
+/*  GET handler                                                        */
+/* ------------------------------------------------------------------ */
 
 export async function GET() {
   try {
-    // Fetch all payments with remaining amount > 0
-    const payments = await db.payment.findMany({
-      where: {
-        remainingAmount: { gt: 0 },
-      },
+    // 1. Fetch ALL active students with their service/level hierarchy
+    const students = await db.student.findMany({
+      where: { status: 'active' },
       include: {
-        student: {
+        level: {
           include: {
-            level: {
-              include: {
-                subject: { include: { service: true } },
-              },
-            },
-            teacher: true,
+            subject: { include: { service: true } },
           },
         },
       },
-      orderBy: { createdAt: 'desc' },
     });
 
-    // Filter to only overdue payments, checking packMonths for Langues
-    const overduePayments = payments.filter((p) => {
-      const serviceId = p.student.level?.subject?.service?.id || '';
-      const isLangues = serviceId === 'service_langues';
-      return isOverdue(p.month, p.year, p.packMonths, isLangues, p.paymentDate);
-    });
-
-    // Group by service → level → student
-    const serviceMap = new Map<string, Map<string, Map<string, typeof overduePayments>>>();
-
-    for (const p of overduePayments) {
-      const serviceName = p.student.level?.subject?.service?.nameAr || 'بدون خدمة';
-      const levelName = p.student.level?.nameAr || 'بدون مستوى';
-      const studentKey = p.studentId;
-
-      if (!serviceMap.has(serviceName)) serviceMap.set(serviceName, new Map());
-      const levelMap = serviceMap.get(serviceName)!;
-      if (!levelMap.has(levelName)) levelMap.set(levelName, new Map());
-      const studentMap = levelMap.get(levelName)!;
-      if (!studentMap.has(studentKey)) studentMap.set(studentKey, []);
-      studentMap.get(studentKey)!.push(p);
+    if (students.length === 0) {
+      return NextResponse.json([]);
     }
 
-    // Build response
-    const result = Array.from(serviceMap.entries()).map(([service, levelMap]) => {
-      const levels = Array.from(levelMap.entries()).map(([level, studentMap]) => {
-        const students = Array.from(studentMap.entries()).map(([, payments]) => {
-          const student = payments[0].student;
-          const totalOverdue = payments.reduce((s, p) => s + p.remainingAmount, 0);
-          const maxMonthsOverdue = Math.max(
-            ...payments.map((p) => {
-              const serviceId = p.student.level?.subject?.service?.id || '';
-              const isLangues = serviceId === 'service_langues';
-              return countMonthsOverdue(p.month, p.year, p.packMonths, isLangues, p.paymentDate);
-            })
-          );
-
-          return {
-            studentId: student.id,
-            studentName: student.fullName,
-            phone: student.phone || null,
-            parentPhone: student.parentPhone || null,
-            parentName: student.parentName || null,
-            monthlyFee: student.monthlyFee,
-            totalOverdue,
-            monthsOverdue: maxMonthsOverdue,
-            paymentCount: payments.length,
-            overduePayments: payments.map((p) => {
-              const serviceId = p.student.level?.subject?.service?.id || '';
-              const isLangues = serviceId === 'service_langues';
-              return {
-                id: p.id,
-                month: p.month,
-                monthLabel: MONTH_LABELS[p.month] || p.month,
-                year: p.year,
-                remainingAmount: p.remainingAmount,
-                monthsOverdue: countMonthsOverdue(p.month, p.year, p.packMonths, isLangues, p.paymentDate),
-              };
-            }),
-          };
-        });
-
-        const totalLevelOverdue = students.reduce((s, st) => s + st.totalOverdue, 0);
-
-        return {
-          level,
-          students,
-          totalOverdue: totalLevelOverdue,
-          studentCount: students.length,
-        };
-      });
-
-      const totalServiceOverdue = levels.reduce((s, l) => s + l.totalOverdue, 0);
-      const totalStudentCount = levels.reduce((s, l) => s + l.studentCount, 0);
-
-      return {
-        service,
-        levels,
-        totalOverdue: totalServiceOverdue,
-        studentCount: totalStudentCount,
-      };
+    // 2. Fetch ALL payments for these students (no remainingAmount filter)
+    const studentIds = students.map((s) => s.id);
+    const allPayments = await db.payment.findMany({
+      where: { studentId: { in: studentIds } },
     });
 
-    // Sort services by total overdue (descending)
+    // 3. Group payments by student
+    const paymentsByStudent = new Map<
+      string,
+      (typeof allPayments)[number][]
+    >();
+    for (const p of allPayments) {
+      const list = paymentsByStudent.get(p.studentId);
+      if (list) {
+        list.push(p);
+      } else {
+        paymentsByStudent.set(p.studentId, [p]);
+      }
+    }
+
+    // 4. Calculate overdue for each student
+    const overdueStudents: OverdueStudent[] = [];
+    for (const student of students) {
+      const payments = paymentsByStudent.get(student.id) || [];
+      const result = calculateStudentOverdue(student, payments);
+      if (result) {
+        overdueStudents.push(result);
+      }
+    }
+
+    if (overdueStudents.length === 0) {
+      return NextResponse.json([]);
+    }
+
+    // 5. Build lookup for service/level grouping
+    const studentById = new Map(students.map((s) => [s.id, s]));
+
+    // 6. Group by Service → Level → Student
+    const serviceMap = new Map<string, Map<string, OverdueStudent[]>>();
+
+    for (const overdue of overdueStudents) {
+      const student = studentById.get(overdue.studentId);
+      const serviceName =
+        student?.level?.subject?.service?.nameAr || 'بدون خدمة';
+      const levelName = student?.level?.nameAr || 'بدون مستوى';
+
+      let levelMap = serviceMap.get(serviceName);
+      if (!levelMap) {
+        levelMap = new Map();
+        serviceMap.set(serviceName, levelMap);
+      }
+
+      let list = levelMap.get(levelName);
+      if (!list) {
+        list = [];
+        levelMap.set(levelName, list);
+      }
+      list.push(overdue);
+    }
+
+    // 7. Build response array
+    const result = Array.from(serviceMap.entries()).map(
+      ([service, levelMap]) => {
+        const levels = Array.from(levelMap.entries()).map(
+          ([level, students]) => {
+            // Sort students by totalOverdue descending within each level
+            students.sort((a, b) => b.totalOverdue - a.totalOverdue);
+
+            const totalLevelOverdue = students.reduce(
+              (sum, s) => sum + s.totalOverdue,
+              0
+            );
+
+            return {
+              level,
+              students,
+              totalOverdue: totalLevelOverdue,
+              studentCount: students.length,
+            };
+          }
+        );
+
+        const totalServiceOverdue = levels.reduce(
+          (sum, l) => sum + l.totalOverdue,
+          0
+        );
+        const totalStudentCount = levels.reduce(
+          (sum, l) => sum + l.studentCount,
+          0
+        );
+
+        return {
+          service,
+          levels,
+          totalOverdue: totalServiceOverdue,
+          studentCount: totalStudentCount,
+        };
+      }
+    );
+
+    // 8. Sort services by total overdue (descending)
     result.sort((a, b) => b.totalOverdue - a.totalOverdue);
 
     return NextResponse.json(result);

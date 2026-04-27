@@ -12,6 +12,7 @@ import {
   Sparkles,
   Plus,
   Pencil,
+  Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useT } from '@/hooks/use-translation';
@@ -36,6 +37,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from '@/components/ui/alert-dialog';
 
 interface Level {
   id: string;
@@ -164,6 +175,36 @@ export function ServicesView() {
   const [levelForm, setLevelForm] = useState({ name: '', nameAr: '', nameFr: '' });
   const [levelSubmitting, setLevelSubmitting] = useState(false);
 
+  // ── Edit Subject dialog ─────────────────────────────────────
+  const [editSubjectOpen, setEditSubjectOpen] = useState(false);
+  const [editSubjectServiceId, setEditSubjectServiceId] = useState('');
+  const [editSubjectId, setEditSubjectId] = useState('');
+  const [editSubjectForm, setEditSubjectForm] = useState({ name: '', nameAr: '', nameFr: '' });
+  const [editSubjectSubmitting, setEditSubjectSubmitting] = useState(false);
+
+  // ── Delete Subject confirmation ─────────────────────────────
+  const [deleteSubjectOpen, setDeleteSubjectOpen] = useState(false);
+  const [deleteSubjectServiceId, setDeleteSubjectServiceId] = useState('');
+  const [deleteSubjectId, setDeleteSubjectId] = useState('');
+  const [deleteSubjectName, setDeleteSubjectName] = useState('');
+  const [deleteSubjectSubmitting, setDeleteSubjectSubmitting] = useState(false);
+
+  // ── Edit Level dialog ───────────────────────────────────────
+  const [editLevelOpen, setEditLevelOpen] = useState(false);
+  const [editLevelServiceId, setEditLevelServiceId] = useState('');
+  const [editLevelSubjectId, setEditLevelSubjectId] = useState('');
+  const [editLevelId, setEditLevelId] = useState('');
+  const [editLevelForm, setEditLevelForm] = useState({ name: '', nameAr: '', nameFr: '' });
+  const [editLevelSubmitting, setEditLevelSubmitting] = useState(false);
+
+  // ── Delete Level confirmation ───────────────────────────────
+  const [deleteLevelOpen, setDeleteLevelOpen] = useState(false);
+  const [deleteLevelServiceId, setDeleteLevelServiceId] = useState('');
+  const [deleteLevelSubjectId, setDeleteLevelSubjectId] = useState('');
+  const [deleteLevelId, setDeleteLevelId] = useState('');
+  const [deleteLevelName, setDeleteLevelName] = useState('');
+  const [deleteLevelSubmitting, setDeleteLevelSubmitting] = useState(false);
+
   const fetchServices = useCallback(async () => {
     try {
       const res = await fetch('/api/services');
@@ -272,6 +313,124 @@ export function ServicesView() {
     }
   };
 
+  // ── Edit Subject ────────────────────────────────────────────
+
+  const handleOpenEditSubject = (serviceId: string, subject: { id: string; name: string; nameAr: string; nameFr: string }) => {
+    setEditSubjectServiceId(serviceId);
+    setEditSubjectId(subject.id);
+    setEditSubjectForm({ name: subject.name, nameAr: subject.nameAr, nameFr: subject.nameFr });
+    setEditSubjectOpen(true);
+  };
+
+  const handleEditSubject = async () => {
+    if (!editSubjectForm.name.trim() || !editSubjectForm.nameAr.trim() || !editSubjectForm.nameFr.trim()) {
+      toast.error('يرجى ملء جميع الحقول المطلوبة');
+      return;
+    }
+    setEditSubjectSubmitting(true);
+    try {
+      const res = await fetch(`/api/services/${editSubjectServiceId}/subjects/${editSubjectId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editSubjectForm),
+      });
+      if (!res.ok) throw new Error();
+      toast.success('تم تعديل المادة بنجاح');
+      setEditSubjectOpen(false);
+      fetchServices();
+    } catch {
+      toast.error('فشل في تعديل المادة');
+    } finally {
+      setEditSubjectSubmitting(false);
+    }
+  };
+
+  // ── Delete Subject ──────────────────────────────────────────
+
+  const handleOpenDeleteSubject = (serviceId: string, subject: { id: string; nameAr: string }) => {
+    setDeleteSubjectServiceId(serviceId);
+    setDeleteSubjectId(subject.id);
+    setDeleteSubjectName(subject.nameAr);
+    setDeleteSubjectOpen(true);
+  };
+
+  const handleDeleteSubject = async () => {
+    setDeleteSubjectSubmitting(true);
+    try {
+      const res = await fetch(`/api/services/${deleteSubjectServiceId}/subjects/${deleteSubjectId}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error();
+      toast.success('تم حذف المادة بنجاح');
+      setDeleteSubjectOpen(false);
+      fetchServices();
+    } catch {
+      toast.error('فشل في حذف المادة');
+    } finally {
+      setDeleteSubjectSubmitting(false);
+    }
+  };
+
+  // ── Edit Level ──────────────────────────────────────────────
+
+  const handleOpenEditLevel = (serviceId: string, subjectId: string, level: { id: string; name: string; nameAr: string; nameFr: string }) => {
+    setEditLevelServiceId(serviceId);
+    setEditLevelSubjectId(subjectId);
+    setEditLevelId(level.id);
+    setEditLevelForm({ name: level.name, nameAr: level.nameAr, nameFr: level.nameFr });
+    setEditLevelOpen(true);
+  };
+
+  const handleEditLevel = async () => {
+    if (!editLevelForm.name.trim() || !editLevelForm.nameAr.trim() || !editLevelForm.nameFr.trim()) {
+      toast.error('يرجى ملء جميع الحقول المطلوبة');
+      return;
+    }
+    setEditLevelSubmitting(true);
+    try {
+      const res = await fetch(`/api/services/${editLevelServiceId}/subjects/${editLevelSubjectId}/levels/${editLevelId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editLevelForm),
+      });
+      if (!res.ok) throw new Error();
+      toast.success('تم تعديل المستوى بنجاح');
+      setEditLevelOpen(false);
+      fetchServices();
+    } catch {
+      toast.error('فشل في تعديل المستوى');
+    } finally {
+      setEditLevelSubmitting(false);
+    }
+  };
+
+  // ── Delete Level ────────────────────────────────────────────
+
+  const handleOpenDeleteLevel = (serviceId: string, subjectId: string, level: { id: string; nameAr: string }) => {
+    setDeleteLevelServiceId(serviceId);
+    setDeleteLevelSubjectId(subjectId);
+    setDeleteLevelId(level.id);
+    setDeleteLevelName(level.nameAr);
+    setDeleteLevelOpen(true);
+  };
+
+  const handleDeleteLevel = async () => {
+    setDeleteLevelSubmitting(true);
+    try {
+      const res = await fetch(`/api/services/${deleteLevelServiceId}/subjects/${deleteLevelSubjectId}/levels/${deleteLevelId}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error();
+      toast.success('تم حذف المستوى بنجاح');
+      setDeleteLevelOpen(false);
+      fetchServices();
+    } catch {
+      toast.error('فشل في حذف المستوى');
+    } finally {
+      setDeleteLevelSubmitting(false);
+    }
+  };
+
   if (loading) return <LoadingSkeleton />;
 
   return (
@@ -376,6 +535,24 @@ export function ServicesView() {
                           <ChevronLeft className={cn('w-4 h-4', config.color)} />
                           <h4 className="font-semibold">{subject.nameAr}</h4>
                           <span className="text-xs text-muted-foreground">({subject.nameFr})</span>
+                          <div className="flex items-center gap-1 mr-auto">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                              onClick={() => handleOpenEditSubject(service.id, subject)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                              onClick={() => handleOpenDeleteSubject(service.id, subject)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </div>
                         {subject.levels.length > 0 && (
                           <div className="flex flex-wrap gap-2 mb-2">
@@ -383,9 +560,21 @@ export function ServicesView() {
                               <Badge
                                 key={level.id}
                                 variant="secondary"
-                                className={cn('text-xs', config.badge)}
+                                className={cn('text-xs gap-1', config.badge)}
                               >
                                 {level.nameAr}
+                                <button
+                                  className="inline-flex items-center justify-center hover:text-destructive transition-colors"
+                                  onClick={() => handleOpenEditLevel(service.id, subject.id, level)}
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </button>
+                                <button
+                                  className="inline-flex items-center justify-center hover:text-destructive transition-colors"
+                                  onClick={() => handleOpenDeleteLevel(service.id, subject.id, level)}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </button>
                               </Badge>
                             ))}
                           </div>
@@ -538,6 +727,80 @@ export function ServicesView() {
       </Dialog>
 
       {/* ═══════════════════════════════════════════════════════
+          EDIT SUBJECT DIALOG
+          ═══════════════════════════════════════════════════════ */}
+      <Dialog open={editSubjectOpen} onOpenChange={setEditSubjectOpen}>
+        <DialogContent className="sm:max-w-md p-0 gap-0 max-h-[90vh] flex flex-col">
+          <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
+            <DialogTitle>تعديل المادة</DialogTitle>
+            <DialogDescription>تعديل بيانات المادة</DialogDescription>
+          </DialogHeader>
+          <div className="overflow-y-auto flex-1 min-h-0 px-6 py-4">
+            <div className="grid gap-4">
+              <div className="space-y-2">
+                <Label>الاسم (عربي) *</Label>
+                <Input
+                  placeholder="مثال: الرياضيات"
+                  value={editSubjectForm.nameAr}
+                  onChange={(e) => setEditSubjectForm({ ...editSubjectForm, nameAr: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>الاسم (فرنسي) *</Label>
+                <Input
+                  placeholder="Ex: Mathématiques"
+                  value={editSubjectForm.nameFr}
+                  onChange={(e) => setEditSubjectForm({ ...editSubjectForm, nameFr: e.target.value })}
+                  dir="ltr"
+                  className="text-left"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>المفتاح الداخلي (name)</Label>
+                <Input
+                  placeholder="مثال: Mathématiques"
+                  value={editSubjectForm.name}
+                  onChange={(e) => setEditSubjectForm({ ...editSubjectForm, name: e.target.value })}
+                  dir="ltr"
+                  className="text-left"
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="shrink-0 px-6 py-4 border-t">
+            <Button variant="outline" onClick={() => setEditSubjectOpen(false)}>إلغاء</Button>
+            <Button onClick={handleEditSubject} disabled={editSubjectSubmitting} className="gap-2">
+              {editSubjectSubmitting ? 'جاري التعديل...' : 'حفظ التعديلات'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══════════════════════════════════════════════════════
+          DELETE SUBJECT CONFIRMATION
+          ═══════════════════════════════════════════════════════ */}
+      <AlertDialog open={deleteSubjectOpen} onOpenChange={setDeleteSubjectOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>هل أنت متأكد من حذف المادة؟</AlertDialogTitle>
+            <AlertDialogDescription>
+              سيتم حذف المادة &quot;{deleteSubjectName}&quot; وجميع المستويات المرتبطة بها. لا يمكن التراجع عن هذا الإجراء.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteSubjectSubmitting}>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteSubject}
+              disabled={deleteSubjectSubmitting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteSubjectSubmitting ? 'جاري الحذف...' : 'حذف المادة'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ═══════════════════════════════════════════════════════
           ADD LEVEL DIALOG
           ═══════════════════════════════════════════════════════ */}
       <Dialog open={addLevelOpen} onOpenChange={setAddLevelOpen}>
@@ -586,6 +849,80 @@ export function ServicesView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ═══════════════════════════════════════════════════════
+          EDIT LEVEL DIALOG
+          ═══════════════════════════════════════════════════════ */}
+      <Dialog open={editLevelOpen} onOpenChange={setEditLevelOpen}>
+        <DialogContent className="sm:max-w-md p-0 gap-0 max-h-[90vh] flex flex-col">
+          <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
+            <DialogTitle>تعديل المستوى</DialogTitle>
+            <DialogDescription>تعديل بيانات المستوى</DialogDescription>
+          </DialogHeader>
+          <div className="overflow-y-auto flex-1 min-h-0 px-6 py-4">
+            <div className="grid gap-4">
+              <div className="space-y-2">
+                <Label>الاسم (عربي) *</Label>
+                <Input
+                  placeholder="مثال: السنة الأولى"
+                  value={editLevelForm.nameAr}
+                  onChange={(e) => setEditLevelForm({ ...editLevelForm, nameAr: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>الاسم (فرنسي) *</Label>
+                <Input
+                  placeholder="Ex: 1ère Année"
+                  value={editLevelForm.nameFr}
+                  onChange={(e) => setEditLevelForm({ ...editLevelForm, nameFr: e.target.value })}
+                  dir="ltr"
+                  className="text-left"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>المفتاح الداخلي (name)</Label>
+                <Input
+                  placeholder="مثال: 1ère Année"
+                  value={editLevelForm.name}
+                  onChange={(e) => setEditLevelForm({ ...editLevelForm, name: e.target.value })}
+                  dir="ltr"
+                  className="text-left"
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="shrink-0 px-6 py-4 border-t">
+            <Button variant="outline" onClick={() => setEditLevelOpen(false)}>إلغاء</Button>
+            <Button onClick={handleEditLevel} disabled={editLevelSubmitting} className="gap-2">
+              {editLevelSubmitting ? 'جاري التعديل...' : 'حفظ التعديلات'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══════════════════════════════════════════════════════
+          DELETE LEVEL CONFIRMATION
+          ═══════════════════════════════════════════════════════ */}
+      <AlertDialog open={deleteLevelOpen} onOpenChange={setDeleteLevelOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>هل أنت متأكد من حذف المستوى؟</AlertDialogTitle>
+            <AlertDialogDescription>
+              سيتم حذف المستوى &quot;{deleteLevelName}&quot;. لا يمكن التراجع عن هذا الإجراء.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteLevelSubmitting}>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteLevel}
+              disabled={deleteLevelSubmitting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteLevelSubmitting ? 'جاري الحذف...' : 'حذف المستوى'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
