@@ -21,6 +21,14 @@ function toYM(date: Date): number {
   return date.getFullYear() * 12 + date.getMonth();
 }
 
+/** Format a Date to dd/mm/yyyy */
+function formatDate(date: Date): string {
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
 interface OverdueStudentInfo {
   studentId: string;
   studentName: string;
@@ -34,6 +42,7 @@ interface OverdueStudentInfo {
   monthsOverdue: number;
   hasPendingPayment: boolean;
   pendingPaymentId: string | null;
+  nextDueDate: string | null;
   overduePayments: {
     id: string;
     month: string;
@@ -63,7 +72,9 @@ export async function GET(
                 students: {
                   where: { status: 'active' },
                   include: {
-                    payments: true,
+                    payments: {
+                      orderBy: { paymentDate: 'asc' },
+                    },
                   },
                 },
               },
@@ -117,6 +128,7 @@ export async function GET(
       let maxMonthsOverdue = 0;
       let hasPendingPayment = false;
       let pendingPaymentId: string | null = null;
+      let nextDueDate: string | null = null;
       const overduePayments: OverdueStudentInfo['overduePayments'] = [];
 
       // Check if student has a pending payment for current month
@@ -129,6 +141,69 @@ export async function GET(
       if (currentMonthPending) {
         hasPendingPayment = true;
         pendingPaymentId = currentMonthPending.id;
+      }
+
+      // ── Calculate next due date ──
+      // Logic: find the FIRST payment date, add packMonths * 30 days
+      // For students with multiple payments, find the latest fully-paid pack
+      // and calculate from its date + packMonths * 30
+
+      if (payments.length > 0) {
+        // Sort payments by paymentDate ascending (first payment first)
+        const sortedByDate = [...payments].sort((a, b) => {
+          const aTime = a.paymentDate
+            ? new Date(a.paymentDate).getTime()
+            : new Date(a.year, getMonthIndex(a.month), 1).getTime();
+          const bTime = b.paymentDate
+            ? new Date(b.paymentDate).getTime()
+            : new Date(b.year, getMonthIndex(b.month), 1).getTime();
+          return aTime - bTime;
+        });
+
+        // Find the first payment date (awal mra)
+        const firstPayment = sortedByDate[0];
+        let firstPaymentDate: Date;
+        if (firstPayment.paymentDate) {
+          firstPaymentDate = firstPayment.paymentDate instanceof Date
+            ? firstPayment.paymentDate
+            : new Date(firstPayment.paymentDate);
+        } else {
+          firstPaymentDate = new Date(firstPayment.year, getMonthIndex(firstPayment.month), 1);
+        }
+
+        // Find the latest fully paid payment to determine current pack duration
+        const fullyPaidPayments = sortedByDate.filter(p => p.remainingAmount === 0 || p.paidAmount >= p.amount - (p.discount || 0));
+        let latestPackPayment: typeof sortedByDate[0] | null = null;
+        let latestPackDate: Date | null = null;
+
+        for (const p of sortedByDate) {
+          const pDate = p.paymentDate
+            ? (p.paymentDate instanceof Date ? p.paymentDate : new Date(p.paymentDate))
+            : new Date(p.year, getMonthIndex(p.month), 1);
+
+          if (!latestPackDate || pDate >= latestPackDate) {
+            latestPackDate = pDate;
+            latestPackPayment = p;
+          }
+        }
+
+        // Use the latest payment's date and pack months for due date calculation
+        if (latestPackPayment && latestPackDate) {
+          const packDays = (latestPackPayment.packMonths || 1) * 30;
+          const dueDate = new Date(latestPackDate.getTime() + packDays * 24 * 60 * 60 * 1000);
+          nextDueDate = formatDate(dueDate);
+        } else if (firstPaymentDate) {
+          // Fallback to first payment + 30 days
+          const dueDate = new Date(firstPaymentDate.getTime() + 30 * 24 * 60 * 60 * 1000);
+          nextDueDate = formatDate(dueDate);
+        }
+      } else {
+        // No payments - use enrollment date + 30 days
+        const enrollmentDate = student.enrollmentDate instanceof Date
+          ? student.enrollmentDate
+          : new Date(student.enrollmentDate);
+        const dueDate = new Date(enrollmentDate.getTime() + 30 * 24 * 60 * 60 * 1000);
+        nextDueDate = formatDate(dueDate);
       }
 
       if (payments.length === 0) {
@@ -249,13 +324,24 @@ export async function GET(
           monthsOverdue: maxMonthsOverdue,
           hasPendingPayment,
           pendingPaymentId,
+          nextDueDate,
           overduePayments,
         });
       }
     }
 
-    // Sort by total overdue descending
-    overdueStudents.sort((a, b) => b.totalOverdue - a.totalOverdue);
+    // Sort by nextDueDate descending (newest date first = top, oldest date last = bottom)
+    overdueStudents.sort((a, b) => {
+      if (!a.nextDueDate && !b.nextDueDate) return b.totalOverdue - a.totalOverdue;
+      if (!a.nextDueDate) return 1;
+      if (!b.nextDueDate) return -1;
+      // nextDueDate is in dd/mm/yyyy format, parse for comparison
+      const parseDate = (d: string) => {
+        const [day, month, year] = d.split('/').map(Number);
+        return new Date(year, month - 1, day).getTime();
+      };
+      return parseDate(b.nextDueDate) - parseDate(a.nextDueDate);
+    });
     const grandTotal = overdueStudents.reduce((s, o) => s + o.totalOverdue, 0);
 
     return NextResponse.json({

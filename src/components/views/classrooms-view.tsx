@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   DoorOpen,
   Users,
@@ -11,6 +11,11 @@ import {
   Clock,
   AlertTriangle,
   DoorOpenIcon,
+  Wallet,
+  Phone,
+  User,
+  Loader2,
+  CalendarClock,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useT } from '@/hooks/use-translation';
@@ -42,6 +47,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
+// ── Types ──────────────────────────────────────────────────────────────────
+
 interface ScheduleItem {
   id: string;
   dayOfWeek: string;
@@ -60,6 +67,40 @@ interface Classroom {
   schedules: ScheduleItem[];
 }
 
+interface OverdueStudent {
+  studentId: string;
+  studentName: string;
+  phone: string | null;
+  parentPhone: string | null;
+  parentName: string | null;
+  monthlyFee: number;
+  levelName: string;
+  subjectName: string;
+  totalOverdue: number;
+  monthsOverdue: number;
+  hasPendingPayment: boolean;
+  pendingPaymentId: string | null;
+  nextDueDate: string | null;
+  overduePayments: {
+    id: string;
+    month: string;
+    monthLabel: string;
+    year: number;
+    remainingAmount: number;
+    monthsOverdue: number;
+  }[];
+}
+
+interface OverdueData {
+  classroomId: string;
+  classroomName: string;
+  students: OverdueStudent[];
+  totalOverdue: number;
+  studentCount: number;
+}
+
+// ── Constants ──────────────────────────────────────────────────────────────
+
 const DAY_MAP: Record<string, string> = {
   '1': 'الأحد',
   '2': 'الاثنين',
@@ -69,6 +110,11 @@ const DAY_MAP: Record<string, string> = {
   '6': 'الجمعة',
   '7': 'السبت',
 };
+
+const MONTH_KEYS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+] as const;
 
 const CLASSROOM_COLORS = [
   { accent: 'bg-emerald-500', bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700' },
@@ -82,6 +128,8 @@ function getTodayDayOfWeek(): string {
   // Our system: 1=Sun, 2=Mon, ..., 7=Sat
   return String(jsDay === 0 ? 1 : jsDay + 1);
 }
+
+// ── Sub-components ─────────────────────────────────────────────────────────
 
 function LoadingSkeleton() {
   return (
@@ -131,6 +179,8 @@ function EmptyState({ t }: { t: ReturnType<typeof useT> }) {
   );
 }
 
+// ── Main Component ─────────────────────────────────────────────────────────
+
 export function ClassroomsView() {
   const t = useT();
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
@@ -145,6 +195,13 @@ export function ClassroomsView() {
   });
   const [addDialog, setAddDialog] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Overdue payments state
+  const [overdueOpen, setOverdueOpen] = useState(false);
+  const [overdueClassroom, setOverdueClassroom] = useState<Classroom | null>(null);
+  const [overdueData, setOverdueData] = useState<OverdueData | null>(null);
+  const [overdueLoading, setOverdueLoading] = useState(false);
+  const [creatingInvoice, setCreatingInvoice] = useState<string | null>(null);
 
   // Form state
   const [formName, setFormName] = useState('');
@@ -167,6 +224,74 @@ export function ClassroomsView() {
   useEffect(() => {
     fetchClassrooms();
   }, []);
+
+  // ── Overdue payments logic ────────────────────────────────────────────
+
+  const fetchOverduePayments = useCallback(async (classroomId: string) => {
+    setOverdueLoading(true);
+    try {
+      const res = await fetch(`/api/classrooms/${classroomId}/overdue`);
+      if (!res.ok) throw new Error('Failed to fetch');
+      const data = await res.json();
+      setOverdueData(data);
+    } catch {
+      toast.error(t.classrooms.overdueFetchError);
+    } finally {
+      setOverdueLoading(false);
+    }
+  }, [t]);
+
+  const handleOpenOverdue = (classroom: Classroom) => {
+    setOverdueClassroom(classroom);
+    setOverdueOpen(true);
+    setOverdueData(null);
+    fetchOverduePayments(classroom.id);
+  };
+
+  const handleCloseOverdue = () => {
+    setOverdueOpen(false);
+    setOverdueClassroom(null);
+    setOverdueData(null);
+  };
+
+  const handleCreateInvoiceForStudent = async (student: OverdueStudent) => {
+    const now = new Date();
+    const currentMonth = MONTH_KEYS[now.getMonth()];
+    const currentYear = now.getFullYear();
+
+    setCreatingInvoice(student.studentId);
+    try {
+      const res = await fetch('/api/payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId: student.studentId,
+          amount: student.monthlyFee,
+          paidAmount: 0,
+          discount: 0,
+          packMonths: 1,
+          month: currentMonth,
+          year: currentYear,
+          paymentDate: null,
+          method: 'cash',
+          notes: '',
+          status: 'pending',
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to create');
+      toast.success(t.payments.invoiceCreatedQuick);
+      // Refresh overdue data
+      if (overdueClassroom) {
+        fetchOverduePayments(overdueClassroom.id);
+      }
+    } catch {
+      toast.error(t.common.saveError);
+    } finally {
+      setCreatingInvoice(null);
+    }
+  };
+
+  // ── CRUD logic ────────────────────────────────────────────────────────
 
   const resetForm = () => {
     setFormName('');
@@ -307,6 +432,15 @@ export function ClassroomsView() {
                     <Button
                       variant="ghost"
                       size="icon"
+                      className="h-8 w-8 text-orange-500 hover:text-orange-600 hover:bg-orange-50"
+                      onClick={() => handleOpenOverdue(classroom)}
+                      title={t.classrooms.overduePayments || 'المدفوعات المستحقة'}
+                    >
+                      <Wallet className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       className="h-8 w-8"
                       onClick={() => openEdit(classroom)}
                     >
@@ -384,6 +518,159 @@ export function ClassroomsView() {
           );
         })}
       </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          OVERDUE PAYMENTS DIALOG
+          ═══════════════════════════════════════════════════════════════════ */}
+      <Dialog open={overdueOpen} onOpenChange={(open) => { if (!open) handleCloseOverdue(); }}>
+        <DialogContent className="sm:max-w-lg p-0 gap-0 max-h-[85vh] flex flex-col">
+          {/* Header */}
+          <div className="shrink-0 px-6 pt-6 pb-4 bg-gradient-to-r from-red-50 to-orange-50 rounded-t-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-red-700">
+                <AlertTriangle className="w-5 h-5" />
+                {t.payments.overdue}
+              </DialogTitle>
+              <DialogDescription className="text-red-600/80 text-sm">
+                {t.classrooms.overdueDialogDesc}
+              </DialogDescription>
+            </DialogHeader>
+
+            {/* Summary bar */}
+            {!overdueLoading && overdueData && overdueData.studentCount > 0 && (
+              <div className="mt-3 flex items-center justify-between bg-white/80 rounded-lg px-4 py-2.5 border border-red-100">
+                <div>
+                  <span className="text-xs text-muted-foreground">{t.classrooms.unpaidCount}:</span>
+                  <span className="font-bold text-red-600 mx-1">{overdueData.studentCount}</span>
+                  <span className="text-xs text-muted-foreground">{t.common.dh}</span>
+                </div>
+                <div className="text-left">
+                  <span className="text-xs text-muted-foreground">{t.classrooms.totalOverdue}:</span>
+                  <span className="font-bold text-red-700 mx-1 text-lg">
+                    {overdueData.totalOverdue.toLocaleString()}
+                  </span>
+                  <span className="text-xs text-muted-foreground">{t.common.dh}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Student list */}
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
+            {overdueLoading ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-3">
+                <Loader2 className="w-8 h-8 text-red-500 animate-spin" />
+                <p className="text-sm text-muted-foreground">{t.common.loading}</p>
+              </div>
+            ) : overdueData && overdueData.students.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-3">
+                <div className="w-16 h-16 rounded-full bg-emerald-50 flex items-center justify-center">
+                  <Wallet className="w-8 h-8 text-emerald-500" />
+                </div>
+                <p className="font-medium text-emerald-700">{t.classrooms.allPaid}</p>
+                <p className="text-sm text-muted-foreground">{t.classrooms.allPaidDesc}</p>
+              </div>
+            ) : overdueData ? (
+              <div className="space-y-3">
+                {overdueData.students.map((student) => (
+                  <div
+                    key={student.studentId}
+                    className="rounded-xl border border-red-100 bg-white p-4 hover:shadow-sm transition-shadow"
+                  >
+                    {/* Top row: Student info + Add Invoice Button */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        {/* Student name */}
+                        <div className="flex items-center gap-2 mb-1">
+                          <User className="w-4 h-4 text-red-400 shrink-0" />
+                          <p className="font-semibold text-sm truncate">{student.studentName}</p>
+                          <Badge className="bg-red-100 text-red-700 border-red-200 hover:bg-red-100 text-[10px] px-1.5 py-0 shrink-0">
+                            {student.monthsOverdue} {t.classrooms.monthsLabel}
+                          </Badge>
+                        </div>
+
+                        {/* Phone */}
+                        {student.phone && (
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2">
+                            <Phone className="w-3 h-3" />
+                            <span dir="ltr">{student.phone}</span>
+                          </div>
+                        )}
+
+                        {/* Level & Subject */}
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+                          <span className="bg-slate-100 px-2 py-0.5 rounded">{student.levelName}</span>
+                          <span className="bg-slate-100 px-2 py-0.5 rounded">{student.subjectName}</span>
+                        </div>
+                      </div>
+
+                      {/* RED Add Invoice Button */}
+                      <Button
+                        onClick={() => handleCreateInvoiceForStudent(student)}
+                        disabled={creatingInvoice === student.studentId}
+                        className="bg-red-600 hover:bg-red-700 text-white shrink-0 gap-1.5 h-9 px-3 text-xs font-semibold"
+                      >
+                        {creatingInvoice === student.studentId ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Plus className="w-3.5 h-3.5" />
+                        )}
+                        {t.classrooms.addInvoice}
+                      </Button>
+                    </div>
+
+                    {/* Bottom row: Amount + Due Date */}
+                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
+                      <div className="flex items-center gap-3">
+                        {/* Amount */}
+                        <div>
+                          <span className="text-[10px] text-muted-foreground">{t.classrooms.overdueAmount}</span>
+                          <p className="text-red-600 font-bold text-base">
+                            {student.totalOverdue.toLocaleString()}{' '}
+                            <span className="text-xs font-normal">{t.common.dh}</span>
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Due Date */}
+                      {student.nextDueDate && (
+                        <div className="text-left flex items-center gap-1.5">
+                          <CalendarClock className="w-3.5 h-3.5 text-amber-500" />
+                          <div>
+                            <span className="text-[10px] text-muted-foreground">{t.classrooms.dueDate}</span>
+                            <p className="text-amber-700 font-semibold text-xs" dir="ltr">
+                              {student.nextDueDate}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Pending payment warning */}
+                    {student.hasPendingPayment && (
+                      <div className="mt-2 flex items-center gap-1.5 text-[10px] text-amber-600 bg-amber-50 px-2 py-1 rounded w-fit">
+                        <AlertTriangle className="w-3 h-3" />
+                        {t.classrooms.pendingExists}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
+          {/* Footer */}
+          <div className="shrink-0 px-6 py-3 border-t bg-gray-50/50 rounded-b-lg">
+            <Button
+              variant="outline"
+              onClick={handleCloseOverdue}
+              className="w-full"
+            >
+              {t.common.close}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Add/Edit Dialog */}
       <Dialog

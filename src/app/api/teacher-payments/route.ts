@@ -280,6 +280,21 @@ export async function GET(request: NextRequest) {
 
         const groups = Array.from(groupsMap.values());
 
+        // Build student details list (name + monthly contribution for calcMonth)
+        const studentDetails = teacherStudents
+          .map((student) => {
+            const contribution = monthlyContributionByStudent.get(student.id) || 0;
+            return {
+              studentId: student.id,
+              studentName: student.fullName,
+              levelNameAr: student.level?.nameAr || '—',
+              subjectNameAr: student.level?.subject?.nameAr || '—',
+              monthlyAmount: Math.round(contribution * 100) / 100,
+              paid: contribution > 0,
+            };
+          })
+          .sort((a, b) => b.monthlyAmount - a.monthlyAmount);
+
         return {
           teacherId: teacher.id,
           teacherName: teacher.fullName,
@@ -289,6 +304,7 @@ export async function GET(request: NextRequest) {
           totalCollected: Math.round(totalCollected * 100) / 100,
           teacherShare: Math.round(teacherShare * 100) / 100,
           groups,
+          studentDetails,
         };
       });
 

@@ -405,6 +405,9 @@ const ar = {
     bonCenterSig: 'توقيع المركز',
     bonTeacherSig: 'توقيع الأستاذ',
     bonPrint: 'طباعة',
+    bonStudentsTitle: 'تفاصيل المدفوعات - التلاميذ',
+    bonStudentNameCol: 'اسم التلميذ',
+    bonAmountDh: 'المبلغ (درهم)',
   },
 
   // ── Schedule ──
@@ -519,6 +522,8 @@ const ar = {
     pendingExists: 'قسطة معلقة',
     invoiceCreated: 'تم إنشاء القسطة بنجاح - في انتظار الدفع',
     overdueFetchError: 'فشل في تحميل المدفوعات المستحقة',
+    dueDate: 'تاريخ الاستحقاق',
+    overduePayments: 'المدفوعات المستحقة',
   },
 
   // ── Settings ──
@@ -976,6 +981,9 @@ const fr: typeof ar = {
     bonCenterSig: 'Signature du centre',
     bonTeacherSig: 'Signature du professeur',
     bonPrint: 'Imprimer',
+    bonStudentsTitle: 'Détails des paiements - Étudiants',
+    bonStudentNameCol: "Nom de l'étudiant",
+    bonAmountDh: 'Montant (DH)',
   },
 
   // ── Schedule ──
@@ -1090,6 +1098,8 @@ const fr: typeof ar = {
     pendingExists: 'Facture en attente',
     invoiceCreated: 'Facture créée avec succès - en attente de paiement',
     overdueFetchError: 'Échec du chargement des paiements en retard',
+    dueDate: "Date d'échéance",
+    overduePayments: 'Paiements en retard',
   },
 
   // ── Settings ──

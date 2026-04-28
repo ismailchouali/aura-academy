@@ -118,6 +118,14 @@ interface CalculationData {
     levelNameAr: string;
     studentCount: number;
   }[];
+  studentDetails?: {
+    studentId: string;
+    studentName: string;
+    levelNameAr: string;
+    subjectNameAr: string;
+    monthlyAmount: number;
+    paid: boolean;
+  }[];
 }
 
 interface PaymentFormData {
@@ -177,6 +185,11 @@ function printTeacherBon(
   const groups = calcData?.groups || [];
   const totalStudents = calcData?.totalStudents || groups.reduce((s, g) => s + g.studentCount, 0);
 
+  // Student details for the bon
+  const studentDetails = calcData?.studentDetails || [];
+  const paidStudents = studentDetails.filter(s => s.paid);
+  const totalPaidByStudents = paidStudents.reduce((s, st) => s + st.monthlyAmount, 0);
+
   let groupsTableHTML = '';
   if (groups.length > 0) {
     groupsTableHTML = `
@@ -202,6 +215,39 @@ function printTeacherBon(
           </tr>
         </tbody>
       </table>`;
+  }
+
+  // Student payments details table
+  let studentsTableHTML = '';
+  if (paidStudents.length > 0) {
+    studentsTableHTML = `
+      <div class="bon-students">
+        <h3>${t.teacherPayments.bonStudentsTitle}</h3>
+        <table style="width:100%; border-collapse:collapse; margin-top:8px; font-size:11px;">
+          <thead>
+            <tr style="background:#f0fdfa;">
+              <th style="border:1px solid #d1d5db; padding:5px 8px; text-align:right; font-weight:600; font-size:10px;">#</th>
+              <th style="border:1px solid #d1d5db; padding:5px 8px; text-align:right; font-weight:600; font-size:10px;">${t.teacherPayments.bonStudentNameCol}</th>
+              <th style="border:1px solid #d1d5db; padding:5px 8px; text-align:right; font-weight:600; font-size:10px;">${t.teacherPayments.bonSubjectLevel}</th>
+              <th style="border:1px solid #d1d5db; padding:5px 8px; text-align:center; font-weight:600; font-size:10px;">${t.teacherPayments.bonAmountDh}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${paidStudents.map((s, i) => `
+              <tr>
+                <td style="border:1px solid #d1d5db; padding:4px 8px; text-align:right;">${i + 1}</td>
+                <td style="border:1px solid #d1d5db; padding:4px 8px; text-align:right; font-weight:500;">${s.studentName}</td>
+                <td style="border:1px solid #d1d5db; padding:4px 8px; text-align:right; font-size:10px; color:#64748b;">${s.subjectNameAr} - ${s.levelNameAr}</td>
+                <td style="border:1px solid #d1d5db; padding:4px 8px; text-align:center; font-weight:600; color:#059669;">${s.monthlyAmount.toLocaleString('fr-MA', { minimumFractionDigits: 2 })}</td>
+              </tr>
+            `).join('')}
+            <tr style="background:#f0fdfa; font-weight:700;">
+              <td colspan="3" style="border:1px solid #d1d5db; padding:5px 8px; text-align:right;">${t.teacherPayments.bonTotalRow}</td>
+              <td style="border:1px solid #d1d5db; padding:5px 8px; text-align:center; color:#059669;">${totalPaidByStudents.toLocaleString('fr-MA', { minimumFractionDigits: 2 })}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>`;
   }
 
   const html = `<!DOCTYPE html>
@@ -289,6 +335,16 @@ function printTeacherBon(
     font-weight: 700;
     margin-bottom: 4px;
   }
+  .bon-students {
+    padding: 8px 20px;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .bon-students h3 {
+    font-size: 12px;
+    color: #0d9488;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
   .amount-box {
     background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%);
     margin: 12px 20px;
@@ -370,6 +426,8 @@ function printTeacherBon(
       <h3>${t.teacherPayments.bonGroupsTitle}</h3>
       ${groupsTableHTML}
     </div>` : ''}
+
+    ${studentsTableHTML}
 
     <div class="amount-box">
       <div class="amount-label">${t.teacherPayments.bonAmountDue}</div>
@@ -685,9 +743,29 @@ export function TeacherPaymentsView() {
     }
   };
 
-  const handlePrintBon = (payment: TeacherPayment) => {
+  const handlePrintBon = async (payment: TeacherPayment) => {
     const teacher = teachers.find((t) => t.id === payment.teacherId);
-    const teacherCalc = calcData.find((c) => c.teacherId === payment.teacherId);
+
+    // Fetch calc data for this specific teacher/month/year if not already available
+    let teacherCalc = calcData.find((c) => c.teacherId === payment.teacherId);
+    if (!teacherCalc || !teacherCalc.studentDetails) {
+      try {
+        const params = new URLSearchParams({
+          calculate: 'true',
+          teacherId: payment.teacherId,
+          month: payment.month,
+          year: String(payment.year),
+        });
+        const res = await fetch(`/api/teacher-payments?${params.toString()}`);
+        if (res.ok) {
+          const data = await res.json();
+          teacherCalc = data.find((c: CalculationData) => c.teacherId === payment.teacherId) || undefined;
+        }
+      } catch {
+        // fallback to existing calcData
+      }
+    }
+
     printTeacherBon(payment, teacher, teacherCalc, t, getMonthName);
   };
 
