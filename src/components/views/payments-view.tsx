@@ -111,6 +111,27 @@ interface StudentSearchResult {
   teacher: { id: string; fullName: string } | null;
 }
 
+interface Service {
+  id: string;
+  name: string;
+  nameAr: string;
+  nameFr: string;
+  subjects: {
+    id: string;
+    name: string;
+    nameAr: string;
+    nameFr: string;
+    levels: {
+      id: string;
+      name: string;
+      nameAr: string;
+      nameFr: string;
+    }[];
+    order: number;
+  }[];
+  order: number;
+}
+
 interface PaymentFormData {
   studentId: string;
   amount: number | '';
@@ -501,6 +522,25 @@ export function PaymentsView() {
   const [filterMonth, setFilterMonth] = useState('all');
   const [filterYear, setFilterYear] = useState(String(new Date().getFullYear()));
   const [filterStatus, setFilterStatus] = useState('all');
+  const [filterServiceId, setFilterServiceId] = useState('all');
+  const [filterSubjectId, setFilterSubjectId] = useState('all');
+  const [filterLevelId, setFilterLevelId] = useState('all');
+  const [services, setServices] = useState<Service[]>([]);
+
+  // Computed: subjects filtered by selected service
+  const filterSubjects = useMemo(() => {
+    if (filterServiceId === 'all') return [];
+    const svc = services.find((s) => s.id === filterServiceId);
+    return svc?.subjects || [];
+  }, [filterServiceId, services]);
+
+  // Computed: levels filtered by selected subject
+  const filterLevels = useMemo(() => {
+    if (filterSubjectId === 'all') return [];
+    const svc = services.find((s) => s.id === filterServiceId);
+    const subj = svc?.subjects.find((sub) => sub.id === filterSubjectId);
+    return subj?.levels || [];
+  }, [filterServiceId, filterSubjectId, services]);
 
   // Dialog states
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -527,6 +567,9 @@ export function PaymentsView() {
       if (filterMonth !== 'all') params.set('month', filterMonth);
       if (filterYear) params.set('year', filterYear);
       if (filterStatus !== 'all') params.set('status', filterStatus);
+      if (filterServiceId !== 'all') params.set('serviceId', filterServiceId);
+      if (filterSubjectId !== 'all') params.set('subjectId', filterSubjectId);
+      if (filterLevelId !== 'all') params.set('levelId', filterLevelId);
       const res = await fetch(`/api/payments?${params.toString()}`);
       if (!res.ok) throw new Error();
       const json = await res.json();
@@ -536,11 +579,37 @@ export function PaymentsView() {
     } finally {
       setLoading(false);
     }
-  }, [filterMonth, filterYear, filterStatus, t]);
+  }, [filterMonth, filterYear, filterStatus, filterServiceId, filterSubjectId, filterLevelId, t]);
 
   useEffect(() => {
     fetchPayments();
   }, [fetchPayments]);
+
+  // Fetch services for filters
+  useEffect(() => {
+    const fetchServices = async () => {
+      try {
+        const res = await fetch('/api/services');
+        if (!res.ok) throw new Error();
+        const json = await res.json();
+        setServices(json);
+      } catch {
+        // silent
+      }
+    };
+    fetchServices();
+  }, []);
+
+  // Cascade: reset subject/level when service changes
+  useEffect(() => {
+    setFilterSubjectId('all');
+    setFilterLevelId('all');
+  }, [filterServiceId]);
+
+  // Cascade: reset level when subject changes
+  useEffect(() => {
+    setFilterLevelId('all');
+  }, [filterSubjectId]);
 
   // ── Load all students (for payment dialog) ─────────────────────────
 
@@ -910,40 +979,104 @@ export function PaymentsView() {
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
             <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-1 w-full">
-              <Select value={filterMonth} onValueChange={setFilterMonth}>
+              <Select value={filterServiceId} onValueChange={setFilterServiceId}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder={t.payments.allMonths} />
+                  <SelectValue placeholder={t.students.filterByService || 'الخدمة'} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">{t.payments.allMonths}</SelectItem>
-                  {MONTHS.map((m) => (
-                    <SelectItem key={m.value} value={m.value}>
-                      {m.label}
+                  <SelectItem value="all">{t.students.filterByService || 'كل الخدمات'}</SelectItem>
+                  {services.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.nameAr || s.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <Input
-                type="number"
-                placeholder={t.payments.year}
-                value={filterYear}
-                onChange={(e) => setFilterYear(e.target.value)}
-                dir="ltr"
-                className="w-full"
-              />
-              <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <Select value={filterSubjectId} onValueChange={setFilterSubjectId} disabled={filterServiceId === 'all'}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder={t.payments.allStatuses} />
+                  <SelectValue placeholder={t.students.filterBySubject || 'المادة'} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">{t.payments.allStatuses}</SelectItem>
-                  <SelectItem value="paid">{t.payments.statusPaid}</SelectItem>
-                  <SelectItem value="partial">{t.payments.statusPartial}</SelectItem>
-                  <SelectItem value="pending">{t.payments.statusPending}</SelectItem>
+                  <SelectItem value="all">{t.students.filterBySubject || 'كل المواد'}</SelectItem>
+                  {filterSubjects.map((subj) => (
+                    <SelectItem key={subj.id} value={subj.id}>
+                      {subj.nameAr || subj.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={filterLevelId} onValueChange={setFilterLevelId} disabled={filterSubjectId === 'all'}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder={t.students.filterByLevel || 'المستوى'} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t.students.filterByLevel || 'كل المستويات'}</SelectItem>
+                  {filterLevels.map((lvl) => (
+                    <SelectItem key={lvl.id} value={lvl.id}>
+                      {lvl.nameAr || lvl.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
           </div>
+          {/* Second row: month, year, status */}
+          {(filterServiceId !== 'all' || filterSubjectId !== 'all' || filterLevelId !== 'all') && (
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mt-3 pt-3 border-t border-gray-100">
+              <div className="w-4 shrink-0" />
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-1 w-full">
+                <Select value={filterMonth} onValueChange={setFilterMonth}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder={t.payments.allMonths} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{t.payments.allMonths}</SelectItem>
+                    {MONTHS.map((m) => (
+                      <SelectItem key={m.value} value={m.value}>
+                        {m.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  type="number"
+                  placeholder={t.payments.year}
+                  value={filterYear}
+                  onChange={(e) => setFilterYear(e.target.value)}
+                  dir="ltr"
+                  className="w-full"
+                />
+                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder={t.payments.allStatuses} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{t.payments.allStatuses}</SelectItem>
+                    <SelectItem value="paid">{t.payments.statusPaid}</SelectItem>
+                    <SelectItem value="partial">{t.payments.statusPartial}</SelectItem>
+                    <SelectItem value="pending">{t.payments.statusPending}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+          {(filterServiceId !== 'all' || filterSubjectId !== 'all' || filterLevelId !== 'all') && (
+            <div className="mt-2 flex justify-end">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs text-muted-foreground hover:text-red-600"
+                onClick={() => {
+                  setFilterServiceId('all');
+                  setFilterSubjectId('all');
+                  setFilterLevelId('all');
+                }}
+              >
+                <X className="h-3 w-3 mr-1" />
+                {t.common.clear || 'مسح الفلاتر'}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 

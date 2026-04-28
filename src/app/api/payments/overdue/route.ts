@@ -409,8 +409,17 @@ export async function GET() {
       ([service, levelMap]) => {
         const levels = Array.from(levelMap.entries()).map(
           ([level, students]) => {
-            // Sort students by totalOverdue descending within each level
-            students.sort((a, b) => b.totalOverdue - a.totalOverdue);
+            // Sort students by nextDueDate descending (newest due date on top) within each level
+            students.sort((a, b) => {
+              if (!a.nextDueDate && !b.nextDueDate) return b.totalOverdue - a.totalOverdue;
+              if (!a.nextDueDate) return 1;
+              if (!b.nextDueDate) return -1;
+              const parseDate = (d: string) => {
+                const [day, month, year] = d.split('/').map(Number);
+                return new Date(year, month - 1, day).getTime();
+              };
+              return parseDate(b.nextDueDate) - parseDate(a.nextDueDate);
+            });
 
             const totalLevelOverdue = students.reduce(
               (sum, s) => sum + s.totalOverdue,

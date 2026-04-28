@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { Prisma } from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   try {
@@ -8,6 +9,9 @@ export async function GET(request: NextRequest) {
     const month = searchParams.get('month');
     const year = searchParams.get('year');
     const status = searchParams.get('status');
+    const serviceId = searchParams.get('serviceId');
+    const subjectId = searchParams.get('subjectId');
+    const levelId = searchParams.get('levelId');
 
     const where: Record<string, unknown> = {};
 
@@ -24,6 +28,19 @@ export async function GET(request: NextRequest) {
       where.status = status;
     }
 
+    // Filter by service/subject/level through student relation
+    if (serviceId || subjectId || levelId) {
+      const studentFilter: Record<string, unknown> = {};
+      if (levelId) {
+        studentFilter.levelId = levelId;
+      } else if (subjectId) {
+        studentFilter.level = { subjectId };
+      } else if (serviceId) {
+        studentFilter.level = { subject: { serviceId } };
+      }
+      where.student = studentFilter;
+    }
+
     const payments = await db.payment.findMany({
       where: Object.keys(where).length > 0 ? where : undefined,
       include: {
@@ -38,7 +55,7 @@ export async function GET(request: NextRequest) {
           },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { paymentDate: 'desc' },
     });
 
     return NextResponse.json(payments);
