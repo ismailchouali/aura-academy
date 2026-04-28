@@ -330,6 +330,8 @@ const ar = {
     packBadge: 'باك',
     packMonthsUnit: 'أشهر',
     packMonthlyEquiv: 'المعادل الشهري',
+    invoiceCreatedQuick: 'تم إنشاء القسطة بنجاح - في انتظار الدفع',
+    addInvoiceQuick: 'إضافة قسطة',
   },
 
   // ── Teacher Payments ──
@@ -900,6 +902,8 @@ const fr: typeof ar = {
     packBadge: 'Pack',
     packMonthsUnit: 'mois',
     packMonthlyEquiv: 'Équivalent mensuel',
+    invoiceCreatedQuick: 'Facture créée avec succès - en attente de paiement',
+    addInvoiceQuick: 'Ajouter une facture',
   },
 
   // ── Teacher Payments ──

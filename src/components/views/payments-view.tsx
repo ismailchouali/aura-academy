@@ -514,6 +514,7 @@ export function PaymentsView() {
   const [overdueOpen, setOverdueOpen] = useState(false);
   const [overdueData, setOverdueData] = useState<OverdueService[]>([]);
   const [overdueLoading, setOverdueLoading] = useState(false);
+  const [creatingInvoice, setCreatingInvoice] = useState<string | null>(null);
 
   // ── Data fetching ──────────────────────────────────────────────────────
 
@@ -614,6 +615,43 @@ export function PaymentsView() {
   const handleOpenOverdue = () => {
     setOverdueOpen(true);
     fetchOverdue();
+  };
+
+  const handleCreateInvoiceForOverdue = async (student: OverdueStudent) => {
+    const now = new Date();
+    const currentMonth = MONTH_KEYS[now.getMonth()];
+    const currentYear = now.getFullYear();
+
+    setCreatingInvoice(student.studentId);
+    try {
+      const res = await fetch('/api/payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId: student.studentId,
+          amount: student.monthlyFee,
+          paidAmount: 0,
+          discount: 0,
+          packMonths: 1,
+          month: currentMonth,
+          year: currentYear,
+          paymentDate: null,
+          method: 'cash',
+          notes: '',
+          status: 'pending',
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to create');
+      toast.success(t.payments.invoiceCreatedQuick);
+      // Refresh overdue data
+      fetchOverdue();
+      // Also refresh main payments list
+      fetchPayments();
+    } catch {
+      toast.error(t.common.saveError);
+    } finally {
+      setCreatingInvoice(null);
+    }
   };
 
   // ── Form handling ──────────────────────────────────────────────────────
@@ -1606,6 +1644,19 @@ export function PaymentsView() {
                                     </Badge>
                                   </div>
                                 </div>
+                                <Button
+                                  size="sm"
+                                  className="gap-1.5 bg-red-500 hover:bg-red-600 text-white shrink-0"
+                                  onClick={() => handleCreateInvoiceForOverdue(student)}
+                                  disabled={creatingInvoice === student.studentId}
+                                >
+                                  {creatingInvoice === student.studentId ? (
+                                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                  ) : (
+                                    <Plus className="w-3.5 h-3.5" />
+                                  )}
+                                  {t.payments.addInvoiceQuick}
+                                </Button>
                               </div>
                             ))}
                           </div>

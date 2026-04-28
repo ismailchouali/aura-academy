@@ -11,11 +11,6 @@ import {
   Clock,
   AlertTriangle,
   DoorOpenIcon,
-  Wallet,
-  FileText,
-  X,
-  Phone,
-  User,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useT } from '@/hooks/use-translation';
@@ -63,37 +58,6 @@ interface Classroom {
   nameAr: string;
   capacity: number;
   schedules: ScheduleItem[];
-}
-
-interface OverdueStudent {
-  studentId: string;
-  studentName: string;
-  phone: string | null;
-  parentPhone: string | null;
-  parentName: string | null;
-  monthlyFee: number;
-  levelName: string;
-  subjectName: string;
-  totalOverdue: number;
-  monthsOverdue: number;
-  hasPendingPayment: boolean;
-  pendingPaymentId: string | null;
-  overduePayments: {
-    id: string;
-    month: string;
-    monthLabel: string;
-    year: number;
-    remainingAmount: number;
-    monthsOverdue: number;
-  }[];
-}
-
-interface ClassroomOverdueData {
-  classroomId: string;
-  classroomName: string;
-  students: OverdueStudent[];
-  totalOverdue: number;
-  studentCount: number;
 }
 
 const DAY_MAP: Record<string, string> = {
@@ -181,15 +145,6 @@ export function ClassroomsView() {
   });
   const [addDialog, setAddDialog] = useState(false);
   const [saving, setSaving] = useState(false);
-
-  // Overdue payments state
-  const [overdueDialog, setOverdueDialog] = useState<{ open: boolean; classroom: Classroom | null }>({
-    open: false,
-    classroom: null,
-  });
-  const [overdueData, setOverdueData] = useState<ClassroomOverdueData | null>(null);
-  const [overdueLoading, setOverdueLoading] = useState(false);
-  const [creatingInvoice, setCreatingInvoice] = useState<string | null>(null);
 
   // Form state
   const [formName, setFormName] = useState('');
@@ -294,66 +249,6 @@ export function ClassroomsView() {
     }
   };
 
-  // ── Overdue payments handlers ──
-
-  const handleOpenOverdue = async (classroom: Classroom) => {
-    setOverdueDialog({ open: true, classroom });
-    setOverdueLoading(true);
-    setOverdueData(null);
-    try {
-      const res = await fetch(`/api/classrooms/${classroom.id}/overdue`);
-      if (!res.ok) throw new Error('Failed to fetch');
-      const data = await res.json();
-      setOverdueData(data);
-    } catch {
-      toast.error(t.classrooms.overdueFetchError);
-    } finally {
-      setOverdueLoading(false);
-    }
-  };
-
-  const handleCreateInvoice = async (student: OverdueStudent) => {
-    const now = new Date();
-    const currentMonth = MONTH_ORDER[now.getMonth()];
-    const currentYear = now.getFullYear();
-
-    setCreatingInvoice(student.studentId);
-    try {
-      const res = await fetch('/api/payments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          studentId: student.studentId,
-          amount: student.monthlyFee,
-          paidAmount: 0,
-          discount: 0,
-          packMonths: 1,
-          month: currentMonth,
-          year: currentYear,
-          paymentDate: null,
-          method: 'cash',
-          notes: '',
-          status: 'pending',
-        }),
-      });
-      if (!res.ok) throw new Error('Failed to create');
-      toast.success(t.classrooms.invoiceCreated);
-      // Refresh overdue data
-      if (overdueDialog.classroom) {
-        await handleOpenOverdue(overdueDialog.classroom);
-      }
-    } catch {
-      toast.error(t.common.saveError);
-    } finally {
-      setCreatingInvoice(null);
-    }
-  };
-
-  const MONTH_ORDER = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
-  ];
-
   const todayStr = getTodayDayOfWeek();
 
   if (loading) return <LoadingSkeleton />;
@@ -409,15 +304,6 @@ export function ClassroomsView() {
                     </div>
                   </div>
                   <div className="flex gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
-                      onClick={() => handleOpenOverdue(classroom)}
-                      title={t.payments.overdue}
-                    >
-                      <Wallet className="w-3.5 h-3.5" />
-                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -569,156 +455,6 @@ export function ClassroomsView() {
               {saving ? t.common.saving : t.common.add}
             </Button>
           </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ═══════════════════════════════════════════════════════════════════
-          OUTSTANDING PAYMENTS DIALOG
-          ═══════════════════════════════════════════════════════════════════ */}
-      <Dialog open={overdueDialog.open} onOpenChange={(open) => {
-        if (!open) {
-          setOverdueDialog({ open: false, classroom: null });
-          setOverdueData(null);
-        }
-      }}>
-        <DialogContent className="sm:max-w-2xl p-0 gap-0 max-h-[85vh] flex flex-col">
-          <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
-            <DialogTitle className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
-                <Wallet className="w-4 h-4 text-amber-600" />
-              </div>
-              {t.payments.overdue} - {overdueDialog.classroom?.nameAr}
-            </DialogTitle>
-            <DialogDescription>
-              {t.classrooms.overdueDialogDesc}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="overflow-y-auto flex-1 min-h-0 px-6 py-4">
-            {overdueLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="animate-spin w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full"></div>
-              </div>
-            ) : overdueData && overdueData.students.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 gap-3">
-                <div className="w-16 h-16 rounded-full bg-emerald-50 flex items-center justify-center">
-                  <FileText className="w-8 h-8 text-emerald-500" />
-                </div>
-                <p className="text-muted-foreground font-medium">{t.classrooms.allPaid}</p>
-                <p className="text-sm text-muted-foreground">{t.classrooms.allPaidDesc}</p>
-              </div>
-            ) : overdueData ? (
-              <div className="space-y-4">
-                {/* Summary */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-lg bg-red-50 p-3 text-center">
-                    <p className="text-xs text-red-600 font-medium">{t.classrooms.totalOverdue}</p>
-                    <p className="text-lg font-bold text-red-700">
-                      {overdueData.totalOverdue.toLocaleString()}{' '}
-                      <span className="text-xs font-normal">{t.common.dh}</span>
-                    </p>
-                  </div>
-                  <div className="rounded-lg bg-amber-50 p-3 text-center">
-                    <p className="text-xs text-amber-600 font-medium">{t.classrooms.unpaidCount}</p>
-                    <p className="text-lg font-bold text-amber-700">
-                      {overdueData.studentCount}{' '}
-                      <span className="text-xs font-normal">{t.students.studentCount}</span>
-                    </p>
-                  </div>
-                </div>
-
-                <Separator />
-
-                {/* Students List */}
-                <div className="space-y-3">
-                  {overdueData.students.map((student) => (
-                    <div
-                      key={student.studentId}
-                      className="rounded-lg border p-4 hover:bg-accent/30 transition-colors"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-start gap-3 flex-1 min-w-0">
-                          <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
-                            <User className="w-5 h-5" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-sm">{student.studentName}</p>
-                            <div className="flex items-center gap-2 mt-1 flex-wrap">
-                              {student.levelName && (
-                                <span className="text-[10px] bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded">
-                                  {student.subjectName} - {student.levelName}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                              {student.phone && (
-                                <span className="flex items-center gap-1" dir="ltr">
-                                  <Phone className="w-3 h-3" />
-                                  {student.phone}
-                                </span>
-                              )}
-                              {student.parentPhone && (
-                                <span className="flex items-center gap-1" dir="ltr">
-                                  <Phone className="w-3 h-3" />
-                                  {student.parentPhone}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 mt-2">
-                              <span className="text-xs text-red-600 font-medium">
-                                {t.classrooms.overdueAmount}: {student.totalOverdue.toLocaleString()} {t.common.dh}
-                              </span>
-                              <span className="text-xs text-muted-foreground">
-                                ({student.monthsOverdue} {t.classrooms.monthsLabel})
-                              </span>
-                            </div>
-
-                            {/* Show overdue payment details */}
-                            {student.overduePayments.length > 0 && (
-                              <div className="mt-2 flex flex-wrap gap-1">
-                                {student.overduePayments.map((op) => (
-                                  <span
-                                    key={op.id}
-                                    className="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded border border-red-100"
-                                  >
-                                    {op.monthLabel} {op.year}: {op.remainingAmount.toLocaleString()} {t.common.dh}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Create Invoice Button */}
-                        <div className="shrink-0">
-                          {student.hasPendingPayment ? (
-                            <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100 whitespace-nowrap">
-                              <FileText className="w-3 h-3 ml-1" />
-                              {t.classrooms.pendingExists}
-                            </Badge>
-                          ) : (
-                            <Button
-                              size="sm"
-                              className="gap-1.5 bg-amber-500 hover:bg-amber-600 text-white whitespace-nowrap"
-                              onClick={() => handleCreateInvoice(student)}
-                              disabled={creatingInvoice === student.studentId}
-                            >
-                              {creatingInvoice === student.studentId ? (
-                                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                              ) : (
-                                <Plus className="w-3.5 h-3.5" />
-                              )}
-                              {t.classrooms.addInvoice}
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </div>
         </DialogContent>
       </Dialog>
 
