@@ -144,9 +144,18 @@ export async function GET(
       }
 
       // ── Calculate next due date ──
-      // Logic: find the FIRST payment date, add packMonths * 30 days
-      // For students with multiple payments, find the latest fully-paid pack
-      // and calculate from its date + packMonths * 30
+      // Logic: find the latest payment date, add packMonths calendar months
+      // Same day of month is preserved (e.g. March 5 → April 5)
+
+      /** Add N calendar months to a date, keeping the same day of month */
+      const addCalMonths = (date: Date, months: number): Date => {
+        const day = date.getDate();
+        const result = new Date(date.getFullYear(), date.getMonth() + months, day);
+        if (result.getDate() !== day) {
+          result.setDate(0); // clamp to last day of month (e.g. Jan 31 → Feb 28)
+        }
+        return result;
+      };
 
       if (payments.length > 0) {
         // Sort payments by paymentDate ascending (first payment first)
@@ -171,8 +180,7 @@ export async function GET(
           firstPaymentDate = new Date(firstPayment.year, getMonthIndex(firstPayment.month), 1);
         }
 
-        // Find the latest fully paid payment to determine current pack duration
-        const fullyPaidPayments = sortedByDate.filter(p => p.remainingAmount === 0 || p.paidAmount >= p.amount - (p.discount || 0));
+        // Find the latest payment to determine current pack duration
         let latestPackPayment: typeof sortedByDate[0] | null = null;
         let latestPackDate: Date | null = null;
 
@@ -187,22 +195,21 @@ export async function GET(
           }
         }
 
-        // Use the latest payment's date and pack months for due date calculation
+        // Use the latest payment's date + calendar months for due date
         if (latestPackPayment && latestPackDate) {
-          const packDays = (latestPackPayment.packMonths || 1) * 30;
-          const dueDate = new Date(latestPackDate.getTime() + packDays * 24 * 60 * 60 * 1000);
+          const dueDate = addCalMonths(latestPackDate, latestPackPayment.packMonths || 1);
           nextDueDate = formatDate(dueDate);
         } else if (firstPaymentDate) {
-          // Fallback to first payment + 30 days
-          const dueDate = new Date(firstPaymentDate.getTime() + 30 * 24 * 60 * 60 * 1000);
+          // Fallback to first payment + 1 calendar month
+          const dueDate = addCalMonths(firstPaymentDate, 1);
           nextDueDate = formatDate(dueDate);
         }
       } else {
-        // No payments - use enrollment date + 30 days
+        // No payments - use enrollment date + 1 calendar month
         const enrollmentDate = student.enrollmentDate instanceof Date
           ? student.enrollmentDate
           : new Date(student.enrollmentDate);
-        const dueDate = new Date(enrollmentDate.getTime() + 30 * 24 * 60 * 60 * 1000);
+        const dueDate = addCalMonths(enrollmentDate, 1);
         nextDueDate = formatDate(dueDate);
       }
 

@@ -80,6 +80,17 @@ interface OverdueStudent {
   overduePayments: OverduePaymentInfo[];
 }
 
+/** Add N calendar months to a date, keeping the same day of month */
+function addCalendarMonths(date: Date, months: number): Date {
+  const day = date.getDate();
+  const result = new Date(date.getFullYear(), date.getMonth() + months, day);
+  // If day overflowed (e.g. Jan 31 → Feb 30 doesn't exist), clamp to last day
+  if (result.getDate() !== day) {
+    result.setDate(0); // last day of previous month
+  }
+  return result;
+}
+
 function calculateNextDueDate(
   enrollmentDate: Date,
   payments: Array<{
@@ -92,7 +103,7 @@ function calculateNextDueDate(
   }>
 ): string | null {
   if (payments.length === 0) {
-    const dueDate = new Date(enrollmentDate.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const dueDate = addCalendarMonths(enrollmentDate, 1);
     return formatDate(dueDate);
   }
 
@@ -122,8 +133,7 @@ function calculateNextDueDate(
   }
 
   if (latestPayment && latestDate) {
-    const packDays = (latestPayment.packMonths || 1) * 30;
-    const dueDate = new Date(latestDate.getTime() + packDays * 24 * 60 * 60 * 1000);
+    const dueDate = addCalendarMonths(latestDate, latestPayment.packMonths || 1);
     return formatDate(dueDate);
   }
 
