@@ -505,6 +505,18 @@ const ar = {
     fetchError: 'فشل في تحميل القاعات',
     deleteWarning: 'تحذير: هذه القاعة تحتوي على',
     deleteWarningSuffix: 'حصة دراسية. سيتم التأثير على الجدول الزمني.',
+    // Overdue payments
+    overdueDialogDesc: 'التلاميذ الذين لم يسددوا أقساطهم في هذه القاعة',
+    totalOverdue: 'إجمالي المستحق',
+    unpaidCount: 'عدد غير المسددين',
+    allPaid: 'جميع التلاميذ مسددون',
+    allPaidDesc: 'لا توجد مدفوعات مستحقة في هذه القاعة',
+    overdueAmount: 'المبلغ المستحق',
+    monthsLabel: 'أشهر',
+    addInvoice: 'إضافة قسطة',
+    pendingExists: 'قسطة معلقة',
+    invoiceCreated: 'تم إنشاء القسطة بنجاح - في انتظار الدفع',
+    overdueFetchError: 'فشل في تحميل المدفوعات المستحقة',
   },
 
   // ── Settings ──
@@ -1062,6 +1074,18 @@ const fr: typeof ar = {
     fetchError: 'Échec du chargement des salles',
     deleteWarning: 'Attention : cette salle contient',
     deleteWarningSuffix: 'séances. L\'emploi du temps sera affecté.',
+    // Overdue payments
+    overdueDialogDesc: 'Étudiants qui n\'ont pas payé dans cette salle',
+    totalOverdue: 'Total dû',
+    unpaidCount: 'Non payés',
+    allPaid: 'Tous les étudiants ont payé',
+    allPaidDesc: 'Aucun paiement en retard dans cette salle',
+    overdueAmount: 'Montant dû',
+    monthsLabel: 'mois',
+    addInvoice: 'Ajouter une facture',
+    pendingExists: 'Facture en attente',
+    invoiceCreated: 'Facture créée avec succès - en attente de paiement',
+    overdueFetchError: 'Échec du chargement des paiements en retard',
   },
 
   // ── Settings ──
