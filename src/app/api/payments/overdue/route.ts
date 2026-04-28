@@ -21,6 +21,14 @@ function toYM(date: Date): number {
   return date.getFullYear() * 12 + date.getMonth();
 }
 
+/** Format a Date to dd/mm/yyyy */
+function formatDate(date: Date): string {
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
 /**
  * Calculate the end month (as YM) of a payment's coverage period.
  * Uses paymentDate for the start; falls back to month/year string fields.
@@ -68,7 +76,58 @@ interface OverdueStudent {
   monthlyFee: number;
   totalOverdue: number;
   monthsOverdue: number;
+  nextDueDate: string | null;
   overduePayments: OverduePaymentInfo[];
+}
+
+function calculateNextDueDate(
+  enrollmentDate: Date,
+  payments: Array<{
+    id: string;
+    remainingAmount: number;
+    month: string;
+    year: number;
+    packMonths: number;
+    paymentDate: Date | string | null;
+  }>
+): string | null {
+  if (payments.length === 0) {
+    const dueDate = new Date(enrollmentDate.getTime() + 30 * 24 * 60 * 60 * 1000);
+    return formatDate(dueDate);
+  }
+
+  // Sort payments by paymentDate ascending
+  const sortedByDate = [...payments].sort((a, b) => {
+    const aTime = a.paymentDate
+      ? new Date(a.paymentDate).getTime()
+      : new Date(a.year, getMonthIndex(a.month), 1).getTime();
+    const bTime = b.paymentDate
+      ? new Date(b.paymentDate).getTime()
+      : new Date(b.year, getMonthIndex(b.month), 1).getTime();
+    return aTime - bTime;
+  });
+
+  // Find the latest payment by date
+  let latestPayment: typeof sortedByDate[0] | null = null;
+  let latestDate: Date | null = null;
+
+  for (const p of sortedByDate) {
+    const pDate = p.paymentDate
+      ? (p.paymentDate instanceof Date ? p.paymentDate : new Date(p.paymentDate))
+      : new Date(p.year, getMonthIndex(p.month), 1);
+    if (!latestDate || pDate >= latestDate) {
+      latestDate = pDate;
+      latestPayment = p;
+    }
+  }
+
+  if (latestPayment && latestDate) {
+    const packDays = (latestPayment.packMonths || 1) * 30;
+    const dueDate = new Date(latestDate.getTime() + packDays * 24 * 60 * 60 * 1000);
+    return formatDate(dueDate);
+  }
+
+  return null;
 }
 
 function calculateStudentOverdue(
@@ -104,6 +163,8 @@ function calculateStudentOverdue(
     const monthsOverdue = currentYM - enrollmentYM - 1;
     const totalOverdue = monthsOverdue * student.monthlyFee;
 
+    const nextDueDate = calculateNextDueDate(student.enrollmentDate, []);
+
     return {
       studentId: student.id,
       studentName: student.fullName,
@@ -113,6 +174,7 @@ function calculateStudentOverdue(
       monthlyFee: student.monthlyFee,
       totalOverdue,
       monthsOverdue,
+      nextDueDate,
       overduePayments: [],
     };
   }
@@ -234,6 +296,8 @@ function calculateStudentOverdue(
   const totalOverdue = unpaidOverdue + packOverdue;
   if (totalOverdue <= 0) return null;
 
+  const nextDueDate = calculateNextDueDate(student.enrollmentDate, payments);
+
   return {
     studentId: student.id,
     studentName: student.fullName,
@@ -243,6 +307,7 @@ function calculateStudentOverdue(
     monthlyFee: student.monthlyFee,
     totalOverdue,
     monthsOverdue: maxMonthsOverdue,
+    nextDueDate,
     overduePayments,
   };
 }

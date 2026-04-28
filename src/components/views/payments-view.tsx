@@ -58,6 +58,7 @@ import {
   Phone,
   UserCheck,
   CalendarDays,
+  CalendarClock,
   X,
   ChevronDown,
 } from 'lucide-react';
@@ -148,6 +149,7 @@ interface OverdueStudent {
   totalOverdue: number;
   monthsOverdue: number;
   paymentCount: number;
+  nextDueDate: string | null;
   overduePayments: {
     id: string;
     month: string;
@@ -1631,7 +1633,7 @@ export function PaymentsView() {
                                       </span>
                                     )}
                                   </div>
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-2 flex-wrap">
                                     <span className="font-bold text-red-600">
                                       {student.totalOverdue.toLocaleString()}{' '}
                                       {t.common.dh}
@@ -1642,6 +1644,12 @@ export function PaymentsView() {
                                     >
                                       {student.paymentCount} {t.payments.month}
                                     </Badge>
+                                    {student.nextDueDate && (
+                                      <span className="flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200" dir="ltr">
+                                        <CalendarClock className="h-3 w-3 text-amber-500" />
+                                        {student.nextDueDate}
+                                      </span>
+                                    )}
                                   </div>
                                 </div>
                                 <Button
