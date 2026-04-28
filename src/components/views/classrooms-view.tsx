@@ -630,20 +630,18 @@ export function ClassroomsView() {
                             <span className="text-xs font-normal">{t.common.dh}</span>
                           </p>
                         </div>
-                      </div>
 
-                      {/* Due Date */}
-                      {student.nextDueDate && (
-                        <div className="text-left flex items-center gap-1.5">
-                          <CalendarClock className="w-3.5 h-3.5 text-amber-500" />
+                        {/* Due Date */}
+                        <div className="flex items-center gap-1.5 bg-amber-50 px-2.5 py-1.5 rounded-lg border border-amber-200">
+                          <CalendarClock className="w-4 h-4 text-amber-600" />
                           <div>
-                            <span className="text-[10px] text-muted-foreground">{t.classrooms.dueDate}</span>
-                            <p className="text-amber-700 font-semibold text-xs" dir="ltr">
-                              {student.nextDueDate}
+                            <span className="text-[10px] text-amber-500 font-medium">{t.classrooms.dueDate}</span>
+                            <p className="text-amber-800 font-bold text-sm" dir="ltr">
+                              {student.nextDueDate || '—'}
                             </p>
                           </div>
                         </div>
-                      )}
+                      </div>
                     </div>
 
                     {/* Pending payment warning */}
