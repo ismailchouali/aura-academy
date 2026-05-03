@@ -55,6 +55,8 @@ import {
   Layers,
   UserMinus,
   Sparkles,
+  CircleCheck,
+  CircleAlert,
 } from 'lucide-react';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -80,7 +82,8 @@ interface Student {
   packMonths?: number;
   status: string;
   enrollmentDate: string;
-  payments: unknown[];
+  isPackPaid?: boolean;
+  nextDueDate?: string | null;
 }
 
 interface Service {
@@ -1268,6 +1271,7 @@ export function StudentsView() {
                     <TableHead className="text-right hidden lg:table-cell">{t.students.teacher}</TableHead>
                     <TableHead className="text-right hidden md:table-cell">{t.common.phone}</TableHead>
                     <TableHead className="text-right hidden sm:table-cell">{t.students.fee}</TableHead>
+                    <TableHead className="text-center">الدفعة</TableHead>
                     <TableHead className="text-right">{t.common.status}</TableHead>
                     <TableHead className="text-right hidden lg:table-cell">{t.students.enrollment}</TableHead>
                     <TableHead className="text-right">{t.common.actions}</TableHead>
@@ -1327,6 +1331,17 @@ export function StudentsView() {
                           </Badge>
                         ) : (
                           <span className="text-muted-foreground text-sm">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {student.isPackPaid ? (
+                          <div className="flex items-center justify-center gap-1" title="الpack مخلص">
+                            <CircleCheck className="h-5 w-5 text-emerald-500" />
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-center gap-1" title={student.nextDueDate ? `تاريخ الاستحقاق: ${student.nextDueDate}` : 'لم يدفع بعد'}>
+                            <CircleAlert className="h-5 w-5 text-red-400" />
+                          </div>
                         )}
                       </TableCell>
                       <TableCell className="text-right">

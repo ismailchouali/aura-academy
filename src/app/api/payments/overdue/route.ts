@@ -325,12 +325,14 @@ function calculateStudentOverdue(
     }
     const packDueDate = addCalendarMonths(packStartDate, latestPaid.packMonths);
 
-    // Use day-level comparison: only count months whose due date has passed
+    // Use month-level comparison to correctly iterate through overdue months
     if (todayDate >= packDueDate) {
-      // Iterate month-by-month using actual due dates
+      // Iterate month-by-month using month-level comparison
+      // The old day-level check (checkDate <= todayDate) could skip the current month
+      // when the pack expired on a day later than today's day in the current month
       let checkDate = new Date(packDueDate.getTime());
 
-      while (checkDate <= todayDate) {
+      while (toYM(checkDate) <= currentYM) {
         const monthYM = toYM(checkDate);
         if (!coveredMonths.has(monthYM)) {
           packOverdue += student.monthlyFee;

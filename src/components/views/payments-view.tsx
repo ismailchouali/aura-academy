@@ -527,6 +527,9 @@ export function PaymentsView() {
   const [filterLevelId, setFilterLevelId] = useState('all');
   const [services, setServices] = useState<Service[]>([]);
 
+  // Student name/phone search filter for payments table
+  const [paymentSearch, setPaymentSearch] = useState('');
+
   // Computed: subjects filtered by selected service
   const filterSubjects = useMemo(() => {
     if (filterServiceId === 'all') return [];
@@ -541,6 +544,18 @@ export function PaymentsView() {
     const subj = svc?.subjects.find((sub) => sub.id === filterSubjectId);
     return subj?.levels || [];
   }, [filterServiceId, filterSubjectId, services]);
+
+  // Computed: filter payments by student name or phone
+  const filteredPayments = useMemo(() => {
+    if (!paymentSearch || paymentSearch.length < 1) return payments;
+    const q = paymentSearch.toLowerCase();
+    return payments.filter((p) => {
+      const name = (p.student.fullName || '').toLowerCase();
+      const phone = (p.student.phone || '').toLowerCase();
+      const parentPhone = (p.student.parentPhone || '').toLowerCase();
+      return name.includes(q) || phone.includes(q) || parentPhone.includes(q);
+    });
+  }, [payments, paymentSearch]);
 
   // Dialog states
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -894,10 +909,10 @@ export function PaymentsView() {
 
   // ── Totals ─────────────────────────────────────────────────────────────
 
-  const totalAmount = payments.reduce((s, p) => s + p.amount, 0);
-  const totalDiscount = payments.reduce((s, p) => s + (p.discount || 0), 0);
-  const totalPaid = payments.reduce((s, p) => s + p.paidAmount, 0);
-  const totalRemaining = payments.reduce(
+  const totalAmount = filteredPayments.reduce((s, p) => s + p.amount, 0);
+  const totalDiscount = filteredPayments.reduce((s, p) => s + (p.discount || 0), 0);
+  const totalPaid = filteredPayments.reduce((s, p) => s + p.paidAmount, 0);
+  const totalRemaining = filteredPayments.reduce(
     (s, p) => s + p.remainingAmount,
     0
   );
@@ -915,7 +930,7 @@ export function PaymentsView() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-muted-foreground">
           <Wallet className="h-5 w-5" />
-          <span className="text-sm">{payments.length} {t.payments.paymentCount}</span>
+          <span className="text-sm">{filteredPayments.length} {t.payments.paymentCount}</span>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -976,6 +991,18 @@ export function PaymentsView() {
       {/* Filters */}
       <Card>
         <CardContent className="p-4">
+          {/* Student search row */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-3">
+            <div className="relative flex-1 w-full">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="بحث بالاسم أو رقم الهاتف..."
+                value={paymentSearch}
+                onChange={(e) => setPaymentSearch(e.target.value)}
+                className="pr-9"
+              />
+            </div>
+          </div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
             <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-1 w-full">
@@ -1085,12 +1112,12 @@ export function PaymentsView() {
         <CardContent className="p-0">
           {loading ? (
             <TableSkeleton />
-          ) : payments.length === 0 ? (
+          ) : filteredPayments.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <Receipt className="h-12 w-12 mx-auto mb-3 opacity-30" />
-              <p className="font-medium">{t.payments.noPayments}</p>
+              <p className="font-medium">{paymentSearch ? 'لا توجد نتائج' : t.payments.noPayments}</p>
               <p className="text-sm mt-1">
-                {t.payments.addFirst}
+                {paymentSearch ? 'جرب كلمة بحث أخرى' : t.payments.addFirst}
               </p>
             </div>
           ) : (
@@ -1120,7 +1147,7 @@ export function PaymentsView() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {payments.map((payment) => (
+                  {filteredPayments.map((payment) => (
                     <TableRow key={payment.id}>
                       <TableCell className="text-right">
                         <div>
