@@ -309,43 +309,46 @@ function calculateStudentOverdue(
   const latestPaid = sorted.find((p) => p.remainingAmount === 0);
 
   if (latestPaid) {
-    const packEndYM = getPaymentEndYM(latestPaid);
+    // Compute pack start date and due date
+    let packStartDate: Date;
+    if (latestPaid.paymentDate) {
+      packStartDate =
+        latestPaid.paymentDate instanceof Date
+          ? latestPaid.paymentDate
+          : new Date(latestPaid.paymentDate);
+    } else {
+      packStartDate = new Date(
+        latestPaid.year,
+        getMonthIndex(latestPaid.month),
+        1
+      );
+    }
+    const packDueDate = addCalendarMonths(packStartDate, latestPaid.packMonths);
 
-    if (currentYM >= packEndYM) {
-      // Count months from the due date month to current month (inclusive)
-      // that do NOT already have a payment record.
-      for (let m = packEndYM; m <= currentYM; m++) {
-        if (!coveredMonths.has(m)) {
+    // Use day-level comparison: only count months whose due date has passed
+    if (todayDate >= packDueDate) {
+      // Iterate month-by-month using actual due dates
+      let checkDate = new Date(packDueDate.getTime());
+
+      while (checkDate <= todayDate) {
+        const monthYM = toYM(checkDate);
+        if (!coveredMonths.has(monthYM)) {
           packOverdue += student.monthlyFee;
           packMonthsExpired++;
         }
+        checkDate = addCalendarMonths(checkDate, 1);
       }
 
       if (packMonthsExpired > 0) {
         maxMonthsOverdue = Math.max(maxMonthsOverdue, packMonthsExpired);
 
-        // Derive the pack's end month from the actual due date
-        let packStartDate: Date;
-        if (latestPaid.paymentDate) {
-          packStartDate =
-            latestPaid.paymentDate instanceof Date
-              ? latestPaid.paymentDate
-              : new Date(latestPaid.paymentDate);
-        } else {
-          packStartDate = new Date(
-            latestPaid.year,
-            getMonthIndex(latestPaid.month),
-            1
-          );
-        }
-        const dueDate = addCalendarMonths(packStartDate, latestPaid.packMonths);
-        const endMonthName = MONTH_ORDER[dueDate.getMonth()];
+        const endMonthName = MONTH_ORDER[packDueDate.getMonth()];
 
         overduePayments.push({
           id: `pack_expired_${latestPaid.id}`,
           month: endMonthName,
           monthLabel: MONTH_LABELS[endMonthName] || endMonthName,
-          year: dueDate.getFullYear(),
+          year: packDueDate.getFullYear(),
           remainingAmount: packOverdue,
           monthsOverdue: packMonthsExpired,
           type: 'expired_pack',
