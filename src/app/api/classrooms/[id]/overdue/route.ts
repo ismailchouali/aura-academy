@@ -29,6 +29,39 @@ function formatDate(date: Date): string {
   return `${day}/${month}/${year}`;
 }
 
+/** Add N calendar months to a date, keeping the same day of month */
+function addCalMonths(date: Date, months: number): Date {
+  const day = date.getDate();
+  const result = new Date(date.getFullYear(), date.getMonth() + months, day);
+  if (result.getDate() !== day) {
+    result.setDate(0); // clamp to last day of month (e.g. Jan 31 → Feb 28)
+  }
+  return result;
+}
+
+/** Check if a date is the last day of its month */
+function isLastDayOfMonth(date: Date): boolean {
+  const nextDay = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
+  return nextDay.getMonth() !== date.getMonth();
+}
+
+/** Get the end YM for a payment using actual day-level due date */
+function getPaymentEndYM(payment: {
+  paymentDate?: Date | string | null;
+  month: string;
+  year: number;
+  packMonths: number;
+}): number {
+  let startDate: Date;
+  if (payment.paymentDate) {
+    startDate = payment.paymentDate instanceof Date ? payment.paymentDate : new Date(payment.paymentDate);
+  } else {
+    startDate = new Date(payment.year, getMonthIndex(payment.month), 1);
+  }
+  const dueDate = addCalMonths(startDate, payment.packMonths);
+  return toYM(dueDate);
+}
+
 interface OverdueStudentInfo {
   studentId: string;
   studentName: string;
@@ -143,21 +176,7 @@ export async function GET(
         pendingPaymentId = currentMonthPending.id;
       }
 
-      // ── Calculate next due date ──
-      // Logic: find the latest payment date, add packMonths calendar months
-      // Same day of month is preserved (e.g. March 5 → April 5)
-
-      /** Add N calendar months to a date, keeping the same day of month */
-      const addCalMonths = (date: Date, months: number): Date => {
-        const day = date.getDate();
-        const result = new Date(date.getFullYear(), date.getMonth() + months, day);
-        if (result.getDate() !== day) {
-          result.setDate(0); // clamp to last day of month (e.g. Jan 31 → Feb 28)
-        }
-        return result;
-      };
-
-      // Track the day-level due date for day-level comparison
+      // ── Calculate next due date (day-level) ──
       let nextDueDateObj: Date | null = null;
 
       if (payments.length > 0) {
@@ -171,17 +190,6 @@ export async function GET(
             : new Date(b.year, getMonthIndex(b.month), 1).getTime();
           return aTime - bTime;
         });
-
-        // Find the first payment date (awal mra)
-        const firstPayment = sortedByDate[0];
-        let firstPaymentDate: Date;
-        if (firstPayment.paymentDate) {
-          firstPaymentDate = firstPayment.paymentDate instanceof Date
-            ? firstPayment.paymentDate
-            : new Date(firstPayment.paymentDate);
-        } else {
-          firstPaymentDate = new Date(firstPayment.year, getMonthIndex(firstPayment.month), 1);
-        }
 
         // Find the latest payment to determine current pack duration
         let latestPackPayment: typeof sortedByDate[0] | null = null;
@@ -203,8 +211,17 @@ export async function GET(
           const dueDate = addCalMonths(latestPackDate, latestPackPayment.packMonths || 1);
           nextDueDate = formatDate(dueDate);
           nextDueDateObj = dueDate;
-        } else if (firstPaymentDate) {
+        } else {
           // Fallback to first payment + 1 calendar month
+          const firstPayment = sortedByDate[0];
+          let firstPaymentDate: Date;
+          if (firstPayment.paymentDate) {
+            firstPaymentDate = firstPayment.paymentDate instanceof Date
+              ? firstPayment.paymentDate
+              : new Date(firstPayment.paymentDate);
+          } else {
+            firstPaymentDate = new Date(firstPayment.year, getMonthIndex(firstPayment.month), 1);
+          }
           const dueDate = addCalMonths(firstPaymentDate, 1);
           nextDueDate = formatDate(dueDate);
           nextDueDateObj = dueDate;
@@ -236,37 +253,42 @@ export async function GET(
         totalOverdue = monthsOverdue * student.monthlyFee;
         maxMonthsOverdue = monthsOverdue;
       } else {
-        // Build set of covered months
+        // Build set of covered months using day-level due dates
+        // Key fix: use addCalMonths to compute actual due date, and only include
+        // the due date month if it's the last day of the month.
         const coveredMonths = new Set<number>();
         for (const p of payments) {
-          let startYM: number;
+          let startDate: Date;
           if (p.paymentDate) {
-            startYM = toYM(
-              p.paymentDate instanceof Date ? p.paymentDate : new Date(p.paymentDate)
-            );
+            startDate = p.paymentDate instanceof Date ? p.paymentDate : new Date(p.paymentDate);
           } else {
-            startYM = p.year * 12 + getMonthIndex(p.month);
+            startDate = new Date(p.year, getMonthIndex(p.month), 1);
           }
-          for (let m = 0; m < p.packMonths; m++) {
-            coveredMonths.add(startYM + m);
+          const startYM = toYM(startDate);
+          const dueDate = addCalMonths(startDate, p.packMonths);
+          const dueDateYM = toYM(dueDate);
+
+          // Add the start month
+          coveredMonths.add(startYM);
+
+          // Add intermediate months between start and due date month
+          for (let m = startYM + 1; m < dueDateYM; m++) {
+            coveredMonths.add(m);
+          }
+
+          // Add the due date month ONLY if it's the last day of the month
+          if (isLastDayOfMonth(dueDate)) {
+            coveredMonths.add(dueDateYM);
           }
         }
 
-        // Find unpaid payments
+        // Find unpaid payments whose coverage has passed
         for (const p of payments) {
           if (p.remainingAmount > 0) {
-            let startYM: number;
-            if (p.paymentDate) {
-              startYM = toYM(
-                p.paymentDate instanceof Date ? p.paymentDate : new Date(p.paymentDate)
-              );
-            } else {
-              startYM = p.year * 12 + getMonthIndex(p.month);
-            }
-            const endYM = startYM + p.packMonths - 1;
+            const endYM = getPaymentEndYM(p);
 
-            if (currentYM > endYM) {
-              const monthsLate = currentYM - endYM;
+            if (currentYM >= endYM) {
+              const monthsLate = Math.max(1, currentYM - endYM);
               totalOverdue += p.remainingAmount;
               maxMonthsOverdue = Math.max(maxMonthsOverdue, monthsLate);
               overduePayments.push({
@@ -294,23 +316,14 @@ export async function GET(
 
         const latestPaid = sorted.find((p) => p.remainingAmount === 0);
         if (latestPaid) {
-          let packStartYM: number;
-          if (latestPaid.paymentDate) {
-            packStartYM = toYM(
-              latestPaid.paymentDate instanceof Date
-                ? latestPaid.paymentDate
-                : new Date(latestPaid.paymentDate)
-            );
-          } else {
-            packStartYM =
-              latestPaid.year * 12 + getMonthIndex(latestPaid.month);
-          }
-          const packEndYM = packStartYM + latestPaid.packMonths - 1;
+          const packEndYM = getPaymentEndYM(latestPaid);
 
-          if (currentYM > packEndYM) {
+          if (currentYM >= packEndYM) {
             let packOverdue = 0;
             let packMonthsExpired = 0;
-            for (let m = packEndYM + 1; m <= currentYM; m++) {
+            // Count months from the due date month to current month (inclusive)
+            // that do NOT already have a payment record.
+            for (let m = packEndYM; m <= currentYM; m++) {
               if (!coveredMonths.has(m)) {
                 packOverdue += student.monthlyFee;
                 packMonthsExpired++;
