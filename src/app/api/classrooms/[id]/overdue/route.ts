@@ -157,6 +157,9 @@ export async function GET(
         return result;
       };
 
+      // Track the day-level due date for day-level comparison
+      let nextDueDateObj: Date | null = null;
+
       if (payments.length > 0) {
         // Sort payments by paymentDate ascending (first payment first)
         const sortedByDate = [...payments].sort((a, b) => {
@@ -199,10 +202,12 @@ export async function GET(
         if (latestPackPayment && latestPackDate) {
           const dueDate = addCalMonths(latestPackDate, latestPackPayment.packMonths || 1);
           nextDueDate = formatDate(dueDate);
+          nextDueDateObj = dueDate;
         } else if (firstPaymentDate) {
           // Fallback to first payment + 1 calendar month
           const dueDate = addCalMonths(firstPaymentDate, 1);
           nextDueDate = formatDate(dueDate);
+          nextDueDateObj = dueDate;
         }
       } else {
         // No payments - use enrollment date + 1 calendar month
@@ -211,6 +216,15 @@ export async function GET(
           : new Date(student.enrollmentDate);
         const dueDate = addCalMonths(enrollmentDate, 1);
         nextDueDate = formatDate(dueDate);
+        nextDueDateObj = dueDate;
+      }
+
+      // ── Day-level check: if next due date hasn't arrived yet, skip this student ──
+      if (nextDueDateObj) {
+        const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        if (todayDate < nextDueDateObj) {
+          continue; // Not overdue yet
+        }
       }
 
       if (payments.length === 0) {

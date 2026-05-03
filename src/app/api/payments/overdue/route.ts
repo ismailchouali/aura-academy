@@ -91,7 +91,12 @@ function addCalendarMonths(date: Date, months: number): Date {
   return result;
 }
 
-function calculateNextDueDate(
+/**
+ * Calculate the next due date as a Date object (day-level precision).
+ * - No payments: enrollmentDate + 1 month
+ * - Has payments: latest paymentDate + packMonths
+ */
+function getNextDueDate(
   enrollmentDate: Date,
   payments: Array<{
     id: string;
@@ -101,10 +106,9 @@ function calculateNextDueDate(
     packMonths: number;
     paymentDate: Date | string | null;
   }>
-): string | null {
+): Date | null {
   if (payments.length === 0) {
-    const dueDate = addCalendarMonths(enrollmentDate, 1);
-    return formatDate(dueDate);
+    return addCalendarMonths(enrollmentDate, 1);
   }
 
   // Sort payments by paymentDate ascending
@@ -133,11 +137,25 @@ function calculateNextDueDate(
   }
 
   if (latestPayment && latestDate) {
-    const dueDate = addCalendarMonths(latestDate, latestPayment.packMonths || 1);
-    return formatDate(dueDate);
+    return addCalendarMonths(latestDate, latestPayment.packMonths || 1);
   }
 
   return null;
+}
+
+function calculateNextDueDate(
+  enrollmentDate: Date,
+  payments: Array<{
+    id: string;
+    remainingAmount: number;
+    month: string;
+    year: number;
+    packMonths: number;
+    paymentDate: Date | string | null;
+  }>
+): string | null {
+  const dueDate = getNextDueDate(enrollmentDate, payments);
+  return dueDate ? formatDate(dueDate) : null;
 }
 
 function calculateStudentOverdue(
@@ -160,7 +178,21 @@ function calculateStudentOverdue(
   }>
 ): OverdueStudent | null {
   const now = new Date();
+  const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const currentYM = toYM(now);
+
+  // ── Day-level check: calculate next due date ──
+  const nextDue = getNextDueDate(
+    student.enrollmentDate instanceof Date
+      ? student.enrollmentDate
+      : new Date(student.enrollmentDate),
+    payments
+  );
+
+  // If the next due date hasn't arrived yet (today < due date), NOT overdue
+  if (nextDue && todayDate < nextDue) {
+    return null;
+  }
 
   /* ── Case A: No payments at all ─────────────────────────────── */
 
