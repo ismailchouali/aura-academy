@@ -246,17 +246,31 @@ export async function GET(
 
       if (payments.length === 0) {
         // No payments at all - check if enrollment is old enough
-        const enrollmentYM = toYM(new Date(student.enrollmentDate));
-        if (enrollmentYM >= currentYM - 1) continue; // 1 month grace
+        const enrollmentDate = student.enrollmentDate instanceof Date
+          ? student.enrollmentDate
+          : new Date(student.enrollmentDate);
+        const enrollmentYM = toYM(enrollmentDate);
+        const enrollmentDay = enrollmentDate.getDate();
+        const firstDueYM = enrollmentYM + 1;
+        if (firstDueYM > currentYM) continue; // 1 month grace
 
-        const monthsOverdue = currentYM - enrollmentYM - 1;
-        totalOverdue = monthsOverdue * student.monthlyFee;
-        maxMonthsOverdue = monthsOverdue;
+        // For the first due month, check if the payment cycle day has arrived
+        if (firstDueYM === currentYM) {
+          const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+          const effectiveCycleDay = Math.min(enrollmentDay, lastDayOfMonth);
+          if (now.getDate() < effectiveCycleDay) continue;
+        }
+
+        // Sequential: only show 1 overdue month at a time
+        totalOverdue = student.monthlyFee;
+        maxMonthsOverdue = 1;
       } else {
-        // Build set of covered months using day-level due dates
-        // Key fix: use addCalMonths to compute actual due date, and only include
-        // the due date month if it's the last day of the month.
+        // Build two sets:
+        // - anyPaymentMonths: months with ANY payment record (paid or unpaid)
+        // - coveredMonths: months covered by FULLY PAID payments only
         const coveredMonths = new Set<number>();
+        const anyPaymentMonths = new Set<number>();
+
         for (const p of payments) {
           let startDate: Date;
           if (p.paymentDate) {
@@ -268,17 +282,24 @@ export async function GET(
           const dueDate = addCalMonths(startDate, p.packMonths);
           const dueDateYM = toYM(dueDate);
 
-          // Add the start month
-          coveredMonths.add(startYM);
-
-          // Add intermediate months between start and due date month
+          // Track months with ANY payment record
+          anyPaymentMonths.add(startYM);
           for (let m = startYM + 1; m < dueDateYM; m++) {
-            coveredMonths.add(m);
+            anyPaymentMonths.add(m);
+          }
+          if (isLastDayOfMonth(dueDate)) {
+            anyPaymentMonths.add(dueDateYM);
           }
 
-          // Add the due date month ONLY if it's the last day of the month
-          if (isLastDayOfMonth(dueDate)) {
-            coveredMonths.add(dueDateYM);
+          // Only track months from FULLY PAID payments
+          if (p.remainingAmount === 0) {
+            coveredMonths.add(startYM);
+            for (let m = startYM + 1; m < dueDateYM; m++) {
+              coveredMonths.add(m);
+            }
+            if (isLastDayOfMonth(dueDate)) {
+              coveredMonths.add(dueDateYM);
+            }
           }
         }
 
@@ -331,48 +352,45 @@ export async function GET(
             let packOverdue = 0;
             let packMonthsExpired = 0;
 
+            const studentEnrollmentDate = student.enrollmentDate instanceof Date
+              ? student.enrollmentDate
+              : new Date(student.enrollmentDate);
+            const enrollmentDay = studentEnrollmentDate.getDate();
+
             // Iterate month-by-month using month-level comparison
-            // The old day-level check could skip the current month
+            // Sequential logic: stop at the first month not covered by a PAID payment.
+            // The student must pay each month in order before the next appears.
             let checkDate = new Date(packDueDate.getTime());
             while (toYM(checkDate) <= currentYM) {
               const monthYM = toYM(checkDate);
-              if (!coveredMonths.has(monthYM)) {
+
+              // For the current month, only count if the payment cycle day has arrived
+              // (based on the student's enrollment date day, e.g., the 28th)
+              if (monthYM === currentYM) {
+                const lastDayOfCurrentMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+                const effectiveCycleDay = Math.min(enrollmentDay, lastDayOfCurrentMonth);
+                if (now.getDate() < effectiveCycleDay) {
+                  break;
+                }
+              }
+
+              // Only count if not covered by a PAID payment AND not already counted by Step 1
+              if (!coveredMonths.has(monthYM) && !anyPaymentMonths.has(monthYM)) {
                 packOverdue += student.monthlyFee;
                 packMonthsExpired++;
               }
+
+              // Sequential: stop at the first month that's not fully covered by a PAID payment.
+              if (!coveredMonths.has(monthYM)) {
+                break;
+              }
+
               checkDate = addCalMonths(checkDate, 1);
             }
 
             if (packMonthsExpired > 0) {
               totalOverdue += packOverdue;
               maxMonthsOverdue = Math.max(maxMonthsOverdue, packMonthsExpired);
-            }
-          }
-        }
-
-        // Also check if current month is not covered at all (no expired pack counted it)
-        // Use day-level check: only count if the due date for this month has passed
-        if (!coveredMonths.has(currentYM) && !hasPendingPayment) {
-          // Determine the payment cycle day from the latest payment
-          const latestP = sorted[0]; // sorted by date descending
-          if (latestP) {
-            let refDate: Date;
-            if (latestP.paymentDate) {
-              refDate = latestP.paymentDate instanceof Date
-                ? latestP.paymentDate
-                : new Date(latestP.paymentDate);
-            } else {
-              refDate = new Date(latestP.year, getMonthIndex(latestP.month), 1);
-            }
-            const paymentDay = refDate.getDate();
-            const dueDateInCurrentMonth = new Date(now.getFullYear(), now.getMonth(), paymentDay);
-            // Clamp to last day if needed (e.g., day 31 in a 30-day month)
-            if (dueDateInCurrentMonth.getDate() !== paymentDay) {
-              dueDateInCurrentMonth.setDate(0);
-            }
-            if (todayDate >= dueDateInCurrentMonth) {
-              totalOverdue += student.monthlyFee;
-              maxMonthsOverdue = Math.max(maxMonthsOverdue, 1);
             }
           }
         }
