@@ -169,8 +169,9 @@ interface OverdueStudent {
   monthlyFee: number;
   totalOverdue: number;
   monthsOverdue: number;
-  paymentCount: number;
   nextDueDate: string | null;
+  subjectName: string | null;
+  levelName: string | null;
   overduePayments: {
     id: string;
     month: string;
@@ -1772,6 +1773,11 @@ export function PaymentsView() {
                                         {t.students.guardian}{student.parentName}
                                       </span>
                                     )}
+                                    {student.subjectName && (
+                                      <span className="text-[11px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded inline-block mt-0.5">
+                                        {student.subjectName}
+                                      </span>
+                                    )}
                                   </div>
                                   <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                                     {student.phone && (
@@ -1802,7 +1808,7 @@ export function PaymentsView() {
                                       variant="outline"
                                       className="text-[10px] border-red-200 text-red-600"
                                     >
-                                      {student.paymentCount} {t.payments.month}
+                                      {student.monthsOverdue} {t.payments.month}
                                     </Badge>
                                     {student.nextDueDate && (
                                       <span className="flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200" dir="ltr">

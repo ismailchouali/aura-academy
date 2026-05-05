@@ -96,12 +96,24 @@ export async function GET(request: NextRequest) {
           const month = String(dueDate.getMonth() + 1).padStart(2, '0');
           const year = dueDate.getFullYear();
           nextDueDate = `${day}/${month}/${year}`;
+        }
 
-          // Pack is considered paid if:
-          // 1. The latest payment is fully paid (remainingAmount === 0)
-          // 2. The due date hasn't passed yet (today < dueDate)
-          if (latestPayment.remainingAmount === 0 && todayDate < dueDate) {
-            isPackPaid = true;
+        // Pack is considered paid if ANY fully-paid payment's coverage
+        // period includes the current month (not just the latest payment)
+        for (const p of payments) {
+          if (p.remainingAmount === 0) {
+            let pStartDate: Date;
+            if (p.paymentDate) {
+              pStartDate = p.paymentDate instanceof Date ? p.paymentDate : new Date(p.paymentDate);
+            } else {
+              pStartDate = new Date(p.year, getMonthIndex(p.month), 1);
+            }
+            const pDueDate = addCalendarMonths(pStartDate, p.packMonths || 1);
+            // Check if current month is within [startMonth, dueMonth)
+            if (toYM(pStartDate) <= currentYM && currentYM < toYM(pDueDate)) {
+              isPackPaid = true;
+              break;
+            }
           }
         }
       }

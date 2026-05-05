@@ -94,6 +94,8 @@ interface OverdueStudent {
   totalOverdue: number;
   monthsOverdue: number;
   nextDueDate: string | null;
+  subjectName: string | null;
+  levelName: string | null;
   overduePayments: OverduePaymentInfo[];
 }
 
@@ -234,6 +236,8 @@ function calculateStudentOverdue(
       totalOverdue,
       monthsOverdue: 1,
       nextDueDate,
+      subjectName: null,
+      levelName: null,
       overduePayments: [],
     };
   }
@@ -416,6 +420,8 @@ function calculateStudentOverdue(
     totalOverdue,
     monthsOverdue: maxMonthsOverdue,
     nextDueDate,
+    subjectName: null,
+    levelName: null,
     overduePayments,
   };
 }
@@ -468,6 +474,9 @@ export async function GET() {
       const payments = paymentsByStudent.get(student.id) || [];
       const result = calculateStudentOverdue(student, payments);
       if (result) {
+        // Attach subject/level info from the student record
+        result.subjectName = student?.level?.subject?.nameAr || null;
+        result.levelName = student?.level?.nameAr || null;
         overdueStudents.push(result);
       }
     }
