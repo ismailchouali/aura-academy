@@ -3,8 +3,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -482,50 +480,6 @@ function printTeacherBon(
   }
 }
 
-async function generateTeacherBonPdfBlob(
-  payment: TeacherPayment,
-  teacher: Teacher | undefined,
-  calcData: CalculationData | undefined,
-  t: Translations,
-  getMonthName: (month: string) => string
-): Promise<Blob> {
-  const bonHtml = getTeacherBonHtml(payment, teacher, calcData, t, getMonthName);
-  const cleanHtml = bonHtml.replace(
-    /<div class="no-print"[\s\S]*<\/div>\s*<\/body>/,
-    '</body>'
-  );
-  const container = document.createElement('div');
-  container.style.position = 'fixed';
-  container.style.left = '-9999px';
-  container.style.top = '0';
-  container.style.width = '800px';
-  container.innerHTML = cleanHtml;
-  document.body.appendChild(container);
-  try {
-    await new Promise(resolve => setTimeout(resolve, 500));
-    const canvas = await html2canvas(container, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = pdf.internal.pageSize.getHeight();
-    const imgWidth = pdfWidth - 10;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-    let heightLeft = imgHeight;
-    let position = 5;
-    pdf.addImage(imgData, 'PNG', 5, position, imgWidth, imgHeight);
-    heightLeft -= (pdfHeight - 10);
-    while (heightLeft > 0) {
-      position = heightLeft - imgHeight + 5;
-      pdf.addPage();
-      pdf.addImage(imgData, 'PNG', 5, position, imgWidth, imgHeight);
-      heightLeft -= (pdfHeight - 10);
-    }
-    return pdf.output('blob');
-  } finally {
-    document.body.removeChild(container);
-  }
-}
-
 // ─── Main Component ──────────────────────────────────────────────────
 
 export function TeacherPaymentsView() {
@@ -826,49 +780,7 @@ export function TeacherPaymentsView() {
     }
 
     try {
-      // Fetch calc data if needed
-      let teacherCalc = calcData.find((c) => c.teacherId === payment.teacherId);
-      if (!teacherCalc || !teacherCalc.studentDetails) {
-        try {
-          const params = new URLSearchParams({
-            calculate: 'true',
-            teacherId: payment.teacherId,
-            month: payment.month,
-            year: String(payment.year),
-          });
-          const res = await fetch(`/api/teacher-payments?${params.toString()}`);
-          if (res.ok) {
-            const data = await res.json();
-            teacherCalc = data.find((c: CalculationData) => c.teacherId === payment.teacherId) || undefined;
-          }
-        } catch {
-          // fallback
-        }
-      }
-
-      const teacherName = teacher?.fullName || 'bon';
-      const monthLabel = getMonthName(payment.month);
-      const fileName = `bon_${teacherName}_${monthLabel}.pdf`;
-
-      // Generate PDF blob
-      const pdfBlob = await generateTeacherBonPdfBlob(payment, teacher, teacherCalc, t, getMonthName);
-      const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
-
-      // Try Web Share API (sends file directly to WhatsApp on mobile)
-      if (navigator.share && navigator.canShare) {
-        try {
-          const shareData = { files: [pdfFile] };
-          if (navigator.canShare(shareData)) {
-            await navigator.share(shareData);
-            return;
-          }
-        } catch (e) {
-          if ((e as Error).name === 'AbortError') return;
-          // Fall through to fallback
-        }
-      }
-
-      // Fallback: open WhatsApp + download PDF
+      // Format phone
       const cleanPhone = phone.replace(/[^0-9+]/g, '').replace(/^\+/, '');
       let whatsappPhone = cleanPhone;
       if (whatsappPhone.startsWith('0') && whatsappPhone.length >= 10) {
@@ -876,12 +788,39 @@ export function TeacherPaymentsView() {
       } else if (whatsappPhone.startsWith('6') || whatsappPhone.startsWith('7')) {
         whatsappPhone = '212' + whatsappPhone;
       }
+
+      // Generate PDF from server
+      const res = await fetch('/api/teacher-payments/bon-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paymentId: payment.id }),
+      });
+      if (!res.ok) throw new Error('PDF generation failed');
+      const pdfBlob = await res.blob();
+      const disposition = res.headers.get('Content-Disposition');
+      const match = disposition?.match(/filename="?([^"]+)"?/);
+      const fileName = match?.[1] || `bon_${teacher?.fullName || 'prof'}_${payment.month}.pdf`;
+      const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
+
+      // Try Web Share API
+      if (navigator.share && navigator.canShare) {
+        try {
+          if (navigator.canShare({ files: [pdfFile] })) {
+            await navigator.share({ files: [pdfFile] });
+            return;
+          }
+        } catch (e) {
+          if ((e as Error).name === 'AbortError') return;
+        }
+      }
+
+      // Desktop: open WhatsApp + download PDF
       window.open(`https://wa.me/${whatsappPhone}`, '_blank');
       const url = URL.createObjectURL(pdfBlob);
       const a = document.createElement('a');
       a.href = url; a.download = fileName; a.click();
       URL.revokeObjectURL(url);
-      toast.success('تم فتح واتساب وتحميل البون كـ PDF - أرفق البون في المحادثة');
+      toast.success('تم تحميل البون كـ PDF وفتح واتساب');
     } catch (err) {
       console.error('WhatsApp send error:', err);
       toast.error('حدث خطأ أثناء إرسال البون');
