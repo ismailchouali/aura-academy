@@ -806,54 +806,31 @@ export function TeacherPaymentsView() {
         }
       }
 
-      const bonHtml = getTeacherBonHtml(payment, teacher, teacherCalc, t, getMonthName);
-
-      // Create a hidden container and render the bon
-      const container = document.createElement('div');
-      container.innerHTML = bonHtml.replace(/<!DOCTYPE[^>]*>/, '').replace(/<html[^>]*>/, '').replace(/<head>[\s\S]*?<\/head>/, '').replace(/<body>/, '').replace(/<\/body>/, '').replace(/<\/html>/, '').replace(/<script[\s\S]*?<\/script>/, '');
-      container.style.position = 'absolute';
-      container.style.left = '-9999px';
-      container.style.top = '0';
-      container.style.width = '700px';
-      document.body.appendChild(container);
-
-      const html2pdf = (await import('html2pdf.js')).default;
-      const teacherName = payment.teacher?.fullName || teacher?.fullName || 'teacher';
-      const blob = await html2pdf()
-        .set({
-          margin: 10,
-          filename: `bon_prof_${teacherName.replace(/\s+/g, '_')}.pdf`,
-          image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: { scale: 2, useCORS: true },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        })
-        .from(container.querySelector('.bon-container') || container)
-        .outputPdf('blob');
-
-      document.body.removeChild(container);
-
-      // Try Web Share API first
-      if (navigator.share && navigator.canShare) {
-        const file = new File([blob], `bon_prof_${teacherName.replace(/\s+/g, '_')}.pdf`, { type: 'application/pdf' });
-        const shareData = { files: [file], title: `بون دفع أستاذ - ${teacherName}` };
-        if (navigator.canShare(shareData)) {
-          await navigator.share(shareData);
-          return;
-        }
-      }
-
-      // Fallback: download PDF and open WhatsApp
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `bon_prof_${teacherName.replace(/\s+/g, '_')}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-
+      // Open WhatsApp
       const cleanPhone = phone.replace(/[^0-9+]/g, '');
       const whatsappPhone = cleanPhone.startsWith('+') ? cleanPhone.slice(1) : cleanPhone;
       window.open(`https://wa.me/${whatsappPhone}`, '_blank');
-      toast.success('تم تحميل البون PDF وفتح واتساب');
+
+      // Open bon in new tab for printing/saving as PDF
+      const bonHtml = getTeacherBonHtml(payment, teacher, teacherCalc, t, getMonthName);
+      const modifiedHtml = bonHtml.replace(
+        /<div class="no-print"[^>]*>[\s\S]*?<\/div>\s*<script[\s\S]*?<\/script>\s*<\/body>/,
+        `<div class="no-print" style="text-align:center; margin-top:12px; display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
+    <button onclick="window.print()" style="padding:8px 24px; background:#0d9488; color:white; border:none; border-radius:6px; cursor:pointer; font-family:inherit; font-size:14px;">${t.teacherPayments.bonPrint}</button>
+    <button onclick="try{window.close();}catch(e){}" style="padding:8px 24px; background:#64748b; color:white; border:none; border-radius:6px; cursor:pointer; font-family:inherit; font-size:14px;">إغلاق</button>
+  </div>
+  <div class="no-print" style="text-align:center; margin-top:8px; font-size:12px; color:#64748b;">
+    💡 يمكنك حفظ البون كـ PDF من نافذة الطباعة (اختر "Save as PDF" كطابعة)
+  </div>
+</body>`
+      );
+      const win = window.open('', '_blank', 'width=750,height=900');
+      if (win) {
+        win.document.write(modifiedHtml);
+        win.document.close();
+      }
+
+      toast.success('تم فتح واتساب ونافذة البون');
     } catch (err) {
       console.error('WhatsApp send error:', err);
       toast.error('حدث خطأ أثناء إرسال البون');
