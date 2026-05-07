@@ -807,8 +807,14 @@ export function TeacherPaymentsView() {
       }
 
       // Open WhatsApp
-      const cleanPhone = phone.replace(/[^0-9+]/g, '');
-      const whatsappPhone = cleanPhone.startsWith('+') ? cleanPhone.slice(1) : cleanPhone;
+      const cleanPhone = phone.replace(/[^0-9+]/g, '').replace(/^\+/, '');
+      let whatsappPhone = cleanPhone;
+      // Format Moroccan numbers: 06/07 → 2126/2127
+      if (whatsappPhone.startsWith('0') && whatsappPhone.length >= 10) {
+        whatsappPhone = '212' + whatsappPhone.slice(1);
+      } else if (whatsappPhone.startsWith('6') || whatsappPhone.startsWith('7')) {
+        whatsappPhone = '212' + whatsappPhone;
+      }
       window.open(`https://wa.me/${whatsappPhone}`, '_blank');
 
       // Open bon in new tab for printing/saving as PDF
