@@ -162,11 +162,10 @@ function LanguageToggle() {
 }
 
 export default function Home() {
-  const { currentView, setCurrentView, lang } = useAppStore();
+  const { currentView, setCurrentView, lang, userRole, setUserRole: setStoreUserRole } = useAppStore();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [userName, setUserName] = useState('');
-  const [userRole, setUserRole] = useState<string>('');
   const [accessPages, setAccessPages] = useState<string>('');
   const t = useT();
 
@@ -195,7 +194,8 @@ export default function Home() {
       .then(data => {
         setIsAuthenticated(true);
         setUserName(data.user?.fullName || 'مستخدم');
-        setUserRole(data.user?.role || '');
+        const role = data.user?.role || '';
+        setStoreUserRole(role);
         setAccessPages(data.user?.accessPages || '');
       })
       .catch(() => {

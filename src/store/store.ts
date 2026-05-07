@@ -21,6 +21,8 @@ interface AppState {
   lang: Lang;
   setLang: (lang: Lang) => void;
   toggleLang: () => void;
+  userRole: string;
+  setUserRole: (role: string) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -30,4 +32,6 @@ export const useAppStore = create<AppState>((set) => ({
   setLang: (lang) => set({ lang }),
   toggleLang: () =>
     set((state) => ({ lang: state.lang === 'ar' ? 'fr' : 'ar' })),
+  userRole: '',
+  setUserRole: (role) => set({ userRole: role }),
 }));

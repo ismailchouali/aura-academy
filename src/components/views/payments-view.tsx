@@ -61,8 +61,10 @@ import {
   CalendarClock,
   X,
   ChevronDown,
+  MessageCircle,
 } from 'lucide-react';
 import { useT } from '@/hooks/use-translation';
+import { useAppStore } from '@/store/store';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -226,6 +228,8 @@ function TableSkeleton() {
 
 export function PaymentsView() {
   const t = useT();
+  const { userRole } = useAppStore();
+  const isAdmin = userRole === 'ADMIN';
 
   // ── Derived month data ──
   const MONTHS = useMemo(() =>
@@ -290,13 +294,13 @@ export function PaymentsView() {
     }
   }, [t]);
 
-  const generateBon = useCallback((payment: Payment) => {
+  const getBonHtml = useCallback((payment: Payment) => {
     const student = payment.student;
     const monthLabel = MONTH_NAMES[payment.month] || payment.month;
     const paymentDate = payment.paymentDate ? formatDate(payment.paymentDate) : '—';
     const netAmount = payment.amount - payment.discount;
 
-    const html = `<!DOCTYPE html>
+    return `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
@@ -494,13 +498,74 @@ export function PaymentsView() {
 
     const newWindow = window.open('', '_blank');
     if (newWindow) {
-      newWindow.document.write(html);
+      newWindow.document.write(bonHtml);
       newWindow.document.close();
       setTimeout(() => {
         newWindow.print();
       }, 500);
     }
   }, [t, MONTH_NAMES]);
+
+  const sendBonWhatsApp = useCallback(async (payment: Payment) => {
+    const student = payment.student;
+    const phone = student.phone || student.parentPhone;
+    if (!phone) {
+      toast.error('لا يوجد رقم هاتف لهذا التلميذ');
+      return;
+    }
+
+    try {
+      const bonHtml = getBonHtml(payment);
+      const container = document.createElement('div');
+      container.innerHTML = bonHtml.replace(/<!DOCTYPE[^>]*>/, '').replace(/<html[^>]*>/, '').replace(/<head>[\\s\\S]*?<\\/head>/, '').replace(/<body>/, '').replace(/<\\/body>/, '').replace(/<\\/html>/, '');
+      container.style.position = 'absolute';
+      container.style.left = '-9999px';
+      container.style.top = '0';
+      container.style.width = '700px';
+      document.body.appendChild(container);
+
+      const html2pdf = (await import('html2pdf.js')).default;
+      const blob = await html2pdf()
+        .set({
+          margin: 10,
+          filename: `bon_${student.fullName.replace(/\s+/g, '_')}.pdf`,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        })
+        .from(container.querySelector('.bon') || container)
+        .outputPdf('blob');
+
+      document.body.removeChild(container);
+
+      // Try Web Share API first (allows sharing file to WhatsApp)
+      if (navigator.share && navigator.canShare) {
+        const file = new File([blob], `bon_${student.fullName.replace(/\s+/g, '_')}.pdf`, { type: 'application/pdf' });
+        const shareData = { files: [file], title: `بون دفع - ${student.fullName}` };
+        if (navigator.canShare(shareData)) {
+          await navigator.share(shareData);
+          return;
+        }
+      }
+
+      // Fallback: download PDF and open WhatsApp
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `bon_${student.fullName.replace(/\s+/g, '_')}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      // Open WhatsApp with phone number
+      const cleanPhone = phone.replace(/[^0-9+]/g, '');
+      const whatsappPhone = cleanPhone.startsWith('+') ? cleanPhone.slice(1) : cleanPhone;
+      window.open(`https://wa.me/${whatsappPhone}`, '_blank');
+      toast.success('تم تحميل البون PDF وفتح واتساب');
+    } catch (err) {
+      console.error('WhatsApp send error:', err);
+      toast.error('حدث خطأ أثناء إرسال البون');
+    }
+  }, [t, getBonHtml]);
 
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -949,7 +1014,8 @@ export function PaymentsView() {
         </div>
       </div>
 
-      {/* Summary Cards */}
+      {/* Summary Cards - Admin only */}
+      {isAdmin && (
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card>
           <CardContent className="p-3 text-center">
@@ -988,6 +1054,7 @@ export function PaymentsView() {
           </CardContent>
         </Card>
       </div>
+      )}
 
       {/* Filters */}
       <Card>
@@ -1128,6 +1195,8 @@ export function PaymentsView() {
                   <TableRow>
                     <TableHead className="text-right">{t.payments.studentCol}</TableHead>
                     <TableHead className="text-right">{t.payments.monthYearCol}</TableHead>
+                    {isAdmin && (
+                    <>
                     <TableHead className="text-right hidden md:table-cell">
                       {t.payments.amountCol}
                     </TableHead>
@@ -1140,6 +1209,8 @@ export function PaymentsView() {
                     <TableHead className="text-right hidden lg:table-cell">
                       {t.payments.discountCol}
                     </TableHead>
+                    </>
+                    )}
                     <TableHead className="text-right hidden lg:table-cell">
                       {t.payments.dateCol}
                     </TableHead>
@@ -1178,6 +1249,8 @@ export function PaymentsView() {
                           )}
                         </div>
                       </TableCell>
+                      {isAdmin && (
+                      <>
                       <TableCell className="text-right hidden md:table-cell font-medium">
                         {payment.amount.toLocaleString()}{' '}
                         <span className="text-xs font-normal">{t.common.dh}</span>
@@ -1200,6 +1273,8 @@ export function PaymentsView() {
                           <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
+                      </>
+                      )}
                       <TableCell className="text-right hidden lg:table-cell text-sm text-muted-foreground">
                         {payment.paymentDate
                           ? formatDate(payment.paymentDate)
@@ -1218,6 +1293,15 @@ export function PaymentsView() {
                             title={t.common.printBon}
                           >
                             <FileText className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
+                            onClick={() => sendBonWhatsApp(payment)}
+                            title="إرسال عبر واتساب"
+                          >
+                            <MessageCircle className="h-3.5 w-3.5" />
                           </Button>
                           <Button
                             variant="ghost"
@@ -1433,6 +1517,7 @@ export function PaymentsView() {
                             </span>
                           </div>
                         )}
+                        {isAdmin && (
                         <div className="sm:col-span-2">
                           <span className="text-muted-foreground">
                             {t.common.dh} ({new Date().getFullYear()}):{' '}
@@ -1441,6 +1526,7 @@ export function PaymentsView() {
                             {yearlyPaid.toLocaleString()} {t.common.dh}
                           </span>
                         </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1455,7 +1541,9 @@ export function PaymentsView() {
                   <Wallet className="h-4 w-4 text-primary" />
                   {t.common.amount}
                 </h4>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className={`grid gap-3 ${isAdmin ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2 sm:grid-cols-2'}`}>
+                  {isAdmin && (
+                  <>
                   <div className="space-y-1.5">
                     <Label htmlFor="amount">{t.payments.bonAmountDh} *</Label>
                     <Input
@@ -1518,8 +1606,48 @@ export function PaymentsView() {
                       </span>
                     </div>
                   </div>
+                  </>
+                  )}
+                  {!isAdmin && (
+                  <>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="amount">{t.payments.bonAmountDh} *</Label>
+                    <Input
+                      id="amount"
+                      type="number"
+                      min="0"
+                      value={formData.amount}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          amount: Number(e.target.value) || '',
+                        })
+                      }
+                      placeholder="0"
+                      dir="ltr"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="paidAmount">{t.payments.bonPaid} ({t.common.dh})</Label>
+                    <Input
+                      id="paidAmount"
+                      type="number"
+                      min="0"
+                      value={formData.paidAmount}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          paidAmount: Number(e.target.value) || '',
+                        })
+                      }
+                      placeholder="0"
+                      dir="ltr"
+                    />
+                  </div>
+                  </>
+                  )}
                 </div>
-                {discountValue > 0 && (
+                {isAdmin && discountValue > 0 && (
                   <div className="text-xs text-amber-600 bg-amber-50 rounded-md p-2">
                     {t.payments.bonAfterDiscount}:{' '}
                     <strong>{netAmount.toLocaleString()} {t.common.dh}</strong>

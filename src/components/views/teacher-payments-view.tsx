@@ -59,6 +59,7 @@ import {
   TrendingUp,
   Calculator,
   School,
+  MessageCircle,
 } from 'lucide-react';
 import { useT } from '@/hooks/use-translation';
 import type { Translations } from '@/lib/translations';
@@ -152,15 +153,15 @@ const emptyForm: PaymentFormData = {
   status: 'paid',
 };
 
-// ─── Bon (Receipt) Printer ───────────────────────────────────────────
+// ─── Bon (Receipt) HTML Generator ──────────────────────────────────────
 
-function printTeacherBon(
+function getTeacherBonHtml(
   payment: TeacherPayment,
   teacher: Teacher | undefined,
   calcData: CalculationData | undefined,
   t: Translations,
   getMonthName: (month: string) => string
-) {
+): string {
   const teacherName = payment.teacher?.fullName || teacher?.fullName || '—';
   const teacherPhone = payment.teacher?.phone || teacher?.phone || '—';
   const subjects = teacher?.subjects
@@ -468,13 +469,20 @@ function printTeacherBon(
   </script>
 </body>
 </html>`;
+}
 
+function printTeacherBon(
+  payment: TeacherPayment,
+  teacher: Teacher | undefined,
+  calcData: CalculationData | undefined,
+  t: Translations,
+  getMonthName: (month: string) => string
+) {
+  const html = getTeacherBonHtml(payment, teacher, calcData, t, getMonthName);
   const win = window.open('', '_blank', 'width=750,height=900');
   if (win) {
     win.document.write(html);
     win.document.close();
-  } else {
-    toast.error(t.common.noInternet);
   }
 }
 
@@ -769,6 +777,89 @@ export function TeacherPaymentsView() {
     printTeacherBon(payment, teacher, teacherCalc, t, getMonthName);
   };
 
+  const handleSendWhatsApp = async (payment: TeacherPayment) => {
+    const teacher = teachers.find((t) => t.id === payment.teacherId);
+    const phone = payment.teacher?.phone || teacher?.phone;
+    if (!phone) {
+      toast.error('لا يوجد رقم هاتف لهذا الأستاذ');
+      return;
+    }
+
+    try {
+      // Fetch calc data if needed
+      let teacherCalc = calcData.find((c) => c.teacherId === payment.teacherId);
+      if (!teacherCalc || !teacherCalc.studentDetails) {
+        try {
+          const params = new URLSearchParams({
+            calculate: 'true',
+            teacherId: payment.teacherId,
+            month: payment.month,
+            year: String(payment.year),
+          });
+          const res = await fetch(`/api/teacher-payments?${params.toString()}`);
+          if (res.ok) {
+            const data = await res.json();
+            teacherCalc = data.find((c: CalculationData) => c.teacherId === payment.teacherId) || undefined;
+          }
+        } catch {
+          // fallback
+        }
+      }
+
+      const bonHtml = getTeacherBonHtml(payment, teacher, teacherCalc, t, getMonthName);
+
+      // Create a hidden container and render the bon
+      const container = document.createElement('div');
+      container.innerHTML = bonHtml.replace(/<!DOCTYPE[^>]*>/, '').replace(/<html[^>]*>/, '').replace(/<head>[\s\S]*?<\/head>/, '').replace(/<body>/, '').replace(/<\/body>/, '').replace(/<\/html>/, '').replace(/<script[\s\S]*?<\/script>/, '');
+      container.style.position = 'absolute';
+      container.style.left = '-9999px';
+      container.style.top = '0';
+      container.style.width = '700px';
+      document.body.appendChild(container);
+
+      const html2pdf = (await import('html2pdf.js')).default;
+      const teacherName = payment.teacher?.fullName || teacher?.fullName || 'teacher';
+      const blob = await html2pdf()
+        .set({
+          margin: 10,
+          filename: `bon_prof_${teacherName.replace(/\s+/g, '_')}.pdf`,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        })
+        .from(container.querySelector('.bon-container') || container)
+        .outputPdf('blob');
+
+      document.body.removeChild(container);
+
+      // Try Web Share API first
+      if (navigator.share && navigator.canShare) {
+        const file = new File([blob], `bon_prof_${teacherName.replace(/\s+/g, '_')}.pdf`, { type: 'application/pdf' });
+        const shareData = { files: [file], title: `بون دفع أستاذ - ${teacherName}` };
+        if (navigator.canShare(shareData)) {
+          await navigator.share(shareData);
+          return;
+        }
+      }
+
+      // Fallback: download PDF and open WhatsApp
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `bon_prof_${teacherName.replace(/\s+/g, '_')}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      const cleanPhone = phone.replace(/[^0-9+]/g, '');
+      const whatsappPhone = cleanPhone.startsWith('+') ? cleanPhone.slice(1) : cleanPhone;
+      window.open(`https://wa.me/${whatsappPhone}`, '_blank');
+      toast.success('تم تحميل البون PDF وفتح واتساب');
+    } catch (err) {
+      console.error('WhatsApp send error:', err);
+      toast.error('حدث خطأ أثناء إرسال البون');
+    }
+  };
+
   const getTeacherName = (teacherId: string) =>
     teachers.find((t) => t.id === teacherId)?.fullName || teacherId;
 
@@ -979,6 +1070,15 @@ export function TeacherPaymentsView() {
                             title={t.teacherPayments.printBon}
                           >
                             <Printer className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
+                            onClick={() => handleSendWhatsApp(payment)}
+                            title="إرسال عبر واتساب"
+                          >
+                            <MessageCircle className="h-3.5 w-3.5" />
                           </Button>
                           <Button
                             variant="ghost"
