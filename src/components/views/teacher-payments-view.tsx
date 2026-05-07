@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -461,12 +463,6 @@ function getTeacherBonHtml(
   <div class="no-print" style="text-align:center; margin-top:12px;">
     <button onclick="window.print()" style="padding:8px 24px; background:#0d9488; color:white; border:none; border-radius:6px; cursor:pointer; font-family:inherit; font-size:14px;">${t.teacherPayments.bonPrint}</button>
   </div>
-
-  <script>
-    window.onload = function() {
-      setTimeout(function() { window.print(); }, 400);
-    }
-  </script>
 </body>
 </html>`;
 }
@@ -483,6 +479,52 @@ function printTeacherBon(
   if (win) {
     win.document.write(html);
     win.document.close();
+  }
+}
+
+async function generateTeacherBonPdf(
+  payment: TeacherPayment,
+  teacher: Teacher | undefined,
+  calcData: CalculationData | undefined,
+  t: Translations,
+  getMonthName: (month: string) => string
+) {
+  const bonHtml = getTeacherBonHtml(payment, teacher, calcData, t, getMonthName);
+  const cleanHtml = bonHtml.replace(
+    /<div class="no-print"[\s\S]*<\/div>\s*<\/body>/,
+    '</body>'
+  );
+  const container = document.createElement('div');
+  container.style.position = 'fixed';
+  container.style.left = '-9999px';
+  container.style.top = '0';
+  container.style.width = '800px';
+  container.innerHTML = cleanHtml;
+  document.body.appendChild(container);
+  try {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const canvas = await html2canvas(container, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+    const imgWidth = pdfWidth - 10;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    let heightLeft = imgHeight;
+    let position = 5;
+    pdf.addImage(imgData, 'PNG', 5, position, imgWidth, imgHeight);
+    heightLeft -= (pdfHeight - 10);
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight + 5;
+      pdf.addPage();
+      pdf.addImage(imgData, 'PNG', 5, position, imgWidth, imgHeight);
+      heightLeft -= (pdfHeight - 10);
+    }
+    const teacherName = teacher?.fullName || 'bon';
+    const monthLabel = getMonthName(payment.month);
+    pdf.save(`bon_${teacherName}_${monthLabel}.pdf`);
+  } finally {
+    document.body.removeChild(container);
   }
 }
 
@@ -806,37 +848,27 @@ export function TeacherPaymentsView() {
         }
       }
 
-      // Open WhatsApp
+      // Format phone for WhatsApp
       const cleanPhone = phone.replace(/[^0-9+]/g, '').replace(/^\+/, '');
       let whatsappPhone = cleanPhone;
-      // Format Moroccan numbers: 06/07 → 2126/2127
       if (whatsappPhone.startsWith('0') && whatsappPhone.length >= 10) {
         whatsappPhone = '212' + whatsappPhone.slice(1);
       } else if (whatsappPhone.startsWith('6') || whatsappPhone.startsWith('7')) {
         whatsappPhone = '212' + whatsappPhone;
       }
-      window.open(`https://wa.me/${whatsappPhone}`, '_blank');
 
-      // Open bon in new tab for printing/saving as PDF
-      const bonHtml = getTeacherBonHtml(payment, teacher, teacherCalc, t, getMonthName);
-      const modifiedHtml = bonHtml.replace(
-        /<div class="no-print"[^>]*>[\s\S]*?<\/div>\s*<script[\s\S]*?<\/script>\s*<\/body>/,
-        `<div class="no-print" style="text-align:center; margin-top:12px; display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
-    <button onclick="window.print()" style="padding:8px 24px; background:#0d9488; color:white; border:none; border-radius:6px; cursor:pointer; font-family:inherit; font-size:14px;">${t.teacherPayments.bonPrint}</button>
-    <button onclick="try{window.close();}catch(e){}" style="padding:8px 24px; background:#64748b; color:white; border:none; border-radius:6px; cursor:pointer; font-family:inherit; font-size:14px;">إغلاق</button>
-  </div>
-  <div class="no-print" style="text-align:center; margin-top:8px; font-size:12px; color:#64748b;">
-    💡 يمكنك حفظ البون كـ PDF من نافذة الطباعة (اختر "Save as PDF" كطابعة)
-  </div>
-</body>`
+      // Build pre-filled message
+      const teacherName = teacher?.fullName || '';
+      const monthLabel = getMonthName(payment.month);
+      const netAmount = payment.amount - payment.discount;
+      const msg = encodeURIComponent(
+        `مرحبا ${teacherName}، إليكم وصل الدفع لشهر ${monthLabel}:\nالمبلغ: ${netAmount} درهم\nتم تحميل وصل الدفع (PDF) تلقائياً، يرجى إرفاقه.`
       );
-      const win = window.open('', '_blank', 'width=750,height=900');
-      if (win) {
-        win.document.write(modifiedHtml);
-        win.document.close();
-      }
+      window.open(`https://wa.me/${whatsappPhone}?text=${msg}`, '_blank');
 
-      toast.success('تم فتح واتساب ونافذة البون');
+      // Auto-download bon as PDF
+      await generateTeacherBonPdf(payment, teacher, teacherCalc, t, getMonthName);
+      toast.success('تم تحميل البون كـ PDF وفتح واتساب - أرفق البون في المحادثة');
     } catch (err) {
       console.error('WhatsApp send error:', err);
       toast.error('حدث خطأ أثناء إرسال البون');

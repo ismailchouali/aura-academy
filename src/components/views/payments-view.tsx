@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { toast } from 'sonner';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -495,18 +497,64 @@ export function PaymentsView() {
   </div>
 </body>
 </html>`;
-
-    const newWindow = window.open('', '_blank');
-    if (newWindow) {
-      newWindow.document.write(bonHtml);
-      newWindow.document.close();
-      setTimeout(() => {
-        newWindow.print();
-      }, 500);
-    }
   }, [t, MONTH_NAMES]);
 
-  const sendBonWhatsApp = useCallback((payment: Payment) => {
+  // Generate bon in new window for printing
+  const generateBon = useCallback((payment: Payment) => {
+    const bonHtml = getBonHtml(payment);
+    const cleanHtml = bonHtml.replace(
+      /<div class="no-print"[^>]*>[\s\S]*<\/div>\s*<\/body>/,
+      '</body>'
+    );
+    const newWindow = window.open('', '_blank');
+    if (newWindow) {
+      newWindow.document.write(cleanHtml);
+      newWindow.document.close();
+    }
+  }, [getBonHtml]);
+
+  // Generate bon as PDF and auto-download
+  const generateBonPdf = useCallback(async (payment: Payment) => {
+    const bonHtml = getBonHtml(payment);
+    const cleanHtml = bonHtml.replace(
+      /<div class="no-print"[^>]*>[\s\S]*<\/div>\s*<\/body>/,
+      '</body>'
+    );
+    const container = document.createElement('div');
+    container.style.position = 'fixed';
+    container.style.left = '-9999px';
+    container.style.top = '0';
+    container.style.width = '800px';
+    container.innerHTML = cleanHtml;
+    document.body.appendChild(container);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      const canvas = await html2canvas(container, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pdfWidth - 10;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 5;
+      pdf.addImage(imgData, 'PNG', 5, position, imgWidth, imgHeight);
+      heightLeft -= (pdfHeight - 10);
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight + 5;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 5, position, imgWidth, imgHeight);
+        heightLeft -= (pdfHeight - 10);
+      }
+      const studentName = payment.student?.name || 'bon';
+      const monthLabel = MONTH_NAMES[payment.month] || payment.month;
+      pdf.save(`bon_${studentName}_${monthLabel}.pdf`);
+    } finally {
+      document.body.removeChild(container);
+    }
+  }, [getBonHtml, MONTH_NAMES]);
+
+  const sendBonWhatsApp = useCallback(async (payment: Payment) => {
     const student = payment.student;
     const phone = student.phone || student.parentPhone;
     if (!phone) {
@@ -514,38 +562,29 @@ export function PaymentsView() {
       return;
     }
 
-    // Open WhatsApp with the phone number
+    // Format phone for WhatsApp
     const cleanPhone = phone.replace(/[^0-9+]/g, '').replace(/^\+/, '');
     let whatsappPhone = cleanPhone;
-    // Format Moroccan numbers: 06/07 → 2126/2127
     if (whatsappPhone.startsWith('0') && whatsappPhone.length >= 10) {
       whatsappPhone = '212' + whatsappPhone.slice(1);
     } else if (whatsappPhone.startsWith('6') || whatsappPhone.startsWith('7')) {
       whatsappPhone = '212' + whatsappPhone;
     }
-    window.open(`https://wa.me/${whatsappPhone}`, '_blank');
 
-    // Also open bon in new tab so user can print/save as PDF
-    const bonHtml = getBonHtml(payment);
-    const newWindow = window.open('', '_blank');
-    if (newWindow) {
-      // Replace the auto-print script with a manual print button + save instructions
-      const modifiedHtml = bonHtml.replace(
-        /<div class="no-print"[^>]*>[\s\S]*?<\/div>\s*<\/body>/,
-        `<div class="no-print" style="text-align:center; margin-top:16px; display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
-    <button onclick="window.print()" style="background:#0d9488; color:white; border:none; padding:10px 28px; border-radius:8px; font-size:15px; font-family:'Tajawal',sans-serif; font-weight:600; cursor:pointer;">${t.payments.bonPrint}</button>
-    <button onclick="try{window.close();}catch(e){}" style="background:#64748b; color:white; border:none; padding:10px 28px; border-radius:8px; font-size:15px; font-family:'Tajawal',sans-serif; font-weight:600; cursor:pointer;">إغلاق</button>
-  </div>
-  <div class="no-print" style="text-align:center; margin-top:12px; font-size:13px; color:#64748b; font-family:'Tajawal',sans-serif;">
-    💡 يمكنك حفظ البون كـ PDF من نافذة الطباعة (اختر "Save as PDF" كطابعة)
-  </div>
-</body>`
-      );
-      newWindow.document.write(modifiedHtml);
-      newWindow.document.close();
-    }
-    toast.success('تم فتح واتساب ونافذة البون - يمكنك حفظ البون كـ PDF من نافذة الطباعة');
-  }, [t, getBonHtml]);
+    // Build pre-filled message
+    const monthLabel = MONTH_NAMES[payment.month] || payment.month;
+    const netAmount = payment.amount - payment.discount;
+    const msg = encodeURIComponent(
+      `مرحبا ${student.name}، إليكم وصل الدفع لشهر ${monthLabel}:
+المبلغ: ${netAmount} درهم
+تم تحميل وصل الدفع (PDF) تلقائياً، يرجى إرفاقه.`
+    );
+    window.open(`https://wa.me/${whatsappPhone}?text=${msg}`, '_blank');
+
+    // Auto-download bon as PDF
+    await generateBonPdf(payment);
+    toast.success('تم تحميل البون كـ PDF وفتح واتساب - أرفق البون في المحادثة');
+  }, [t, MONTH_NAMES, generateBonPdf]);
 
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
