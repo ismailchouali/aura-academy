@@ -513,8 +513,8 @@ export function PaymentsView() {
     }
   }, [getBonHtml]);
 
-  // Generate bon as PDF and auto-download
-  const generateBonPdf = useCallback(async (payment: Payment) => {
+  // Generate bon as PDF blob
+  const generateBonPdfBlob = useCallback(async (payment: Payment): Promise<Blob> => {
     const bonHtml = getBonHtml(payment);
     const cleanHtml = bonHtml.replace(
       /<div class="no-print"[^>]*>[\s\S]*<\/div>\s*<\/body>/,
@@ -546,13 +546,11 @@ export function PaymentsView() {
         pdf.addImage(imgData, 'PNG', 5, position, imgWidth, imgHeight);
         heightLeft -= (pdfHeight - 10);
       }
-      const studentName = payment.student?.name || 'bon';
-      const monthLabel = MONTH_NAMES[payment.month] || payment.month;
-      pdf.save(`bon_${studentName}_${monthLabel}.pdf`);
+      return pdf.output('blob');
     } finally {
       document.body.removeChild(container);
     }
-  }, [getBonHtml, MONTH_NAMES]);
+  }, [getBonHtml]);
 
   const sendBonWhatsApp = useCallback(async (payment: Payment) => {
     const student = payment.student;
@@ -562,7 +560,29 @@ export function PaymentsView() {
       return;
     }
 
-    // Format phone for WhatsApp
+    const studentName = payment.student?.name || 'bon';
+    const monthLabel = MONTH_NAMES[payment.month] || payment.month;
+    const fileName = `bon_${studentName}_${monthLabel}.pdf`;
+
+    // Generate the PDF blob first
+    const pdfBlob = await generateBonPdfBlob(payment);
+    const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
+
+    // Try Web Share API (sends file directly to WhatsApp on mobile)
+    if (navigator.share && navigator.canShare) {
+      try {
+        const shareData = { files: [pdfFile] };
+        if (navigator.canShare(shareData)) {
+          await navigator.share(shareData);
+          return;
+        }
+      } catch (e) {
+        if ((e as Error).name === 'AbortError') return;
+        // Fall through to fallback
+      }
+    }
+
+    // Fallback: open WhatsApp + download PDF
     const cleanPhone = phone.replace(/[^0-9+]/g, '').replace(/^\+/, '');
     let whatsappPhone = cleanPhone;
     if (whatsappPhone.startsWith('0') && whatsappPhone.length >= 10) {
@@ -570,21 +590,14 @@ export function PaymentsView() {
     } else if (whatsappPhone.startsWith('6') || whatsappPhone.startsWith('7')) {
       whatsappPhone = '212' + whatsappPhone;
     }
-
-    // Build pre-filled message
-    const monthLabel = MONTH_NAMES[payment.month] || payment.month;
-    const netAmount = payment.amount - payment.discount;
-    const msg = encodeURIComponent(
-      `مرحبا ${student.name}، إليكم وصل الدفع لشهر ${monthLabel}:
-المبلغ: ${netAmount} درهم
-تم تحميل وصل الدفع (PDF) تلقائياً، يرجى إرفاقه.`
-    );
-    window.open(`https://wa.me/${whatsappPhone}?text=${msg}`, '_blank');
-
-    // Auto-download bon as PDF
-    await generateBonPdf(payment);
-    toast.success('تم تحميل البون كـ PDF وفتح واتساب - أرفق البون في المحادثة');
-  }, [t, MONTH_NAMES, generateBonPdf]);
+    window.open(`https://wa.me/${whatsappPhone}`, '_blank');
+    // Auto-download PDF
+    const url = URL.createObjectURL(pdfBlob);
+    const a = document.createElement('a');
+    a.href = url; a.download = fileName; a.click();
+    URL.revokeObjectURL(url);
+    toast.success('تم فتح واتساب وتحميل البون كـ PDF - أرفق البون في المحادثة');
+  }, [MONTH_NAMES, generateBonPdfBlob]);
 
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);

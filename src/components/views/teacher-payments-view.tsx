@@ -482,13 +482,13 @@ function printTeacherBon(
   }
 }
 
-async function generateTeacherBonPdf(
+async function generateTeacherBonPdfBlob(
   payment: TeacherPayment,
   teacher: Teacher | undefined,
   calcData: CalculationData | undefined,
   t: Translations,
   getMonthName: (month: string) => string
-) {
+): Promise<Blob> {
   const bonHtml = getTeacherBonHtml(payment, teacher, calcData, t, getMonthName);
   const cleanHtml = bonHtml.replace(
     /<div class="no-print"[\s\S]*<\/div>\s*<\/body>/,
@@ -520,9 +520,7 @@ async function generateTeacherBonPdf(
       pdf.addImage(imgData, 'PNG', 5, position, imgWidth, imgHeight);
       heightLeft -= (pdfHeight - 10);
     }
-    const teacherName = teacher?.fullName || 'bon';
-    const monthLabel = getMonthName(payment.month);
-    pdf.save(`bon_${teacherName}_${monthLabel}.pdf`);
+    return pdf.output('blob');
   } finally {
     document.body.removeChild(container);
   }
@@ -848,7 +846,29 @@ export function TeacherPaymentsView() {
         }
       }
 
-      // Format phone for WhatsApp
+      const teacherName = teacher?.fullName || 'bon';
+      const monthLabel = getMonthName(payment.month);
+      const fileName = `bon_${teacherName}_${monthLabel}.pdf`;
+
+      // Generate PDF blob
+      const pdfBlob = await generateTeacherBonPdfBlob(payment, teacher, teacherCalc, t, getMonthName);
+      const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
+
+      // Try Web Share API (sends file directly to WhatsApp on mobile)
+      if (navigator.share && navigator.canShare) {
+        try {
+          const shareData = { files: [pdfFile] };
+          if (navigator.canShare(shareData)) {
+            await navigator.share(shareData);
+            return;
+          }
+        } catch (e) {
+          if ((e as Error).name === 'AbortError') return;
+          // Fall through to fallback
+        }
+      }
+
+      // Fallback: open WhatsApp + download PDF
       const cleanPhone = phone.replace(/[^0-9+]/g, '').replace(/^\+/, '');
       let whatsappPhone = cleanPhone;
       if (whatsappPhone.startsWith('0') && whatsappPhone.length >= 10) {
@@ -856,19 +876,12 @@ export function TeacherPaymentsView() {
       } else if (whatsappPhone.startsWith('6') || whatsappPhone.startsWith('7')) {
         whatsappPhone = '212' + whatsappPhone;
       }
-
-      // Build pre-filled message
-      const teacherName = teacher?.fullName || '';
-      const monthLabel = getMonthName(payment.month);
-      const netAmount = payment.amount - payment.discount;
-      const msg = encodeURIComponent(
-        `مرحبا ${teacherName}، إليكم وصل الدفع لشهر ${monthLabel}:\nالمبلغ: ${netAmount} درهم\nتم تحميل وصل الدفع (PDF) تلقائياً، يرجى إرفاقه.`
-      );
-      window.open(`https://wa.me/${whatsappPhone}?text=${msg}`, '_blank');
-
-      // Auto-download bon as PDF
-      await generateTeacherBonPdf(payment, teacher, teacherCalc, t, getMonthName);
-      toast.success('تم تحميل البون كـ PDF وفتح واتساب - أرفق البون في المحادثة');
+      window.open(`https://wa.me/${whatsappPhone}`, '_blank');
+      const url = URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.href = url; a.download = fileName; a.click();
+      URL.revokeObjectURL(url);
+      toast.success('تم فتح واتساب وتحميل البون كـ PDF - أرفق البون في المحادثة');
     } catch (err) {
       console.error('WhatsApp send error:', err);
       toast.error('حدث خطأ أثناء إرسال البون');
