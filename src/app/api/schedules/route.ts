@@ -139,7 +139,7 @@ export async function GET(request: NextRequest) {
       where.OR = [
         { sessionType: 'fixed' },
         { sessionType: 'trial', trialDate: { gte: todayCasablanca } },
-        { sessionType: 'trial', trialDate: { isSet: false } },
+        { sessionType: 'trial', trialDate: null },
       ];
     }
 

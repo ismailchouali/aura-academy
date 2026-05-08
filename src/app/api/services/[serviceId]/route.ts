@@ -3,15 +3,15 @@ import { db } from '@/lib/db';
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ serviceId: string }> }
 ) {
   try {
-    const { id } = await params;
+    const { serviceId } = await params;
     const body = await request.json();
     const { name, nameAr, nameFr, icon, order } = body;
 
     const service = await db.service.update({
-      where: { id },
+      where: { id: serviceId },
       data: {
         ...(name !== undefined && { name }),
         ...(nameAr !== undefined && { nameAr }),
@@ -30,13 +30,13 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ serviceId: string }> }
 ) {
   try {
-    const { id } = await params;
+    const { serviceId } = await params;
 
     const service = await db.service.delete({
-      where: { id },
+      where: { id: serviceId },
     });
 
     return NextResponse.json(service);

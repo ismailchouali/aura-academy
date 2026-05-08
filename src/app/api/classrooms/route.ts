@@ -3,9 +3,30 @@ import { db } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
+    // Auto-delete expired trial sessions (trialDate is before today)
+    const nowCasablanca = new Date().toLocaleString('en-US', { timeZone: 'Africa/Casablanca' });
+    const todayCasablanca = new Date(nowCasablanca);
+    todayCasablanca.setHours(0, 0, 0, 0);
+
+    await db.schedule.deleteMany({
+      where: {
+        sessionType: 'trial',
+        trialDate: {
+          lt: todayCasablanca,
+        },
+      },
+    });
+
     const classrooms = await db.classroom.findMany({
       include: {
         schedules: {
+          where: {
+            OR: [
+              { sessionType: 'fixed' },
+              { sessionType: 'trial', trialDate: { gte: todayCasablanca } },
+              { sessionType: 'trial', trialDate: null },
+            ],
+          },
           include: {
             subject: true,
             teacher: true,
