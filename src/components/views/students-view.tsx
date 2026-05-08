@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 import { useT } from '@/hooks/use-translation';
+import { useAppStore } from '@/store/store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -178,6 +179,8 @@ function getAvatarColor(name: string): string {
 
 export function StudentsView() {
   const t = useT();
+  const { userRole } = useAppStore();
+  const isAdmin = userRole === 'ADMIN';
 
   // ── Data state ──────────────────────────────────────────────────────────
   const [students, setStudents] = useState<Student[]>([]);
@@ -1094,7 +1097,8 @@ export function StudentsView() {
               </div>
             </div>
 
-            {/* Monthly Fee */}
+            {/* Monthly Fee - Admin only */}
+            {isAdmin && (
             <div className="space-y-3">
               <h4 className="text-sm font-semibold flex items-center gap-2">
                 <Wallet className="h-4 w-4 text-amber-600" />
@@ -1144,6 +1148,7 @@ export function StudentsView() {
                 </div>
               )}
             </div>
+            )}
           </div>
         );
 
@@ -1270,8 +1275,12 @@ export function StudentsView() {
                     <TableHead className="text-right hidden md:table-cell">{t.students.level}</TableHead>
                     <TableHead className="text-right hidden lg:table-cell">{t.students.teacher}</TableHead>
                     <TableHead className="text-right hidden md:table-cell">{t.common.phone}</TableHead>
+                                    {isAdmin && (
                     <TableHead className="text-right hidden sm:table-cell">{t.students.fee}</TableHead>
+                    )}
+                    {isAdmin && (
                     <TableHead className="text-center">الدفعة</TableHead>
+                    )}
                     <TableHead className="text-right">{t.common.status}</TableHead>
                     <TableHead className="text-right hidden lg:table-cell">{t.students.enrollment}</TableHead>
                     <TableHead className="text-right">{t.common.actions}</TableHead>
@@ -1324,6 +1333,7 @@ export function StudentsView() {
                           {student.phone || '—'}
                         </div>
                       </TableCell>
+                      {isAdmin && (
                       <TableCell className="text-right hidden sm:table-cell">
                         {student.monthlyFee > 0 ? (
                           <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100 font-medium">
@@ -1333,6 +1343,8 @@ export function StudentsView() {
                           <span className="text-muted-foreground text-sm">—</span>
                         )}
                       </TableCell>
+                      )}
+                      {isAdmin && (
                       <TableCell className="text-center">
                         {student.isPackPaid ? (
                           <div className="flex items-center justify-center gap-1" title="الpack مخلص">
@@ -1344,6 +1356,7 @@ export function StudentsView() {
                           </div>
                         )}
                       </TableCell>
+                      )}
                       <TableCell className="text-right">
                         <div className="flex items-center gap-2">
                           <Switch

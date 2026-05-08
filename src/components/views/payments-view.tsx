@@ -61,7 +61,6 @@ import {
   CalendarClock,
   X,
   ChevronDown,
-  MessageCircle,
 } from 'lucide-react';
 import { useT } from '@/hooks/use-translation';
 import { useAppStore } from '@/store/store';
@@ -510,75 +509,6 @@ export function PaymentsView() {
       newWindow.document.close();
     }
   }, [getBonHtml]);
-
-  // Generate bon as proper PDF with Arabic support via API
-  const generateBonPdf = useCallback(async (payment: Payment): Promise<{ blob: Blob; fileName: string }> => {
-    const studentName = payment.student?.fullName || 'etudiant';
-    const monthLabel = MONTH_NAMES[payment.month] || payment.month;
-    const fileName = `bon_${studentName}_${monthLabel}_${payment.year}.pdf`;
-
-    const res = await fetch('/api/payments/bon-pdf', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ paymentId: payment.id }),
-    });
-
-    if (!res.ok) throw new Error('Failed to generate PDF');
-    const blob = await res.blob();
-    // Get filename from header
-    const disposition = res.headers.get('Content-Disposition');
-    const match = disposition?.match(/filename="?([^"]+)"?/);
-    return { blob, fileName: match?.[1] || fileName };
-  }, [MONTH_NAMES]);
-
-  const sendBonWhatsApp = useCallback(async (payment: Payment) => {
-    const student = payment.student;
-    const phone = student.phone || student.parentPhone;
-    if (!phone) {
-      toast.error('لا يوجد رقم هاتف لهذا التلميذ');
-      return;
-    }
-
-    // Format phone
-    const cleanPhone = phone.replace(/[^0-9+]/g, '').replace(/^\+/, '');
-    let whatsappPhone = cleanPhone;
-    if (whatsappPhone.startsWith('0') && whatsappPhone.length >= 10) {
-      whatsappPhone = '212' + whatsappPhone.slice(1);
-    } else if (whatsappPhone.startsWith('6') || whatsappPhone.startsWith('7')) {
-      whatsappPhone = '212' + whatsappPhone;
-    }
-
-    try {
-      // Generate PDF from server (proper Arabic rendering)
-      const { blob, fileName } = await generateBonPdf(payment);
-      const pdfFile = new File([blob], fileName, { type: 'application/pdf' });
-
-      // Try Web Share API (mobile: sends PDF directly to WhatsApp)
-      if (navigator.share && navigator.canShare) {
-        try {
-          if (navigator.canShare({ files: [pdfFile] })) {
-            await navigator.share({ files: [pdfFile] });
-            return;
-          }
-        } catch (e) {
-          if ((e as Error).name === 'AbortError') return;
-        }
-      }
-
-      // Desktop: open WhatsApp + download PDF
-      window.open(`https://wa.me/${whatsappPhone}`, '_blank');
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success('تم تحميل البون كـ PDF وفتح واتساب');
-    } catch (err) {
-      console.error('WhatsApp send error:', err);
-      toast.error('حدث خطأ أثناء إرسال البون');
-    }
-  }, [generateBonPdf]);
 
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1306,15 +1236,6 @@ export function PaymentsView() {
                             title={t.common.printBon}
                           >
                             <FileText className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
-                            onClick={() => sendBonWhatsApp(payment)}
-                            title="إرسال عبر واتساب"
-                          >
-                            <MessageCircle className="h-3.5 w-3.5" />
                           </Button>
                           <Button
                             variant="ghost"

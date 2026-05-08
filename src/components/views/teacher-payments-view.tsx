@@ -59,7 +59,6 @@ import {
   TrendingUp,
   Calculator,
   School,
-  MessageCircle,
 } from 'lucide-react';
 import { useT } from '@/hooks/use-translation';
 import type { Translations } from '@/lib/translations';
@@ -771,62 +770,6 @@ export function TeacherPaymentsView() {
     printTeacherBon(payment, teacher, teacherCalc, t, getMonthName);
   };
 
-  const handleSendWhatsApp = async (payment: TeacherPayment) => {
-    const teacher = teachers.find((t) => t.id === payment.teacherId);
-    const phone = payment.teacher?.phone || teacher?.phone;
-    if (!phone) {
-      toast.error('لا يوجد رقم هاتف لهذا الأستاذ');
-      return;
-    }
-
-    try {
-      // Format phone
-      const cleanPhone = phone.replace(/[^0-9+]/g, '').replace(/^\+/, '');
-      let whatsappPhone = cleanPhone;
-      if (whatsappPhone.startsWith('0') && whatsappPhone.length >= 10) {
-        whatsappPhone = '212' + whatsappPhone.slice(1);
-      } else if (whatsappPhone.startsWith('6') || whatsappPhone.startsWith('7')) {
-        whatsappPhone = '212' + whatsappPhone;
-      }
-
-      // Generate PDF from server
-      const res = await fetch('/api/teacher-payments/bon-pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paymentId: payment.id }),
-      });
-      if (!res.ok) throw new Error('PDF generation failed');
-      const pdfBlob = await res.blob();
-      const disposition = res.headers.get('Content-Disposition');
-      const match = disposition?.match(/filename="?([^"]+)"?/);
-      const fileName = match?.[1] || `bon_${teacher?.fullName || 'prof'}_${payment.month}.pdf`;
-      const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
-
-      // Try Web Share API
-      if (navigator.share && navigator.canShare) {
-        try {
-          if (navigator.canShare({ files: [pdfFile] })) {
-            await navigator.share({ files: [pdfFile] });
-            return;
-          }
-        } catch (e) {
-          if ((e as Error).name === 'AbortError') return;
-        }
-      }
-
-      // Desktop: open WhatsApp + download PDF
-      window.open(`https://wa.me/${whatsappPhone}`, '_blank');
-      const url = URL.createObjectURL(pdfBlob);
-      const a = document.createElement('a');
-      a.href = url; a.download = fileName; a.click();
-      URL.revokeObjectURL(url);
-      toast.success('تم تحميل البون كـ PDF وفتح واتساب');
-    } catch (err) {
-      console.error('WhatsApp send error:', err);
-      toast.error('حدث خطأ أثناء إرسال البون');
-    }
-  };
-
   const getTeacherName = (teacherId: string) =>
     teachers.find((t) => t.id === teacherId)?.fullName || teacherId;
 
@@ -1037,15 +980,6 @@ export function TeacherPaymentsView() {
                             title={t.teacherPayments.printBon}
                           >
                             <Printer className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
-                            onClick={() => handleSendWhatsApp(payment)}
-                            title="إرسال عبر واتساب"
-                          >
-                            <MessageCircle className="h-3.5 w-3.5" />
                           </Button>
                           <Button
                             variant="ghost"
