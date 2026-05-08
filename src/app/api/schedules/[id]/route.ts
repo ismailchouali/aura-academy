@@ -137,6 +137,7 @@ export async function PUT(
         group: body.group,
         sessionType: body.sessionType,
         isRecurring: body.isRecurring,
+        trialDate: body.sessionType === 'trial' && body.trialDate ? new Date(body.trialDate) : null,
       },
       include: {
         subject: { include: { service: true } },

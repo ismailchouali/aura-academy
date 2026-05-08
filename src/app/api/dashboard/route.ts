@@ -135,7 +135,14 @@ export async function GET() {
     const scheduleDayOfWeek = jsDay === 0 ? '1' : String(jsDay + 1);
 
     const todaySessions = await db.schedule.findMany({
-      where: { dayOfWeek: scheduleDayOfWeek },
+      where: {
+        dayOfWeek: scheduleDayOfWeek,
+        OR: [
+          { sessionType: 'fixed' },
+          { sessionType: 'trial', trialDate: { gte: new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Casablanca' })) } },
+          { sessionType: 'trial', trialDate: { isSet: false } },
+        ],
+      },
       include: {
         subject: {
           include: {

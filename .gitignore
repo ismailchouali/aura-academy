@@ -63,3 +63,4 @@ server.log
 
 # Backups
 /backups/
+.env*.local

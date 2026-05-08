@@ -100,6 +100,21 @@ export async function GET(request: NextRequest) {
     const teacherId = searchParams.get('teacherId');
     const subjectId = searchParams.get('subjectId');
     const sessionType = searchParams.get('sessionType');
+    const includeExpired = searchParams.get('includeExpired') === 'true';
+
+    // Auto-delete expired trial sessions (trialDate is before today)
+    const nowCasablanca = new Date().toLocaleString('en-US', { timeZone: 'Africa/Casablanca' });
+    const todayCasablanca = new Date(nowCasablanca);
+    todayCasablanca.setHours(0, 0, 0, 0);
+
+    await db.schedule.deleteMany({
+      where: {
+        sessionType: 'trial',
+        trialDate: {
+          lt: todayCasablanca,
+        },
+      },
+    });
 
     const where: Record<string, unknown> = {};
 
@@ -117,6 +132,15 @@ export async function GET(request: NextRequest) {
     }
     if (sessionType) {
       where.sessionType = sessionType;
+    }
+
+    // If not including expired, filter out trial sessions without a future trialDate
+    if (!includeExpired) {
+      where.OR = [
+        { sessionType: 'fixed' },
+        { sessionType: 'trial', trialDate: { gte: todayCasablanca } },
+        { sessionType: 'trial', trialDate: { isSet: false } },
+      ];
     }
 
     const schedules = await db.schedule.findMany({
@@ -206,6 +230,7 @@ export async function POST(request: NextRequest) {
       group: body.group || null,
       sessionType: body.sessionType || 'fixed',
       isRecurring: body.isRecurring || false,
+      trialDate: body.sessionType === 'trial' && body.trialDate ? new Date(body.trialDate) : null,
     };
 
     const schedule = await db.schedule.create({

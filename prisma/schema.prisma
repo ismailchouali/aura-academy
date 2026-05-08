@@ -183,6 +183,7 @@ model Schedule {
   group       String?
   sessionType String   @default("fixed")
   isRecurring Boolean  @default(false)
+  trialDate   DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }

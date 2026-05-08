@@ -121,6 +121,7 @@ interface Schedule {
   group: string | null;
   sessionType: string;
   isRecurring: boolean;
+  trialDate: string | null;
 }
 
 interface ScheduleFormData {
@@ -133,6 +134,7 @@ interface ScheduleFormData {
   teacherId: string;
   levelId: string;
   group: string;
+  trialDate: string;
 }
 
 interface ConflictError {
@@ -264,6 +266,7 @@ const emptyForm: ScheduleFormData = {
   teacherId: '',
   levelId: '',
   group: '',
+  trialDate: '',
 };
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -578,6 +581,7 @@ export function ScheduleView() {
       teacherId: sched.teacherId || '',
       levelId: sched.levelId || '',
       group: sched.group || '',
+      trialDate: sched.trialDate ? sched.trialDate.split('T')[0] : '',
     });
     setFormOpen(true);
   };
@@ -606,6 +610,10 @@ export function ScheduleView() {
       toast.error('يرجى اختيار الأستاذ');
       return;
     }
+    if (form.sessionType === 'trial' && !form.trialDate) {
+      toast.error('يرجى تحديد تاريخ الحصة التجريبية');
+      return;
+    }
     if (timeToMinutes(form.endTime) <= timeToMinutes(form.startTime)) {
       toast.error('يجب أن يكون وقت النهاية بعد وقت البداية');
       return;
@@ -632,6 +640,7 @@ export function ScheduleView() {
         teacherId: form.teacherId || null,
         levelId: form.levelId || null,
         group: form.group || null,
+        trialDate: form.sessionType === 'trial' ? form.trialDate : null,
       };
 
       const url = editingSchedule
@@ -794,7 +803,7 @@ export function ScheduleView() {
               ${sess.level ? `<br/>${sess.level?.nameAr || sess.level?.name}` : ''}
               ${sess.teacher ? `<br/><span style="color:#64748b;">${sess.teacher.fullName}</span>` : ''}
               ${sess.classroom ? `<br/><span style="color:#0d9488;font-size:8px;">📍 ${sess.classroom.nameAr || sess.classroom.name}</span>` : ''}
-              ${sess.sessionType === 'trial' ? '<br/><span style="color:#f59e0b;font-size:8px;">⚡ تجريبية</span>' : ''}
+              ${sess.sessionType === 'trial' ? `<br/><span style="color:#f59e0b;font-size:8px;">⚡ تجريبية${sess.trialDate ? ` (${new Date(sess.trialDate).toLocaleDateString('ar-MA')})` : ''}</span>` : ''}
               ${sess.group ? `<br/><span style="color:#94a3b8;font-size:8px;">👥 ${sess.group}</span>` : ''}
               <br/><span style="font-size:8px;color:#94a3b8;">${sess.startTime}-${sess.endTime}</span>
             </div>`;
@@ -1125,7 +1134,7 @@ export function ScheduleView() {
                                         {sched.teacher && <p>👨‍🏫 {sched.teacher.fullName}</p>}
                                         {sched.classroom && <p>📍 {sched.classroom.nameAr || sched.classroom.name}</p>}
                                         {sched.group && <p>👥 {sched.group}</p>}
-                                        <p>{isTrial ? '⚡ تجريبية' : '📌 تابتةٌ'}</p>
+                                        <p>{isTrial ? `⚡ تجريبية${sched.trialDate ? ` (${new Date(sched.trialDate).toLocaleDateString('ar-MA')})` : ''}` : '📌 تابتةٌ'}</p>
                                       </div>
                                     </TooltipContent>
                                   </Tooltip>
@@ -1444,6 +1453,29 @@ export function ScheduleView() {
                   className="mt-1.5"
                 />
               </div>
+
+              {/* Trial date - only for trial sessions */}
+              {form.sessionType === 'trial' && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2">
+                  <div className="flex items-center gap-2 text-amber-700">
+                    <Zap className="h-4 w-4" />
+                    <Label className="text-sm font-medium text-amber-700">
+                      تاريخ الحصة التجريبية *
+                    </Label>
+                  </div>
+                  <p className="text-xs text-amber-600/80">
+                    الحصة كتحيد تلقائياً من الجدول بعد هذا التاريخ
+                  </p>
+                  <Input
+                    type="date"
+                    value={form.trialDate}
+                    onChange={(e) => setForm({ ...form, trialDate: e.target.value })}
+                    min={new Date().toISOString().split('T')[0]}
+                    dir="ltr"
+                    className="mt-1 text-left"
+                  />
+                </div>
+              )}
             </div>
 
             <DialogFooter className="shrink-0 px-8 py-4 border-t flex-col sm:flex-row gap-2">
