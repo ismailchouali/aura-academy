@@ -21,3 +21,26 @@ Stage Summary:
 - Payments view already had proper isAdmin guards (المطلوب, الخصم, المدفوع, المتبقي)
 - App compiles and runs successfully on dev server (200)
 - Vercel production build successful (no bon-pdf routes in build output)
+
+---
+Task ID: 2
+Agent: Main
+Task: Auto-remove expired trial sessions from schedule
+
+Work Log:
+- Analyzed schedule system: trial sessions had no specific date, just dayOfWeek
+- Added trialDate DateTime? field to Schedule model in Prisma schema
+- Pushed schema to Neon PostgreSQL database (via aura-academy Vercel project env)
+- Modified GET /api/schedules: auto-delete expired trials (trialDate < today), filter remaining
+- Modified POST /api/schedules: save trialDate when sessionType is 'trial'
+- Modified PUT /api/schedules/[id]: update trialDate
+- Modified GET /api/dashboard: exclude expired trials from todaySessions
+- Updated schedule-view.tsx form: added date picker for trial sessions with validation
+- Updated schedule-view.tsx tooltips and print view to show trial date
+- Updated description text: "كتحيد من الجدول بعد ما تعدي"
+
+Stage Summary:
+- Trial sessions now require a specific date
+- Expired trial sessions are auto-deleted on every schedule fetch
+- Dashboard todaySessions excludes expired trials
+- All time comparisons use Africa/Casablanca timezone
