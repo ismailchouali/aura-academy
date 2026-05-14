@@ -80,12 +80,24 @@ export async function GET() {
     const currentMonthStats = monthlyStats[String(currentMonth)] || { revenue: 0, expected: 0, remaining: 0 };
     const monthlyIncome = currentMonthStats.revenue;
 
-    // This year teacher payments total
+    // This year teacher payments total + monthly breakdown
     const teacherPaymentsThisYear = await db.teacherPayment.aggregate({
       _sum: { amount: true },
       where: { year: currentYear },
     });
     const teacherPaymentsTotal = teacherPaymentsThisYear._sum.amount || 0;
+
+    // Monthly teacher payment breakdown for current year
+    const monthlyTeacherPaymentsData = await db.teacherPayment.findMany({
+      where: { year: currentYear },
+      select: { month: true, amount: true },
+    });
+    const monthlyTeacherPayments: Record<string, number> = {};
+    for (const tp of monthlyTeacherPaymentsData) {
+      const monthNum = monthNameToNumber[tp.month] || parseInt(tp.month);
+      const key = String(monthNum);
+      monthlyTeacherPayments[key] = (monthlyTeacherPayments[key] || 0) + tp.amount;
+    }
 
     // Recent payments (last 10)
     const recentPayments = await db.payment.findMany({
@@ -176,6 +188,7 @@ export async function GET() {
       recentStudents,
       totalTeacherPayments: teacherPaymentStats._sum.amount || 0,
       teacherPaymentsThisYear: teacherPaymentsTotal,
+      monthlyTeacherPayments,
       todaySessions,
     });
   } catch (error) {
