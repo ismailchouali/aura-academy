@@ -46,9 +46,6 @@ export async function GET(request?: NextRequest) {
         packMonths: true,
         student: {
           select: {
-            id: true,
-            teacherId: true,
-            teacher: { select: { id: true, percentage: true } },
             level: {
               select: {
                 subject: {
@@ -92,46 +89,26 @@ export async function GET(request?: NextRequest) {
       monthlyStats[key].count += 1;
     }
 
-    // ─── Teacher expenses: based on Payment.month (month the professor TAUGHT) ──
-    // The expense for month X = teacher's share of all student payments where
-    // Payment.month = X. This reflects the actual month the professor taught,
-    // NOT when the professor was actually paid (which happens the following month).
-    //
-    // Example: Students pay for April → Payment.month = "April" → professor taught
-    // in April → expense shows in April. The actual payment to the professor
-    // happens in May, but the expense belongs to April.
-    const monthlyTeacherExpenses: Record<string, number> = {};
+    // ─── Teacher expenses: from TeacherPayment records ──────────────────
+    // Read actual amounts paid to teachers, grouped by month.
+    // The "month" field on TeacherPayment = the month the expense belongs to
+    // (the month the teacher worked, NOT the month the physical payment happened).
+    const teacherPaymentsThisYearResult = await db.teacherPayment.aggregate({
+      _sum: { amount: true },
+      where: { year: targetYear },
+    });
+    const teacherPaymentsTotal = teacherPaymentsThisYearResult._sum.amount || 0;
 
-    for (const p of monthlyPayments) {
-      if ((p.paidAmount || 0) <= 0) continue;
-
-      const monthNum = monthNameToNumber[p.month] || parseInt(p.month);
+    const monthlyTeacherPaymentsData = await db.teacherPayment.findMany({
+      where: { year: targetYear },
+      select: { month: true, amount: true },
+    });
+    const monthlyTeacherPayments: Record<string, number> = {};
+    for (const tp of monthlyTeacherPaymentsData) {
+      const monthNum = monthNameToNumber[tp.month] || parseInt(tp.month);
       const key = String(monthNum);
-
-      // Get teacher's percentage
-      const percentage = p.student?.teacher?.percentage || 0;
-      if (percentage <= 0) continue;
-
-      // Calculate monthly amount (same division logic as revenue)
-      const serviceId = p.student?.level?.subject?.serviceId || '';
-      const isLangues = serviceId === 'service_langues';
-      const packMonths = (p.packMonths || 1);
-      const divisor = (isLangues && packMonths > 1) ? packMonths : 1;
-      const monthlyAmount = p.paidAmount / divisor;
-
-      // Teacher's share for this month
-      const teacherShare = (monthlyAmount * percentage) / 100;
-      monthlyTeacherExpenses[key] = (monthlyTeacherExpenses[key] || 0) + teacherShare;
+      monthlyTeacherPayments[key] = (monthlyTeacherPayments[key] || 0) + tp.amount;
     }
-
-    // Round all values
-    for (const key of Object.keys(monthlyTeacherExpenses)) {
-      monthlyTeacherExpenses[key] = Math.round(monthlyTeacherExpenses[key] * 100) / 100;
-    }
-
-    const teacherExpensesTotal = Math.round(
-      Object.values(monthlyTeacherExpenses).reduce((sum, val) => sum + val, 0) * 100
-    ) / 100;
 
     // Current month income (always based on current year, regardless of targetYear)
     let monthlyIncome = 0;
@@ -139,23 +116,17 @@ export async function GET(request?: NextRequest) {
       const currentMonthStats = monthlyStats[String(currentMonth)] || { revenue: 0, expected: 0, remaining: 0 };
       monthlyIncome = currentMonthStats.revenue;
     } else {
-      // Need to calculate current month stats from current year data
       const currentYearPayments = await db.payment.findMany({
         where: { year: currentYear, month: String(currentMonth) },
         select: {
-          month: true,
           paidAmount: true,
-          amount: true,
-          remainingAmount: true,
           packMonths: true,
           student: {
             select: {
               level: {
                 select: {
                   subject: {
-                    select: {
-                      serviceId: true,
-                    },
+                    select: { serviceId: true },
                   },
                 },
               },
@@ -211,7 +182,7 @@ export async function GET(request?: NextRequest) {
       orderBy: { enrollmentDate: 'desc' },
     });
 
-    // Total teacher payments (all time - actual payments made to teachers)
+    // Total teacher payments (all time)
     const teacherPaymentStats = await db.teacherPayment.aggregate({
       _sum: { amount: true },
     });
@@ -261,8 +232,8 @@ export async function GET(request?: NextRequest) {
       recentPayments,
       recentStudents,
       totalTeacherPayments: teacherPaymentStats._sum.amount || 0,
-      teacherPaymentsThisYear: teacherExpensesTotal,
-      monthlyTeacherPayments: monthlyTeacherExpenses,
+      teacherPaymentsThisYear: teacherPaymentsTotal,
+      monthlyTeacherPayments,
       todaySessions,
     });
   } catch (error) {
