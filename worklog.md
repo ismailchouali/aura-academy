@@ -91,3 +91,27 @@ Stage Summary:
 - April expenses now correctly show professor's share for April student payments
 - May expenses will show 0 until students pay for May (professors haven't taught May yet)
 - Files modified: src/app/api/dashboard/route.ts
+
+---
+Task ID: 5
+Agent: Main
+Task: Revert ALL previous modifications to financial system
+
+Work Log:
+- User requested complete revert of all financial report modifications
+- User explained new workflow: teachers will be paid at END of each month (not beginning of next month)
+- With new workflow, TeacherPayment.month naturally matches the work month
+- Reverted 3 files using git checkout to commit f6d7716:
+  1. src/app/api/dashboard/route.ts - removed year query param, monthlyTeacherPayments, expense calculation changes
+  2. src/components/views/financial-reports-view.tsx - removed month/year filter, expense chart column, net profit card
+  3. src/components/views/teacher-payments-view.tsx - removed displayMonth/displayYear for totalThisMonth/totalThisYear
+- Reverted database: 6 TeacherPayment records changed from month="4" back to month="5" (year=2026)
+- Created temporary /api/revert-teacher-payments endpoint, deployed, called it (6 records updated), then deleted
+- Created temporary /api/check-payments endpoint to verify, then deleted
+- Final clean commit pushed and deployed
+
+Stage Summary:
+- All code restored to original state (before any financial modifications)
+- Database data restored: 6 TeacherPayment records back to month="5" (as originally recorded)
+- User's new process: pay teachers end of month → TeacherPayment.month will match work month naturally
+- Vercel deployed clean version without temporary endpoints
