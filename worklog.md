@@ -44,3 +44,27 @@ Stage Summary:
 - Expired trial sessions are auto-deleted on every schedule fetch
 - Dashboard todaySessions excludes expired trials
 - All time comparisons use Africa/Casablanca timezone
+
+---
+Task ID: 3
+Agent: Main
+Task: Fix financial reports - teacher expenses based on student payment coverage, not TeacherPayment records
+
+Work Log:
+- Analyzed user complaint: April showing 0 professor expenses, but professors were paid in May for April's work
+- Root cause: dashboard API used TeacherPayment records (when payment was made) instead of calculating what professors EARNED for teaching in each month
+- Replaced monthlyTeacherPayments calculation in /api/dashboard/route.ts with student-payment-coverage-based algorithm
+- New algorithm (same as teacher-payments API calculate=true mode):
+  - For each active student's payment, calculate monthlyAmount = paidAmount / packMonths
+  - Determine effectiveStart month based on payment date (day 1-15 → next month, day 16-end → month after next)
+  - Check if each month of targetYear falls within payment coverage period
+  - Teacher expense = monthlyAmount × teacher.percentage / 100
+- Added year query parameter support to dashboard API for cross-year filtering
+- Updated financial-reports-view.tsx to re-fetch data when year filter changes (added useRef + useEffect for year changes)
+- Code compiles and runs correctly (verified via dev server)
+
+Stage Summary:
+- Expenses now correctly reflect what professors EARNED for teaching in each month
+- If student paid in April, professor teaches from May (effective start), so expense shows under May
+- Year filtering now works: changing year in financial reports re-fetches data from API
+- Files modified: src/app/api/dashboard/route.ts, src/components/views/financial-reports-view.tsx

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useT } from '@/hooks/use-translation';
@@ -187,9 +187,11 @@ function FinancialContent({ onLock }: FinancialContentProps) {
     '12': t.months.December,
   };
 
+  // Initial fetch
   useEffect(() => {
     async function fetchDashboard() {
       try {
+        setLoading(true);
         const res = await fetch('/api/dashboard');
         if (!res.ok) throw new Error();
         const json = await res.json();
@@ -203,6 +205,30 @@ function FinancialContent({ onLock }: FinancialContentProps) {
     }
     fetchDashboard();
   }, []);
+
+  // Re-fetch when year changes (skip initial load)
+  const initialYearSet = useRef(false);
+  useEffect(() => {
+    if (!initialYearSet.current) {
+      initialYearSet.current = true;
+      return;
+    }
+    if (filterYear <= 0) return;
+    async function fetchDashboardForYear() {
+      try {
+        setLoading(true);
+        const res = await fetch(`/api/dashboard?year=${filterYear}`);
+        if (!res.ok) throw new Error();
+        const json = await res.json();
+        setData(json);
+      } catch {
+        toast.error(t.common.fetchError);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchDashboardForYear();
+  }, [filterYear]);
 
   function handleLogout() {
     localStorage.removeItem('fr_unlocked');
