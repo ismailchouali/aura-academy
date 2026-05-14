@@ -68,3 +68,26 @@ Stage Summary:
 - If student paid in April, professor teaches from May (effective start), so expense shows under May
 - Year filtering now works: changing year in financial reports re-fetches data from API
 - Files modified: src/app/api/dashboard/route.ts, src/components/views/financial-reports-view.tsx
+
+---
+Task ID: 4
+Agent: Main
+Task: Fix expense calculation - use Payment.month instead of effectiveStart delay
+
+Work Log:
+- User reported April still showing 0 expenses and May showing 7,070 expenses
+- Root cause: previous fix used effectiveStart algorithm which pushes expense to NEXT month after student pays
+- The effectiveStart algorithm is for determining WHEN to pay the teacher, not which month the expense belongs to
+- User's workflow: student pays April → professor teaches April → professor gets PAID in May
+- Expense should be in April (month taught), not May (month paid)
+- Completely rewrote calculateTeacherExpenses: now uses Payment.month directly
+- New logic: expense for month X = sum of (paidAmount × teacher.percentage / 100) for all payments where Payment.month = X
+- This is consistent with how revenue is calculated (also uses Payment.month directly)
+- Applied same Langues pack division logic (divide by packMonths only for Langues service)
+- Simplified the code: no more effectiveStart, addMonths helper functions, or separate calculateTeacherExpenses function
+- Code compiles and runs correctly
+
+Stage Summary:
+- April expenses now correctly show professor's share for April student payments
+- May expenses will show 0 until students pay for May (professors haven't taught May yet)
+- Files modified: src/app/api/dashboard/route.ts
