@@ -598,24 +598,20 @@ export function TeacherPaymentsView() {
   const currentMonth = String(now.getMonth() + 1);
   const currentYear = String(now.getFullYear());
 
-  // Use filter month/year if set, otherwise use current month/year
-  const displayMonth = (filterMonth && filterMonth !== 'all') ? filterMonth : currentMonth;
-  const displayYear = (filterYear && filterYear !== 'all') ? filterYear : currentYear;
-
   const totalThisMonth = useMemo(
     () =>
       payments
-        .filter((p) => p.month === displayMonth && String(p.year) === displayYear)
+        .filter((p) => p.month === currentMonth && String(p.year) === currentYear)
         .reduce((s, p) => s + (p.amount || 0), 0),
-    [payments, displayMonth, displayYear]
+    [payments, currentMonth, currentYear]
   );
 
   const totalThisYear = useMemo(
     () =>
       payments
-        .filter((p) => String(p.year) === (filterYear !== 'all' ? filterYear : currentYear))
+        .filter((p) => String(p.year) === currentYear)
         .reduce((s, p) => s + (p.amount || 0), 0),
-    [payments, filterYear, currentYear]
+    [payments, currentYear]
   );
 
   const uniqueTeachersPaid = useMemo(() => {
@@ -804,7 +800,7 @@ export function TeacherPaymentsView() {
                 <TrendingUp className="h-5 w-5 text-teal-600" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">{t.teacherPayments.thisMonthTotal} {(filterMonth && filterMonth !== 'all') ? `(${getMonthName(displayMonth)})` : ''}</p>
+                <p className="text-xs text-muted-foreground">{t.teacherPayments.thisMonthTotal}</p>
                 <p className="text-xl font-bold text-teal-600">
                   {totalThisMonth.toLocaleString()}{' '}
                   <span className="text-xs font-normal text-muted-foreground">{t.common.dh}</span>

@@ -1,24 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
-export async function GET(request?: NextRequest) {
+export async function GET() {
   try {
-    // Support optional year query parameter (for financial reports cross-year filtering)
-    let targetYear = new Date().getFullYear();
-    if (request) {
-      const { searchParams } = new URL(request.url);
-      const yearParam = searchParams.get('year');
-      if (yearParam) {
-        const parsed = parseInt(yearParam);
-        if (!isNaN(parsed) && parsed >= 2020 && parsed <= 2099) {
-          targetYear = parsed;
-        }
-      }
-    }
-
-    const currentYear = new Date().getFullYear();
-    const currentMonth = new Date().getMonth() + 1; // 1-12
-
     const totalStudents = await db.student.count();
     const activeStudents = await db.student.count({ where: { status: 'active' } });
     const totalTeachers = await db.teacher.count();
@@ -35,9 +19,11 @@ export async function GET(request?: NextRequest) {
     const totalExpected = revenueResult._sum.amount || 0;
     const totalRemaining = revenueResult._sum.remainingAmount || 0;
 
-    // ─── Monthly revenue stats for the target year ──────────────────────
+    // Monthly stats for the current year - keyed by month number (1-12)
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth() + 1; // 1-12
     const monthlyPayments = await db.payment.findMany({
-      where: { year: targetYear },
+      where: { year: currentYear },
       select: {
         month: true,
         paidAmount: true,
@@ -60,6 +46,7 @@ export async function GET(request?: NextRequest) {
       },
     });
 
+    // Map English month names to numbers
     const monthNameToNumber: Record<string, number> = {
       January: 1, February: 2, March: 3, April: 4, May: 5, June: 6,
       July: 7, August: 8, September: 9, October: 10, November: 11, December: 12,
@@ -89,62 +76,16 @@ export async function GET(request?: NextRequest) {
       monthlyStats[key].count += 1;
     }
 
-    // ─── Teacher expenses: from TeacherPayment records ──────────────────
-    // Read actual amounts paid to teachers, grouped by month.
-    // The "month" field on TeacherPayment = the month the expense belongs to
-    // (the month the teacher worked, NOT the month the physical payment happened).
-    const teacherPaymentsThisYearResult = await db.teacherPayment.aggregate({
+    // Current month income
+    const currentMonthStats = monthlyStats[String(currentMonth)] || { revenue: 0, expected: 0, remaining: 0 };
+    const monthlyIncome = currentMonthStats.revenue;
+
+    // This year teacher payments total
+    const teacherPaymentsThisYear = await db.teacherPayment.aggregate({
       _sum: { amount: true },
-      where: { year: targetYear },
+      where: { year: currentYear },
     });
-    const teacherPaymentsTotal = teacherPaymentsThisYearResult._sum.amount || 0;
-
-    const monthlyTeacherPaymentsData = await db.teacherPayment.findMany({
-      where: { year: targetYear },
-      select: { month: true, amount: true },
-    });
-    const monthlyTeacherPayments: Record<string, number> = {};
-    for (const tp of monthlyTeacherPaymentsData) {
-      const monthNum = monthNameToNumber[tp.month] || parseInt(tp.month);
-      const key = String(monthNum);
-      monthlyTeacherPayments[key] = (monthlyTeacherPayments[key] || 0) + tp.amount;
-    }
-
-    // Current month income (always based on current year, regardless of targetYear)
-    let monthlyIncome = 0;
-    if (currentYear === targetYear) {
-      const currentMonthStats = monthlyStats[String(currentMonth)] || { revenue: 0, expected: 0, remaining: 0 };
-      monthlyIncome = currentMonthStats.revenue;
-    } else {
-      const currentYearPayments = await db.payment.findMany({
-        where: { year: currentYear, month: String(currentMonth) },
-        select: {
-          paidAmount: true,
-          packMonths: true,
-          student: {
-            select: {
-              level: {
-                select: {
-                  subject: {
-                    select: { serviceId: true },
-                  },
-                },
-              },
-            },
-          },
-        },
-      });
-
-      let revenue = 0;
-      for (const p of currentYearPayments) {
-        const serviceId = p.student?.level?.subject?.serviceId || '';
-        const isLangues = serviceId === 'service_langues';
-        const pPackMonths = (p.packMonths || 1);
-        const divisor = (isLangues && pPackMonths > 1) ? pPackMonths : 1;
-        revenue += p.paidAmount / divisor;
-      }
-      monthlyIncome = revenue;
-    }
+    const teacherPaymentsTotal = teacherPaymentsThisYear._sum.amount || 0;
 
     // Recent payments (last 10)
     const recentPayments = await db.payment.findMany({
@@ -188,6 +129,8 @@ export async function GET(request?: NextRequest) {
     });
 
     // Today's sessions
+    // JavaScript getDay(): 0=Sunday, 1=Monday, ..., 6=Saturday
+    // Schedule dayOfWeek: "1"=Sunday, "2"=Monday, ..., "7"=Saturday
     const jsDay = new Date().getDay();
     const scheduleDayOfWeek = jsDay === 0 ? '1' : String(jsDay + 1);
 
@@ -233,7 +176,6 @@ export async function GET(request?: NextRequest) {
       recentStudents,
       totalTeacherPayments: teacherPaymentStats._sum.amount || 0,
       teacherPaymentsThisYear: teacherPaymentsTotal,
-      monthlyTeacherPayments,
       todaySessions,
     });
   } catch (error) {
