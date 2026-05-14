@@ -3,19 +3,19 @@ import { db } from '@/lib/db';
 
 export async function GET() {
   try {
-    // Revert: change month from "4" back to "5" for 2025 TeacherPayment records
+    // Revert: change month from "4" back to "5" for 2026 TeacherPayment records
     const result = await db.teacherPayment.updateMany({
-      where: { month: '4', year: 2025 },
+      where: { month: '4', year: 2026 },
       data: { month: '5' },
     });
 
     // Verify current state
     const month4Records = await db.teacherPayment.findMany({
-      where: { month: '4', year: 2025 },
+      where: { month: '4', year: 2026 },
       select: { id: true, teacherId: true, amount: true, month: true },
     });
     const month5Records = await db.teacherPayment.findMany({
-      where: { month: '5', year: 2025 },
+      where: { month: '5', year: 2026 },
       select: { id: true, teacherId: true, amount: true, month: true },
     });
 
