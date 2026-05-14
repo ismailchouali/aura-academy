@@ -477,8 +477,8 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                 </div>
               )}
               {/* Registrations list */}
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {registrations.students.slice(0, 20).map((student) => (
+              <div className="space-y-2 max-h-80 overflow-y-auto">
+                {registrations.students.map((student) => (
                   <div key={student.id} className="flex items-center gap-3 p-2.5 rounded-lg border hover:bg-accent/50 transition-colors cursor-pointer" onClick={() => onNavigate('students')}>
                     <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-xs shrink-0">
                       {student.fullName.charAt(0)}
