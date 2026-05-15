@@ -386,24 +386,13 @@ export async function GET(request: NextRequest) {
     margin-bottom: 4px;
   }
 
-  /* Amount boxes */
-  .amount-row {
-    display: flex;
-    gap: 12px;
-    padding: 10px 20px;
-    border-bottom: 1px solid #e2e8f0;
-  }
+  /* Amount box */
   .amount-box {
-    flex: 1;
     background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%);
     padding: 14px;
     border-radius: 8px;
     border: 1px solid #99f6e4;
     text-align: center;
-  }
-  .amount-box.teacher-box {
-    background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
-    border-color: #fde68a;
   }
   .amount-label { font-size: 11px; color: #64748b; margin-bottom: 2px; }
   .amount-value {
@@ -412,11 +401,7 @@ export async function GET(request: NextRequest) {
     color: #0f766e;
     direction: ltr;
   }
-  .amount-box.teacher-box .amount-value {
-    color: #b45309;
-  }
   .amount-currency { font-size: 12px; color: #0d9488; font-weight: 500; }
-  .amount-box.teacher-box .amount-currency { color: #b45309; }
   .percentage-badge {
     display: inline-block;
     background: #0d9488;
@@ -426,9 +411,6 @@ export async function GET(request: NextRequest) {
     padding: 2px 8px;
     border-radius: 10px;
     margin-top: 4px;
-  }
-  .amount-box.teacher-box .percentage-badge {
-    background: #b45309;
   }
 
   /* Footer */
@@ -488,7 +470,7 @@ export async function GET(request: NextRequest) {
     <div class="bon-info">
       <div class="info-grid">
         <div class="info-row">
-          <span class="info-label">اسم الأستاذة</span>
+          <span class="info-label">اسم الأستاذ</span>
           <span class="info-value">${teacherName}</span>
         </div>
         <div class="info-row">
@@ -519,16 +501,12 @@ export async function GET(request: NextRequest) {
       ${studentsTableHTML}
     </div>` : ''}
 
-    <!-- Amount Boxes -->
-    <div class="amount-row">
-      <div class="amount-box">
-        <div class="amount-label">إجمالي المدفوعات المستفادة</div>
-        <div class="amount-value">${formatMoney(totalCollected)} <span class="amount-currency">درهم</span></div>
-      </div>
-      <div class="amount-box teacher-box">
-        <div class="amount-label">حصة المستفيدة (دريهم)</div>
-        <div class="amount-value">${formatMoney(teacherShare)} <span class="amount-currency">درهم</span></div>
-        <div class="percentage-badge">${teacherPercentage}%</div>
+    <!-- Amount Box -->
+    <div style="padding:10px 20px; border-bottom:1px solid #e2e8f0;">
+      <div class="amount-box" style="background:linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%);">
+        <div class="amount-label">المبلغ المستحق</div>
+        <div class="amount-value">${formatMoney(payment.amount)} <span class="amount-currency">درهم</span></div>
+        ${teacherPercentage > 0 ? `<div class="percentage-badge">${teacherPercentage}%</div>` : ''}
       </div>
     </div>
 
