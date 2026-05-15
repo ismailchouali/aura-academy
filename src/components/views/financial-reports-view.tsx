@@ -10,6 +10,13 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Lock,
   Unlock,
   Wallet,
@@ -20,6 +27,7 @@ import {
   Eye,
   EyeOff,
   LogOut,
+  Filter,
 } from 'lucide-react';
 
 interface DashboardData {
@@ -41,17 +49,23 @@ interface DashboardData {
     { revenue: number; expected: number; remaining: number; count: number }
   >;
   teacherPaymentsThisYear: number;
+  monthlyTeacherPayments: Record<string, number>;
 }
 
 const CORRECT_PASSWORD = 'Aura@07';
 
 const MONTH_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
 
+const MONTH_NAMES_AR = [
+  'يناير', 'فبراير', 'مارس', 'أبريل', 'ماي', 'يونيو',
+  'يوليوز', 'غشت', 'شتنبر', 'أكتوبر', 'نونبر', 'دجنبر',
+];
+
 function FinancialContentSkeleton() {
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-        {Array.from({ length: 3 }).map((_, i) => (
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {Array.from({ length: 4 }).map((_, i) => (
           <Card key={i}>
             <CardContent className="p-4">
               <Skeleton className="h-10 w-10 rounded-lg mb-3" />
@@ -66,7 +80,7 @@ function FinancialContentSkeleton() {
           <Skeleton className="h-6 w-40" />
         </CardHeader>
         <CardContent>
-          <Skeleton className="h-52 w-full" />
+          <Skeleton className="h-56 w-full" />
         </CardContent>
       </Card>
     </div>
@@ -154,6 +168,9 @@ function FinancialContent({ onLock }: FinancialContentProps) {
   const [loading, setLoading] = useState(true);
   const t = useT();
 
+  // Filter state
+  const [filterMonth, setFilterMonth] = useState<string>('all');
+
   const monthLabels: Record<string, string> = {
     '1': t.months.January,
     '2': t.months.February,
@@ -172,6 +189,7 @@ function FinancialContent({ onLock }: FinancialContentProps) {
   useEffect(() => {
     async function fetchDashboard() {
       try {
+        setLoading(true);
         const res = await fetch('/api/dashboard');
         if (!res.ok) throw new Error();
         const json = await res.json();
@@ -193,13 +211,40 @@ function FinancialContent({ onLock }: FinancialContentProps) {
   if (loading) return <FinancialContentSkeleton />;
   if (!data) return null;
 
+  // ─── Computed values based on filter ──────────────────────────────────
+  const isAllMonths = filterMonth === 'all';
+
+  // Revenue for selected month or total for year
+  const filteredRevenue = isAllMonths
+    ? Object.values(data.monthlyStats).reduce((sum, m) => sum + m.revenue, 0)
+    : (data.monthlyStats[filterMonth]?.revenue || 0);
+
+  // Expenses (teacher payments) for selected month or total for year
+  const filteredExpenses = isAllMonths
+    ? data.teacherPaymentsThisYear
+    : (data.monthlyTeacherPayments?.[filterMonth] || 0);
+
+  // Net profit
+  const netProfit = filteredRevenue - filteredExpenses;
+
+  // Filter label
+  const filterLabel = isAllMonths
+    ? `مجموع ${data.currentYear}`
+    : `${MONTH_NAMES_AR[parseInt(filterMonth) - 1]} ${data.currentYear}`;
+
+  // Chart data
   const chartData = MONTH_KEYS.map((key) => ({
     month: monthLabels[key],
     monthKey: key,
     revenue: data.monthlyStats[key]?.revenue || 0,
     expected: data.monthlyStats[key]?.expected || 0,
+    expenses: data.monthlyTeacherPayments?.[key] || 0,
   }));
-  const maxChartValue = Math.max(...chartData.map((d) => Math.max(d.revenue, d.expected)), 1);
+
+  const maxChartValue = Math.max(
+    ...chartData.map((d) => Math.max(d.revenue, d.expected, d.expenses)),
+    1
+  );
 
   return (
     <div className="space-y-6">
@@ -215,72 +260,124 @@ function FinancialContent({ onLock }: FinancialContentProps) {
         </Button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-        {/* Monthly Income */}
+      {/* ─── Filter Bar ────────────────────────────────────────────── */}
+      <Card className="border-2 border-dashed border-slate-200 bg-slate-50/50">
+        <CardContent className="p-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
+            <span className="text-xs font-medium text-muted-foreground">تصفية حسب الشهر:</span>
+            <Select value={filterMonth} onValueChange={setFilterMonth}>
+              <SelectTrigger className="w-40 h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">كل الأشهر</SelectItem>
+                {MONTH_KEYS.map((key) => (
+                  <SelectItem key={key} value={key}>
+                    {MONTH_NAMES_AR[parseInt(key) - 1]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Badge variant="secondary" className="text-xs gap-1">
+              {filterLabel}
+            </Badge>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ─── Stats Cards ───────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Filtered Revenue (Income) */}
         <Card className="overflow-hidden border-r-4 border-r-emerald-500">
           <CardContent className="p-4">
             <div className="flex items-start justify-between">
               <div className="p-2.5 rounded-lg bg-emerald-100">
                 <Wallet className="h-5 w-5 text-emerald-600" />
               </div>
-              <Badge variant="outline" className="text-emerald-600 border-emerald-200 text-xs">
-                {monthLabels[String(data.currentMonth)]}
+              <Badge variant="outline" className="text-emerald-600 border-emerald-200 text-[10px]">
+                {isAllMonths ? 'الإجمالي' : MONTH_NAMES_AR[parseInt(filterMonth) - 1]}
               </Badge>
             </div>
             <div className="mt-3">
-              <p className="text-sm text-muted-foreground">{t.financialReports.monthlyIncome}</p>
-              <p className="text-2xl font-bold mt-1">
-                {data.monthlyIncome.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">{t.common.currency}</span>
+              <p className="text-sm text-muted-foreground">الإيرادات</p>
+              <p className="text-2xl font-bold mt-1 text-emerald-700">
+                {filteredRevenue.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">{t.common.currency}</span>
               </p>
             </div>
           </CardContent>
         </Card>
 
-        {/* Total Income */}
+        {/* Filtered Expenses (Teacher Payments) */}
+        <Card className="overflow-hidden border-r-4 border-r-rose-500">
+          <CardContent className="p-4">
+            <div className="flex items-start justify-between">
+              <div className="p-2.5 rounded-lg bg-rose-100">
+                <GraduationCap className="h-5 w-5 text-rose-600" />
+              </div>
+              <Badge variant="outline" className="text-rose-600 border-rose-200 text-[10px]">
+                {isAllMonths ? 'الإجمالي' : MONTH_NAMES_AR[parseInt(filterMonth) - 1]}
+              </Badge>
+            </div>
+            <div className="mt-3">
+              <p className="text-sm text-muted-foreground">المصروفات</p>
+              <p className="text-2xl font-bold mt-1 text-rose-700">
+                {filteredExpenses.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">{t.common.currency}</span>
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Net Profit */}
         <Card className="overflow-hidden border-r-4 border-r-amber-500">
           <CardContent className="p-4">
             <div className="flex items-start justify-between">
               <div className="p-2.5 rounded-lg bg-amber-100">
                 <DollarSign className="h-5 w-5 text-amber-600" />
               </div>
-              <div className="flex items-center gap-1 text-amber-600 text-xs font-medium">
-                <TrendingUp className="h-3.5 w-3.5" />
-                <span>{data.currentYear}</span>
-              </div>
+              <Badge
+                variant="outline"
+                className={cn(
+                  'text-[10px]',
+                  netProfit >= 0
+                    ? 'text-amber-600 border-amber-200'
+                    : 'text-red-600 border-red-200'
+                )}
+              >
+                {netProfit >= 0 ? 'ربح' : 'خسارة'}
+              </Badge>
             </div>
             <div className="mt-3">
-              <p className="text-sm text-muted-foreground">{t.financialReports.totalIncome}</p>
-              <p className="text-2xl font-bold mt-1">
-                {data.totalRevenue.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">{t.common.currency}</span>
+              <p className="text-sm text-muted-foreground">صافي الربح</p>
+              <p className={cn('text-2xl font-bold mt-1', netProfit >= 0 ? 'text-amber-700' : 'text-red-600')}>
+                {netProfit.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">{t.common.currency}</span>
               </p>
             </div>
           </CardContent>
         </Card>
 
-        {/* Teacher Expenses */}
-        <Card className="overflow-hidden border-r-4 border-r-rose-500 col-span-2 lg:col-span-1">
+        {/* Current Month Income (always shows current month) */}
+        <Card className="overflow-hidden border-r-4 border-r-teal-500">
           <CardContent className="p-4">
             <div className="flex items-start justify-between">
-              <div className="p-2.5 rounded-lg bg-rose-100">
-                <GraduationCap className="h-5 w-5 text-rose-600" />
+              <div className="p-2.5 rounded-lg bg-teal-100">
+                <TrendingUp className="h-5 w-5 text-teal-600" />
               </div>
-              <div className="flex items-center gap-1 text-rose-600 text-xs font-medium">
-                <TrendingDown className="h-3.5 w-3.5" />
-                <span>{data.currentYear}</span>
-              </div>
+              <Badge variant="outline" className="text-teal-600 border-teal-200 text-[10px]">
+                {MONTH_NAMES_AR[data.currentMonth - 1]}
+              </Badge>
             </div>
             <div className="mt-3">
-              <p className="text-sm text-muted-foreground">{t.financialReports.expenses}</p>
-              <p className="text-2xl font-bold mt-1">
-                {data.teacherPaymentsThisYear.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">{t.common.currency}</span>
+              <p className="text-sm text-muted-foreground">هذا الشهر</p>
+              <p className="text-2xl font-bold mt-1 text-teal-700">
+                {data.monthlyIncome.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">{t.common.currency}</span>
               </p>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Monthly Income Chart */}
+      {/* ─── Monthly Income / Expenses Chart ─────────────────────── */}
       <Card>
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
@@ -291,26 +388,39 @@ function FinancialContent({ onLock }: FinancialContentProps) {
             <div className="flex items-center gap-4 text-xs">
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 rounded-sm bg-teal-500" />
-                <span className="text-muted-foreground">{t.financialReports.collected}</span>
+                <span className="text-muted-foreground">الإيرادات</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 rounded-sm bg-amber-400/60" />
-                <span className="text-muted-foreground">{t.financialReports.expected}</span>
+                <span className="text-muted-foreground">المتوقع</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-sm bg-rose-400" />
+                <span className="text-muted-foreground">المصروفات</span>
               </div>
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="flex items-end gap-2 h-52">
+          <div className="flex items-end gap-2 h-56">
             {chartData.map((item) => {
               const revenueH = maxChartValue > 0 ? (item.revenue / maxChartValue) * 100 : 0;
               const expectedH = maxChartValue > 0 ? (item.expected / maxChartValue) * 100 : 0;
+              const expensesH = maxChartValue > 0 ? (item.expenses / maxChartValue) * 100 : 0;
               const isCurrentMonth = item.monthKey === String(data.currentMonth);
+              const isSelectedMonth = !isAllMonths && item.monthKey === filterMonth;
+              const highlightMonth = isCurrentMonth || isSelectedMonth;
+
               return (
                 <div key={item.monthKey} className="flex-1 flex flex-col items-center gap-1">
                   {item.revenue > 0 && (
-                    <span className="text-[10px] text-teal-600 font-medium opacity-80">
+                    <span className="text-[9px] text-teal-600 font-medium opacity-80">
                       {(item.revenue / 1000).toFixed(1)}k
+                    </span>
+                  )}
+                  {item.expenses > 0 && (
+                    <span className="text-[9px] text-rose-500 font-medium opacity-80">
+                      {(item.expenses / 1000).toFixed(1)}k
                     </span>
                   )}
                   <div className="w-full flex gap-0.5 items-end" style={{ height: '160px' }}>
@@ -321,14 +431,21 @@ function FinancialContent({ onLock }: FinancialContentProps) {
                     <div
                       className={cn(
                         'flex-1 rounded-t-sm transition-all duration-500 min-h-[2px]',
-                        isCurrentMonth
+                        highlightMonth
                           ? 'bg-gradient-to-t from-teal-600 to-teal-400'
                           : 'bg-gradient-to-t from-teal-500 to-teal-300'
                       )}
                       style={{ height: `${Math.max(revenueH, 2)}%` }}
                     />
+                    <div
+                      className="flex-1 bg-rose-400/70 rounded-t-sm transition-all duration-500 min-h-[2px]"
+                      style={{ height: `${Math.max(expensesH, 2)}%` }}
+                    />
                   </div>
-                  <span className={cn('text-[8px] font-medium mt-1 leading-tight', isCurrentMonth ? 'text-teal-700' : 'text-muted-foreground')}>
+                  <span className={cn(
+                    'text-[8px] font-medium mt-1 leading-tight',
+                    highlightMonth ? 'text-teal-700' : 'text-muted-foreground'
+                  )}>
                     {item.month}
                   </span>
                 </div>
