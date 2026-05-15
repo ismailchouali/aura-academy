@@ -115,3 +115,32 @@ Stage Summary:
 - Database data restored: 6 TeacherPayment records back to month="5" (as originally recorded)
 - User's new process: pay teachers end of month → TeacherPayment.month will match work month naturally
 - Vercel deployed clean version without temporary endpoints
+
+---
+Task ID: 6
+Agent: Main
+Task: Rewrite teacher bon printing with proper format, student details, and fixed calculation algorithm
+
+Work Log:
+- User reported bon printing was broken (error messages when trying to print)
+- User uploaded PDF showing the expected bon format for teacher "majda bou-louidane"
+- Analyzed PDF structure: header (academy name/logo), teacher info, student summary by level, student detail table with payment amounts, total collected from students, teacher's share with percentage, footer
+- Root cause of bon errors: the bon API endpoint was doing a self-referencing HTTP fetch to calculate data, which fails on Vercel
+- Completely rewrote /api/teacher-payments/bon/route.ts:
+  - Removed self-referencing fetch (was causing errors)
+  - All calculation now done inline using direct Prisma queries
+  - Bon now shows: student summary by level with counts, individual student payments with amounts, total collected from students, teacher's percentage and calculated share
+  - Format matches the uploaded PDF example
+  - Proper print button and print CSS
+- Fixed payment coverage algorithm in BOTH bon endpoint AND teacher-payments/route.ts:
+  - OLD: paid 1-15 → effectiveStart = next month; paid 16+ → month after next
+  - NEW: paid 1-15 → effectiveStart = SAME month; paid 16+ → next month
+  - This matches user's workflow: teachers paid at end of month, so if student pays before 15th, teacher gets paid this month
+- Pushed 2 commits to GitHub (bon rewrite + algorithm fix)
+- Auto-deploy via Vercel GitHub integration
+
+Stage Summary:
+- Bon endpoint now returns proper HTML with student details and teacher share breakdown
+- No more self-referencing fetch that caused Vercel errors
+- Payment coverage algorithm corrected to match user's end-of-month payment workflow
+- Files modified: src/app/api/teacher-payments/bon/route.ts, src/app/api/teacher-payments/route.ts
