@@ -141,10 +141,11 @@ export async function GET(request: NextRequest) {
 
       let effectiveStart: { month: number; year: number };
       if (payDay >= 1 && payDay <= 15) {
-        effectiveStart = getNextMonth(payMonth, payYear);
+        // Paid 1st-15th → teacher gets paid for this student THIS month
+        effectiveStart = { month: payMonth, year: payYear };
       } else {
-        const next = getNextMonth(payMonth, payYear);
-        effectiveStart = getNextMonth(next.month, next.year);
+        // Paid 16th-end → teacher gets paid for this student NEXT month
+        effectiveStart = getNextMonth(payMonth, payYear);
       }
 
       for (let i = 0; i < packMonths; i++) {

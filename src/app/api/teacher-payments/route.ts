@@ -89,7 +89,7 @@ export async function GET(request: NextRequest) {
       const calcYear = year ? parseInt(year) : new Date().getFullYear();
 
       // =============================================
-      // NEW ALGORITHM:
+      // ALGORITHM:
       //
       // 1. totalStudents = ALL active students assigned to teacher
       //    (regardless of whether they have payments or not)
@@ -97,8 +97,8 @@ export async function GET(request: NextRequest) {
       // 2. For each student's payment:
       //    monthlyAmount = paidAmount / packMonths
       //    effectiveStartMonth = based on paymentDate:
-      //      - day 1-15 → start of next month
-      //      - day 16-end → start of month after next
+      //      - day 1-15 → SAME month as payment (teacher paid at end of month)
+      //      - day 16-end → NEXT month (late payment, teacher paid next month)
       //    The pack covers 'packMonths' consecutive months
       //    starting from effectiveStartMonth
       //
@@ -107,10 +107,10 @@ export async function GET(request: NextRequest) {
       //
       // Example: Hafsa paid 6300 DH for 9-month pack on April 5
       //   monthlyAmount = 6300/9 = 700 DH/month
-      //   effectiveStartMonth = May (day 5 is in 1-15 range)
-      //   Pack covers: May, Jun, Jul, Aug, Sep, Oct, Nov, Dec, Jan
-      //   So for calcMonth = May: totalCollected += 700
-      //   For calcMonth = June: totalCollected += 700 (etc.)
+      //   effectiveStartMonth = April (day 5 is in 1-15 range)
+      //   Pack covers: Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec
+      //   So for calcMonth = April: totalCollected += 700
+      //   For calcMonth = May: totalCollected += 700 (etc.)
       // =============================================
 
       // Fetch ALL payments for these students (no date range limit)
@@ -150,12 +150,11 @@ export async function GET(request: NextRequest) {
 
         let effectiveStart: { month: number; year: number };
         if (payDay >= 1 && payDay <= 15) {
-          // Paid 1st-15th → teacher gets paid starting next month
-          effectiveStart = getNextMonth(payMonth, payYear);
+          // Paid 1st-15th → teacher gets paid for this student THIS month
+          effectiveStart = { month: payMonth, year: payYear };
         } else {
-          // Paid 16th-end → teacher gets paid starting month after next
-          const next = getNextMonth(payMonth, payYear);
-          effectiveStart = getNextMonth(next.month, next.year);
+          // Paid 16th-end → teacher gets paid for this student NEXT month
+          effectiveStart = getNextMonth(payMonth, payYear);
         }
 
         // The pack covers packMonths months starting from effectiveStart
@@ -187,10 +186,9 @@ export async function GET(request: NextRequest) {
 
         let effectiveStart: { month: number; year: number };
         if (payDay >= 1 && payDay <= 15) {
-          effectiveStart = getNextMonth(payMonth, payYear);
+          effectiveStart = { month: payMonth, year: payYear };
         } else {
-          const next = getNextMonth(payMonth, payYear);
-          effectiveStart = getNextMonth(next.month, next.year);
+          effectiveStart = getNextMonth(payMonth, payYear);
         }
 
         const MONTH_NAMES = ['يناير','فبراير','مارس','أبريل','ماي','يونيو','يوليوز','غشت','شتنبر','أكتوبر','نونبر','دجنبر'];
