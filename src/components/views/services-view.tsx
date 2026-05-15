@@ -189,6 +189,12 @@ export function ServicesView() {
   const [deleteSubjectName, setDeleteSubjectName] = useState('');
   const [deleteSubjectSubmitting, setDeleteSubjectSubmitting] = useState(false);
 
+  // ── Delete Service confirmation ─────────────────────────────
+  const [deleteServiceOpen, setDeleteServiceOpen] = useState(false);
+  const [deleteServiceId, setDeleteServiceId] = useState('');
+  const [deleteServiceName, setDeleteServiceName] = useState('');
+  const [deleteServiceSubmitting, setDeleteServiceSubmitting] = useState(false);
+
   // ── Edit Level dialog ───────────────────────────────────────
   const [editLevelOpen, setEditLevelOpen] = useState(false);
   const [editLevelServiceId, setEditLevelServiceId] = useState('');
@@ -406,6 +412,31 @@ export function ServicesView() {
 
   // ── Delete Level ────────────────────────────────────────────
 
+  // ── Delete Service ───────────────────────────────────────
+
+  const handleOpenDeleteService = (service: { id: string; nameAr: string }) => {
+    setDeleteServiceId(service.id);
+    setDeleteServiceName(service.nameAr);
+    setDeleteServiceOpen(true);
+  };
+
+  const handleDeleteService = async () => {
+    setDeleteServiceSubmitting(true);
+    try {
+      const res = await fetch(`/api/services/${deleteServiceId}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error();
+      toast.success('تم حذف الخدمة بنجاح');
+      setDeleteServiceOpen(false);
+      fetchServices();
+    } catch {
+      toast.error('فشل في حذف الخدمة');
+    } finally {
+      setDeleteServiceSubmitting(false);
+    }
+  };
+
   const handleOpenDeleteLevel = (serviceId: string, subjectId: string, level: { id: string; nameAr: string }) => {
     setDeleteLevelServiceId(serviceId);
     setDeleteLevelSubjectId(subjectId);
@@ -502,6 +533,17 @@ export function ServicesView() {
                   <Badge variant="secondary" className="mr-auto text-xs">
                     {service.subjects.length} {service.subjects.length === 1 ? t.services.subject : t.services.subjects}
                   </Badge>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive mr-1"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenDeleteService(service);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
               </AccordionTrigger>
               <AccordionContent className="px-6 pb-5">
@@ -899,6 +941,30 @@ export function ServicesView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ═══════════════════════════════════════════════════════
+          DELETE SERVICE CONFIRMATION
+          ═══════════════════════════════════════════════════════ */}
+      <AlertDialog open={deleteServiceOpen} onOpenChange={setDeleteServiceOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>هل أنت متأكد من حذف الخدمة؟</AlertDialogTitle>
+            <AlertDialogDescription>
+              سيتم حذف الخدمة &quot;{deleteServiceName}&quot; وجميع المواد والمستويات المرتبطة بها. لا يمكن التراجع عن هذا الإجراء.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteServiceSubmitting}>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteService}
+              disabled={deleteServiceSubmitting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteServiceSubmitting ? 'جاري الحذف...' : 'حذف الخدمة'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ═══════════════════════════════════════════════════════
           DELETE LEVEL CONFIRMATION
