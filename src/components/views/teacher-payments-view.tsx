@@ -197,8 +197,8 @@ function getTeacherBonHtml(
         <thead>
           <tr style="background:#f0fdfa;">
             <th style="border:1px solid #d1d5db; padding:6px 10px; text-align:right; font-weight:600;">#</th>
-            <th style="border:1px solid #d1d5db; padding:6px 10px; text-align:right; font-weight:600;">${t.teacherPayments.bonSubjectLevel}</th>
-            <th style="border:1px solid #d1d5db; padding:6px 10px; text-align:center; font-weight:600;">${t.teacherPayments.bonStudentCountCol}</th>
+            <th style="border:1px solid #d1d5db; padding:6px 10px; text-align:right; font-weight:600;">${t.teacherPayments.bonSubjectLevel || 'المستوى'}</th>
+            <th style="border:1px solid #d1d5db; padding:6px 10px; text-align:center; font-weight:600;">${t.teacherPayments.bonStudentCountCol || 'عدد التلاميذ'}</th>
           </tr>
         </thead>
         <tbody>
@@ -210,7 +210,7 @@ function getTeacherBonHtml(
             </tr>
           `).join('')}
           <tr style="background:#f0fdfa; font-weight:700;">
-            <td colspan="2" style="border:1px solid #d1d5db; padding:6px 10px; text-align:right;">${t.teacherPayments.bonTotalRow}</td>
+            <td colspan="2" style="border:1px solid #d1d5db; padding:6px 10px; text-align:right;">${t.teacherPayments.bonTotalRow || 'المجموع'}</td>
             <td style="border:1px solid #d1d5db; padding:6px 10px; text-align:center;">${totalStudents}</td>
           </tr>
         </tbody>
@@ -222,14 +222,14 @@ function getTeacherBonHtml(
   if (paidStudents.length > 0) {
     studentsTableHTML = `
       <div class="bon-students">
-        <h3>${t.teacherPayments.bonStudentsTitle}</h3>
+        <h3>${t.teacherPayments.bonStudentsTitle || 'تفاصيل التلاميذ'}</h3>
         <table style="width:100%; border-collapse:collapse; margin-top:8px; font-size:11px;">
           <thead>
             <tr style="background:#f0fdfa;">
               <th style="border:1px solid #d1d5db; padding:5px 8px; text-align:right; font-weight:600; font-size:10px;">#</th>
-              <th style="border:1px solid #d1d5db; padding:5px 8px; text-align:right; font-weight:600; font-size:10px;">${t.teacherPayments.bonStudentNameCol}</th>
-              <th style="border:1px solid #d1d5db; padding:5px 8px; text-align:right; font-weight:600; font-size:10px;">${t.teacherPayments.bonSubjectLevel}</th>
-              <th style="border:1px solid #d1d5db; padding:5px 8px; text-align:center; font-weight:600; font-size:10px;">${t.teacherPayments.bonAmountDh}</th>
+              <th style="border:1px solid #d1d5db; padding:5px 8px; text-align:right; font-weight:600; font-size:10px;">${t.teacherPayments.bonStudentNameCol || 'اسم التلميذ'}</th>
+              <th style="border:1px solid #d1d5db; padding:5px 8px; text-align:right; font-weight:600; font-size:10px;">${t.teacherPayments.bonSubjectLevel || 'المستوى'}</th>
+              <th style="border:1px solid #d1d5db; padding:5px 8px; text-align:center; font-weight:600; font-size:10px;">${t.teacherPayments.bonAmountDh || 'المبلغ'}</th>
             </tr>
           </thead>
           <tbody>
@@ -242,7 +242,7 @@ function getTeacherBonHtml(
               </tr>
             `).join('')}
             <tr style="background:#f0fdfa; font-weight:700;">
-              <td colspan="3" style="border:1px solid #d1d5db; padding:5px 8px; text-align:right;">${t.teacherPayments.bonTotalRow}</td>
+              <td colspan="3" style="border:1px solid #d1d5db; padding:5px 8px; text-align:right;">${t.teacherPayments.bonTotalRow || 'المجموع'}</td>
               <td style="border:1px solid #d1d5db; padding:5px 8px; text-align:center; color:#059669;">${totalPaidByStudents.toLocaleString('fr-MA', { minimumFractionDigits: 2 })}</td>
             </tr>
           </tbody>
@@ -250,12 +250,14 @@ function getTeacherBonHtml(
       </div>`;
   }
 
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+
   const html = `<!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
 <meta charset="UTF-8">
-<title>${t.teacherPayments.bonTitle} - ${teacherName}</title>
-<base href="${typeof window !== 'undefined' ? window.location.origin + '/' : '/'}">
+<title>${t.teacherPayments.bonTitle || 'بون دفع'} - ${teacherName}</title>
+<base href="${origin}/">
 <style>
   @page { size: A4; margin: 10mm; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -399,66 +401,66 @@ function getTeacherBonHtml(
     </div>
 
     <div class="bon-title-bar">
-      <h2>${t.teacherPayments.bonTitle}</h2>
+      <h2>${t.teacherPayments.bonTitle || 'بون دفع أستاذ'}</h2>
     </div>
 
     <div class="bon-info">
       <div class="info-row">
-        <span class="info-label">${t.teacherPayments.bonTeacherName}</span>
+        <span class="info-label">${t.teacherPayments.bonTeacherName || 'اسم الأستاذ'}</span>
         <span class="info-value">${teacherName}</span>
       </div>
       <div class="info-row">
-        <span class="info-label">${t.teacherPayments.bonPhone}</span>
+        <span class="info-label">${t.teacherPayments.bonPhone || 'الهاتف'}</span>
         <span class="info-value" dir="ltr">${teacherPhone}</span>
       </div>
       <div class="info-row">
-        <span class="info-label">${t.teacherPayments.bonSubjects}</span>
+        <span class="info-label">${t.teacherPayments.bonSubjects || 'المواد'}</span>
         <span class="info-value" style="font-size:11px;">${subjects}</span>
       </div>
       <div class="info-row">
-        <span class="info-label">${t.teacherPayments.bonDate}</span>
+        <span class="info-label">${t.teacherPayments.bonDate || 'التاريخ'}</span>
         <span class="info-value" dir="ltr">${day} / ${month} / ${year}</span>
       </div>
     </div>
 
     ${groups.length > 0 ? `
     <div class="bon-groups">
-      <h3>${t.teacherPayments.bonGroupsTitle}</h3>
+      <h3>${t.teacherPayments.bonGroupsTitle || 'توزيع التلاميذ'}</h3>
       ${groupsTableHTML}
     </div>` : ''}
 
     ${studentsTableHTML}
 
     <div class="amount-box">
-      <div class="amount-label">${t.teacherPayments.bonAmountDue}</div>
-      <div class="amount-value">${amountStr} <span class="amount-currency">${t.common.dh}</span></div>
+      <div class="amount-label">${t.teacherPayments.bonAmountDue || 'المبلغ المستحق'}</div>
+      <div class="amount-value">${amountStr} <span class="amount-currency">${t.common.dh || 'درهم'}</span></div>
     </div>
 
     <div class="bon-details">
-      <h3>${t.teacherPayments.bonDetails}</h3>
+      <h3>${t.teacherPayments.bonDetails || 'تفاصيل الدفع'}</h3>
       <div class="info-row">
-        <span class="info-label">${t.teacherPayments.bonMonth}</span>
+        <span class="info-label">${t.teacherPayments.bonMonth || 'الشهر'}</span>
         <span class="info-value">${monthStr} ${yearStr}</span>
       </div>
       <div class="info-row">
-        <span class="info-label">${t.teacherPayments.bonPaymentDate}</span>
+        <span class="info-label">${t.teacherPayments.bonPaymentDate || 'تاريخ الدفع'}</span>
         <span class="info-value" dir="ltr">${day} / ${month} / ${year}</span>
       </div>
       ${payment.notes ? `
       <div class="info-row">
-        <span class="info-label">${t.common.notes}</span>
+        <span class="info-label">${t.common.notes || 'ملاحظات'}</span>
         <span class="info-value">${payment.notes}</span>
       </div>` : ''}
     </div>
 
     <div class="bon-footer">
-      <div class="phone-line">${t.payments.bonPhone}</div>
-      <div>${t.payments.bonAddress}</div>
+      <div class="phone-line">الهاتف: 0606030356</div>
+      <div>Bd med V, N°407 Route de Marrakech, Béni Mellal</div>
     </div>
   </div>
 
   <div class="no-print" style="text-align:center; margin-top:12px;">
-    <button onclick="window.print()" style="padding:8px 24px; background:#0d9488; color:white; border:none; border-radius:6px; cursor:pointer; font-family:inherit; font-size:14px;">${t.teacherPayments.bonPrint}</button>
+    <button onclick="window.print()" style="padding:8px 24px; background:#0d9488; color:white; border:none; border-radius:6px; cursor:pointer; font-family:inherit; font-size:14px;">${t.teacherPayments.bonPrint || 'طباعة'}</button>
   </div>
 </body>
 </html>`;
@@ -471,11 +473,24 @@ function printTeacherBon(
   t: Translations,
   getMonthName: (month: string) => string
 ) {
-  const html = getTeacherBonHtml(payment, teacher, calcData, t, getMonthName);
-  const win = window.open('', '_blank', 'width=750,height=900');
-  if (win) {
-    win.document.write(html);
-    win.document.close();
+  try {
+    const html = getTeacherBonHtml(payment, teacher, calcData, t, getMonthName);
+    if (!html) {
+      toast.error('خطأ في إنشاء البون');
+      return;
+    }
+    // Use Blob URL instead of document.write for better compatibility
+    const blob = new Blob([html], { type: 'text/html; charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, '_blank', 'width=750,height=900');
+    if (win) {
+      win.addEventListener('load', () => {
+        URL.revokeObjectURL(url);
+      }, { once: true });
+    }
+  } catch (error) {
+    console.error('Error printing bon:', error);
+    toast.error('خطأ في طباعة البون');
   }
 }
 
