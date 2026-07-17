@@ -1,0 +1,1951 @@
+     1→'use client';
+     2→
+     3→import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+     4→import { toast } from 'sonner';
+     5→import { Button } from '@/components/ui/button';
+     6→import { Input } from '@/components/ui/input';
+     7→import { Label } from '@/components/ui/label';
+     8→import { Textarea } from '@/components/ui/textarea';
+     9→import { Skeleton } from '@/components/ui/skeleton';
+    10→import { Badge } from '@/components/ui/badge';
+    11→import { Card, CardContent } from '@/components/ui/card';
+    12→import { Separator } from '@/components/ui/separator';
+    13→import {
+    14→  Table,
+    15→  TableBody,
+    16→  TableCell,
+    17→  TableHead,
+    18→  TableHeader,
+    19→  TableRow,
+    20→} from '@/components/ui/table';
+    21→import {
+    22→  Dialog,
+    23→  DialogContent,
+    24→  DialogDescription,
+    25→  DialogFooter,
+    26→  DialogHeader,
+    27→  DialogTitle,
+    28→} from '@/components/ui/dialog';
+    29→import {
+    30→  AlertDialog,
+    31→  AlertDialogAction,
+    32→  AlertDialogCancel,
+    33→  AlertDialogContent,
+    34→  AlertDialogDescription,
+    35→  AlertDialogFooter,
+    36→  AlertDialogHeader,
+    37→  AlertDialogTitle,
+    38→} from '@/components/ui/alert-dialog';
+    39→import {
+    40→  Select,
+    41→  SelectContent,
+    42→  SelectItem,
+    43→  SelectTrigger,
+    44→  SelectValue,
+    45→} from '@/components/ui/select';
+    46→// ScrollArea removed - using overflow-y-auto for reliable footer visibility
+    47→import {
+    48→  Plus,
+    49→  Search,
+    50→  Pencil,
+    51→  Trash2,
+    52→  Receipt,
+    53→  Wallet,
+    54→  Filter,
+    55→  FileText,
+    56→  AlertTriangle,
+    57→  User,
+    58→  Phone,
+    59→  UserCheck,
+    60→  CalendarDays,
+    61→  CalendarClock,
+    62→  X,
+    63→  ChevronDown,
+    64→} from 'lucide-react';
+    65→import { useT } from '@/hooks/use-translation';
+    66→import { useAppStore } from '@/store/store';
+    67→
+    68→// ── Types ──────────────────────────────────────────────────────────────────
+    69→
+    70→interface Payment {
+    71→  id: string;
+    72→  studentId: string;
+    73→  student: {
+    74→    id: string;
+    75→    fullName: string;
+    76→    phone: string | null;
+    77→    parentName: string | null;
+    78→    parentPhone: string | null;
+    79→    monthlyFee: number;
+    80→    level: {
+    81→      nameAr: string;
+    82→      subject: { nameAr: string; service?: { nameAr: string; id: string } | null } | null;
+    83→    } | null;
+    84→    teacher: { id: string; fullName: string } | null;
+    85→  };
+    86→  amount: number;
+    87→  paidAmount: number;
+    88→  remainingAmount: number;
+    89→  discount: number;
+    90→  packMonths: number;
+    91→  month: string;
+    92→  year: number;
+    93→  paymentDate: string | null;
+    94→  method: string | null;
+    95→  notes: string | null;
+    96→  status: string;
+    97→  createdAt: string;
+    98→}
+    99→
+   100→interface StudentSearchResult {
+   101→  id: string;
+   102→  fullName: string;
+   103→  phone: string | null;
+   104→  parentName: string | null;
+   105→  parentPhone: string | null;
+   106→  monthlyFee: number;
+   107→  packMonths?: number;
+   108→  level: {
+   109→    nameAr: string;
+   110→    subject: { nameAr: string; service?: { nameAr: string; id: string } | null } | null;
+   111→  } | null;
+   112→  teacher: { id: string; fullName: string } | null;
+   113→}
+   114→
+   115→interface Service {
+   116→  id: string;
+   117→  name: string;
+   118→  nameAr: string;
+   119→  nameFr: string;
+   120→  subjects: {
+   121→    id: string;
+   122→    name: string;
+   123→    nameAr: string;
+   124→    nameFr: string;
+   125→    levels: {
+   126→      id: string;
+   127→      name: string;
+   128→      nameAr: string;
+   129→      nameFr: string;
+   130→    }[];
+   131→    order: number;
+   132→  }[];
+   133→  order: number;
+   134→}
+   135→
+   136→interface PaymentFormData {
+   137→  studentId: string;
+   138→  amount: number | '';
+   139→  paidAmount: number | '';
+   140→  discount: number | '';
+   141→  packMonths: number;
+   142→  month: string;
+   143→  year: number | '';
+   144→  paymentDate: string;
+   145→  method: string;
+   146→  notes: string;
+   147→  status: string;
+   148→}
+   149→
+   150→interface OverdueService {
+   151→  service: string;
+   152→  totalOverdue: number;
+   153→  studentCount: number;
+   154→  levels: OverdueLevel[];
+   155→}
+   156→
+   157→interface OverdueLevel {
+   158→  level: string;
+   159→  totalOverdue: number;
+   160→  studentCount: number;
+   161→  students: OverdueStudent[];
+   162→}
+   163→
+   164→interface OverdueStudent {
+   165→  studentId: string;
+   166→  studentName: string;
+   167→  phone: string | null;
+   168→  parentPhone: string | null;
+   169→  parentName: string | null;
+   170→  monthlyFee: number;
+   171→  totalOverdue: number;
+   172→  monthsOverdue: number;
+   173→  nextDueDate: string | null;
+   174→  subjectName: string | null;
+   175→  levelName: string | null;
+   176→  overduePayments: {
+   177→    id: string;
+   178→    month: string;
+   179→    monthLabel: string;
+   180→    year: number;
+   181→    remainingAmount: number;
+   182→    monthsOverdue: number;
+   183→  }[];
+   184→}
+   185→
+   186→const defaultFormData: PaymentFormData = {
+   187→  studentId: '',
+   188→  amount: '',
+   189→  paidAmount: '',
+   190→  discount: '',
+   191→  packMonths: 1,
+   192→  month: '',
+   193→  year: new Date().getFullYear(),
+   194→  paymentDate: new Date().toISOString().split('T')[0],
+   195→  method: 'cash',
+   196→  notes: '',
+   197→  status: 'pending',
+   198→};
+   199→
+   200→const MONTH_KEYS = [
+   201→  'January', 'February', 'March', 'April', 'May', 'June',
+   202→  'July', 'August', 'September', 'October', 'November', 'December',
+   203→] as const;
+   204→
+   205→// ── Helpers ────────────────────────────────────────────────────────────────
+   206→
+   207→function formatDate(dayMonthYear: string): string {
+   208→  if (!dayMonthYear) return '—';
+   209→  const d = new Date(dayMonthYear);
+   210→  const day = String(d.getDate()).padStart(2, '0');
+   211→  const month = String(d.getMonth() + 1).padStart(2, '0');
+   212→  const year = d.getFullYear();
+   213→  return `${day} / ${month} / ${year}`;
+   214→}
+   215→
+   216→function TableSkeleton() {
+   217→  return (
+   218→    <div className="space-y-3 p-4">
+   219→      {Array.from({ length: 5 }).map((_, i) => (
+   220→        <Skeleton key={i} className="h-10 w-full" />
+   221→      ))}
+   222→    </div>
+   223→  );
+   224→}
+   225→
+   226→// ── Component ──────────────────────────────────────────────────────────────
+   227→
+   228→export function PaymentsView() {
+   229→  const t = useT();
+   230→  const { userRole } = useAppStore();
+   231→  const isAdmin = userRole === 'ADMIN';
+   232→
+   233→  // ── Derived month data ──
+   234→  const MONTHS = useMemo(() =>
+   235→    MONTH_KEYS.map((key) => ({
+   236→      value: key,
+   237→      label: t.months[key],
+   238→    })),
+   239→  [t]);
+   240→
+   241→  const MONTH_NAMES = useMemo(() =>
+   242→    Object.fromEntries(MONTHS.map((m) => [m.value, m.label])),
+   243→  [MONTHS]);
+   244→
+   245→  const PAYMENT_METHODS = useMemo(() => [
+   246→    { value: 'cash', label: t.payments.cash },
+   247→    { value: 'transfer', label: t.payments.transfer },
+   248→    { value: 'check', label: t.payments.check },
+   249→  ], [t]);
+   250→
+   251→  const PACK_OPTIONS = useMemo(() => [
+   252→    { value: 1, label: t.payments.pack1 },
+   253→    { value: 3, label: t.payments.pack3 },
+   254→    { value: 6, label: t.payments.pack6 },
+   255→    { value: 9, label: t.payments.pack9 },
+   256→  ], [t]);
+   257→
+   258→  const getStatusBadge = useCallback((status: string) => {
+   259→    switch (status) {
+   260→      case 'paid':
+   261→        return (
+   262→          <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100">
+   263→            {t.payments.statusPaid}
+   264→          </Badge>
+   265→        );
+   266→      case 'partial':
+   267→        return (
+   268→          <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100">
+   269→            {t.payments.statusPartial}
+   270→          </Badge>
+   271→        );
+   272→      case 'pending':
+   273→        return (
+   274→          <Badge className="bg-red-100 text-red-700 border-red-200 hover:bg-red-100">
+   275→            {t.payments.statusPending}
+   276→          </Badge>
+   277→        );
+   278→      default:
+   279→        return <Badge variant="outline">{status}</Badge>;
+   280→    }
+   281→  }, [t]);
+   282→
+   283→  const getMethodLabel = useCallback((method: string | null) => {
+   284→    switch (method) {
+   285→      case 'cash':
+   286→        return t.payments.cash;
+   287→      case 'transfer':
+   288→        return t.payments.transfer;
+   289→      case 'check':
+   290→        return t.payments.check;
+   291→      default:
+   292→        return method || '—';
+   293→    }
+   294→  }, [t]);
+   295→
+   296→  const getBonHtml = useCallback((payment: Payment) => {
+   297→    const student = payment.student;
+   298→    const monthLabel = MONTH_NAMES[payment.month] || payment.month;
+   299→    const paymentDate = payment.paymentDate ? formatDate(payment.paymentDate) : '—';
+   300→    const netAmount = payment.amount - payment.discount;
+   301→
+   302→    return `<!DOCTYPE html>
+   303→<html lang="ar" dir="rtl">
+   304→<head>
+   305→  <meta charset="UTF-8">
+   306→  <title>${t.payments.bonPrint}</title>
+   307→  <base href="${typeof window !== 'undefined' ? window.location.origin + '/' : '/'}">
+   308→  <style>
+   309→    @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap');
+   310→    * { margin: 0; padding: 0; box-sizing: border-box; }
+   311→    body {
+   312→      font-family: 'Tajawal', 'Segoe UI', Tahoma, sans-serif;
+   313→      background: white;
+   314→      padding: 0;
+   315→      color: #1a1a2e;
+   316→      -webkit-print-color-adjust: exact;
+   317→      print-color-adjust: exact;
+   318→    }
+   319→    @media print {
+   320→      .no-print { display: none !important; }
+   321→      @page { margin: 10mm; size: A4; }
+   322→    }
+   323→    .bon {
+   324→      max-width: 700px;
+   325→      margin: 0 auto;
+   326→      border: 2px solid #0d9488;
+   327→      padding: 32px;
+   328→    }
+   329→    .header {
+   330→      text-align: center;
+   331→      margin-bottom: 20px;
+   332→    }
+   333→    .header h1 {
+   334→      font-size: 20px;
+   335→      font-weight: 800;
+   336→      color: #0d9488;
+   337→      margin-top: 8px;
+   338→      margin-bottom: 0;
+   339→    }
+   340→    .header .logo {
+   341→      width: 70px;
+   342→      height: 70px;
+   343→      border-radius: 50%;
+   344→      object-fit: cover;
+   345→      display: block;
+   346→      margin: 0 auto;
+   347→    }
+   348→    .divider {
+   349→      height: 2px;
+   350→      background: #0d9488;
+   351→      margin: 16px 0;
+   352→    }
+   353→    .info-section {
+   354→      display: grid;
+   355→      grid-template-columns: 1fr 1fr;
+   356→      gap: 12px;
+   357→      margin-bottom: 20px;
+   358→    }
+   359→    .info-item {
+   360→      font-size: 14px;
+   361→    }
+   362→    .info-item .label {
+   363→      color: #64748b;
+   364→      font-weight: 500;
+   365→    }
+   366→    .info-item .value {
+   367→      font-weight: 700;
+   368→      color: #1e293b;
+   369→    }
+   370→    .details-table {
+   371→      width: 100%;
+   372→      border-collapse: collapse;
+   373→      font-size: 14px;
+   374→      margin-bottom: 20px;
+   375→    }
+   376→    .details-table th,
+   377→    .details-table td {
+   378→      padding: 8px 12px;
+   379→      text-align: right;
+   380→      border-bottom: 1px solid #e2e8f0;
+   381→    }
+   382→    .details-table th {
+   383→      background: #f0fdfa;
+   384→      font-weight: 600;
+   385→      color: #0d9488;
+   386→      font-size: 13px;
+   387→    }
+   388→    .details-table .amount {
+   389→      font-weight: 700;
+   390→      text-align: left;
+   391→      direction: ltr;
+   392→    }
+   393→    .details-table .green { color: #059669; }
+   394→    .details-table .red { color: #dc2626; }
+   395→    .details-table .amber { color: #d97706; }
+   396→    .bon-footer {
+   397→      margin-top: 40px;
+   398→      padding-top: 16px;
+   399→      border-top: 1px solid #e2e8f0;
+   400→      text-align: center;
+   401→      font-size: 12px;
+   402→      color: #475569;
+   403→      line-height: 1.8;
+   404→    }
+   405→    .bon-footer .phone-line {
+   406→      font-weight: 600;
+   407→      direction: ltr;
+   408→      display: inline-block;
+   409→    }
+   410→    .no-print {
+   411→      text-align: center;
+   412→      margin-bottom: 16px;
+   413→    }
+   414→    .no-print button {
+   415→      background: #0d9488;
+   416→      color: white;
+   417→      border: none;
+   418→      padding: 10px 28px;
+   419→      border-radius: 8px;
+   420→      font-size: 15px;
+   421→      font-family: 'Tajawal', sans-serif;
+   422→      font-weight: 600;
+   423→      cursor: pointer;
+   424→    }
+   425→    .no-print button:hover { background: #0f766e; }
+   426→  </style>
+   427→</head>
+   428→<body>
+   429→  <div class="bon">
+   430→    <div class="header">
+   431→      <img src="/logo.png" alt="Aura Academy" class="logo">
+   432→      <h1>Aura Academy</h1>
+   433→    </div>
+   434→    <div class="divider"></div>
+   435→    <div class="info-section">
+   436→      <div class="info-item">
+   437→        <span class="label">${t.payments.bonStudentName}: </span>
+   438→        <span class="value">${student.fullName}</span>
+   439→      </div>
+   440→      <div class="info-item">
+   441→        <span class="label">${t.common.phone}: </span>
+   442→        <span class="value" dir="ltr">${student.phone || '—'}</span>
+   443→      </div>
+   444→    </div>
+   445→    <table class="details-table">
+   446→      <thead>
+   447→        <tr>
+   448→          <th>${t.payments.bonStatement}</th>
+   449→          <th class="amount">${t.payments.bonAmountDh}</th>
+   450→        </tr>
+   451→      </thead>
+   452→      <tbody>
+   453→        <tr>
+   454→          <td>${t.payments.bonRequired}</td>
+   455→          <td class="amount">${payment.amount.toLocaleString('ar-MA', { minimumFractionDigits: 2 })}</td>
+   456→        </tr>
+   457→        ${payment.discount > 0 ? `<tr>
+   458→          <td>${t.payments.bonDiscount}</td>
+   459→          <td class="amount amber">- ${payment.discount.toLocaleString('ar-MA', { minimumFractionDigits: 2 })}</td>
+   460→        </tr>
+   461→        <tr>
+   462→          <td>${t.payments.bonAfterDiscount}</td>
+   463→          <td class="amount">${netAmount.toLocaleString('ar-MA', { minimumFractionDigits: 2 })}</td>
+   464→        </tr>` : ''}
+   465→        <tr>
+   466→          <td>${t.payments.bonPaid}</td>
+   467→          <td class="amount green">${payment.paidAmount.toLocaleString('ar-MA', { minimumFractionDigits: 2 })}</td>
+   468→        </tr>
+   469→        <tr>
+   470→          <td>${t.payments.bonRemaining}</td>
+   471→          <td class="amount red">${payment.remainingAmount.toLocaleString('ar-MA', { minimumFractionDigits: 2 })}</td>
+   472→        </tr>
+   473→        <tr>
+   474→          <td>${t.payments.bonMonthYear}</td>
+   475→          <td>${monthLabel} ${payment.year}${payment.packMonths > 1 ? ` (${t.payments.packBadge} ${payment.packMonths} ${t.payments.packMonthsUnit})` : ''}</td>
+   476→        </tr>
+   477→        ${payment.packMonths > 1 ? `<tr>
+   478→          <td>${t.payments.packMonthlyEquiv}</td>
+   479→          <td class="amount">${Math.round(payment.amount / payment.packMonths).toLocaleString('ar-MA', { minimumFractionDigits: 2 })}</td>
+   480→        </tr>` : ''}
+   481→        <tr>
+   482→          <td>${t.payments.bonPaymentDate}</td>
+   483→          <td dir="ltr" style="text-align:right">${paymentDate}</td>
+   484→        </tr>
+   485→      </tbody>
+   486→    </table>
+   487→    <div class="bon-footer">
+   488→      <div class="phone-line">${t.payments.bonPhone}</div>
+   489→      <div>${t.payments.bonAddress}</div>
+   490→    </div>
+   491→  </div>
+   492→  <div class="no-print" style="text-align:center; margin-top:16px;">
+   493→    <button onclick="window.print()">${t.payments.bonPrint}</button>
+   494→  </div>
+   495→</body>
+   496→</html>`;
+   497→  }, [t, MONTH_NAMES]);
+   498→
+   499→  // Generate bon in new window for printing
+   500→  const generateBon = useCallback((payment: Payment) => {
+   501→    const bonHtml = getBonHtml(payment);
+   502→    const cleanHtml = bonHtml.replace(
+   503→      /<div class="no-print"[^>]*>[\s\S]*<\/div>\s*<\/body>/,
+   504→      '</body>'
+   505→    );
+   506→    const newWindow = window.open('', '_blank');
+   507→    if (newWindow) {
+   508→      newWindow.document.write(cleanHtml);
+   509→      newWindow.document.close();
+   510→    }
+   511→  }, [getBonHtml]);
+   512→
+   513→  const [payments, setPayments] = useState<Payment[]>([]);
+   514→  const [loading, setLoading] = useState(true);
+   515→
+   516→  // Student search state
+   517→  const [studentSearchQuery, setStudentSearchQuery] = useState('');
+   518→  const [studentSearchResults, setStudentSearchResults] = useState<StudentSearchResult[]>([]);
+   519→  const [allStudents, setAllStudents] = useState<StudentSearchResult[]>([]);
+   520→  const [studentSearching, setStudentSearching] = useState(false);
+   521→  const studentsLoaded = useRef(false);
+   522→  const [selectedStudent, setSelectedStudent] = useState<StudentSearchResult | null>(null);
+   523→  const [yearlyPaid, setYearlyPaid] = useState(0);
+   524→
+   525→  // Check if selected student belongs to Langues service
+   526→  const isLanguesService = useMemo(() => {
+   527→    return selectedStudent?.level?.subject?.service?.id === 'service_langues';
+   528→  }, [selectedStudent]);
+   529→
+   530→  // Filters
+   531→  const [filterMonth, setFilterMonth] = useState('all');
+   532→  const [filterYear, setFilterYear] = useState(String(new Date().getFullYear()));
+   533→  const [filterStatus, setFilterStatus] = useState('all');
+   534→  const [filterServiceId, setFilterServiceId] = useState('all');
+   535→  const [filterSubjectId, setFilterSubjectId] = useState('all');
+   536→  const [filterLevelId, setFilterLevelId] = useState('all');
+   537→  const [services, setServices] = useState<Service[]>([]);
+   538→
+   539→  // Student name/phone search filter for payments table
+   540→  const [paymentSearch, setPaymentSearch] = useState('');
+   541→
+   542→  // Computed: subjects filtered by selected service
+   543→  const filterSubjects = useMemo(() => {
+   544→    if (filterServiceId === 'all') return [];
+   545→    const svc = services.find((s) => s.id === filterServiceId);
+   546→    return svc?.subjects || [];
+   547→  }, [filterServiceId, services]);
+   548→
+   549→  // Computed: levels filtered by selected subject
+   550→  const filterLevels = useMemo(() => {
+   551→    if (filterSubjectId === 'all') return [];
+   552→    const svc = services.find((s) => s.id === filterServiceId);
+   553→    const subj = svc?.subjects.find((sub) => sub.id === filterSubjectId);
+   554→    return subj?.levels || [];
+   555→  }, [filterServiceId, filterSubjectId, services]);
+   556→
+   557→  // Computed: filter payments by student name or phone
+   558→  const filteredPayments = useMemo(() => {
+   559→    if (!paymentSearch || paymentSearch.length < 1) return payments;
+   560→    const q = paymentSearch.toLowerCase();
+   561→    return payments.filter((p) => {
+   562→      const name = (p.student.fullName || '').toLowerCase();
+   563→      const phone = (p.student.phone || '').toLowerCase();
+   564→      const parentPhone = (p.student.parentPhone || '').toLowerCase();
+   565→      return name.includes(q) || phone.includes(q) || parentPhone.includes(q);
+   566→    });
+   567→  }, [payments, paymentSearch]);
+   568→
+   569→  // Dialog states
+   570→  const [dialogOpen, setDialogOpen] = useState(false);
+   571→  const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
+   572→  const [formData, setFormData] = useState<PaymentFormData>(defaultFormData);
+   573→  const [submitting, setSubmitting] = useState(false);
+   574→
+   575→  // Delete state
+   576→  const [deleteOpen, setDeleteOpen] = useState(false);
+   577→  const [deletingPayment, setDeletingPayment] = useState<Payment | null>(null);
+   578→
+   579→  // Overdue dialog state
+   580→  const [overdueOpen, setOverdueOpen] = useState(false);
+   581→  const [overdueData, setOverdueData] = useState<OverdueService[]>([]);
+   582→  const [overdueLoading, setOverdueLoading] = useState(false);
+   583→  const [creatingInvoice, setCreatingInvoice] = useState<string | null>(null);
+   584→
+   585→  // ── Data fetching ──────────────────────────────────────────────────────
+   586→
+   587→  const fetchPayments = useCallback(async () => {
+   588→    setLoading(true);
+   589→    try {
+   590→      const params = new URLSearchParams();
+   591→      if (filterMonth !== 'all') params.set('month', filterMonth);
+   592→      if (filterYear) params.set('year', filterYear);
+   593→      if (filterStatus !== 'all') params.set('status', filterStatus);
+   594→      if (filterServiceId !== 'all') params.set('serviceId', filterServiceId);
+   595→      if (filterSubjectId !== 'all') params.set('subjectId', filterSubjectId);
+   596→      if (filterLevelId !== 'all') params.set('levelId', filterLevelId);
+   597→      const res = await fetch(`/api/payments?${params.toString()}`);
+   598→      if (!res.ok) throw new Error();
+   599→      const json = await res.json();
+   600→      setPayments(json);
+   601→    } catch {
+   602→      toast.error(t.payments.fetchError);
+   603→    } finally {
+   604→      setLoading(false);
+   605→    }
+   606→  }, [filterMonth, filterYear, filterStatus, filterServiceId, filterSubjectId, filterLevelId, t]);
+   607→
+   608→  useEffect(() => {
+   609→    fetchPayments();
+   610→  }, [fetchPayments]);
+   611→
+   612→  // Fetch services for filters
+   613→  useEffect(() => {
+   614→    const fetchServices = async () => {
+   615→      try {
+   616→        const res = await fetch('/api/services');
+   617→        if (!res.ok) throw new Error();
+   618→        const json = await res.json();
+   619→        setServices(json);
+   620→      } catch {
+   621→        // silent
+   622→      }
+   623→    };
+   624→    fetchServices();
+   625→  }, []);
+   626→
+   627→  // Cascade: reset subject/level when service changes
+   628→  useEffect(() => {
+   629→    setFilterSubjectId('all');
+   630→    setFilterLevelId('all');
+   631→  }, [filterServiceId]);
+   632→
+   633→  // Cascade: reset level when subject changes
+   634→  useEffect(() => {
+   635→    setFilterLevelId('all');
+   636→  }, [filterSubjectId]);
+   637→
+   638→  // ── Load all students (for payment dialog) ─────────────────────────
+   639→
+   640→  const loadAllStudents = useCallback(async () => {
+   641→    setStudentSearching(true);
+   642→    try {
+   643→      const res = await fetch('/api/students');
+   644→      if (!res.ok) throw new Error();
+   645→      const json = await res.json();
+   646→      setAllStudents(json);
+   647→      setStudentSearchResults(json);
+   648→    } catch {
+   649→      console.error('Failed to load students for payment dialog');
+   650→      setAllStudents([]);
+   651→      setStudentSearchResults([]);
+   652→    } finally {
+   653→      setStudentSearching(false);
+   654→    }
+   655→  }, []);
+   656→
+   657→  // ── Student search (local filtering – no API calls) ────────────────
+   658→
+   659→  const filteredStudents = useMemo(() => {
+   660→    if (!studentSearchQuery || studentSearchQuery.length < 1) {
+   661→      return allStudents;
+   662→    }
+   663→    const q = studentSearchQuery.toLowerCase();
+   664→    return allStudents.filter((s) => {
+   665→      const name = (s.fullName || '').toLowerCase();
+   666→      const phone = (s.phone || '').toLowerCase();
+   667→      const parentPhone = (s.parentPhone || '').toLowerCase();
+   668→      return name.includes(q) || phone.includes(q) || parentPhone.includes(q);
+   669→    });
+   670→  }, [studentSearchQuery, allStudents]);
+   671→
+   672→  // Fetch yearly paid amount when student is selected
+   673→  useEffect(() => {
+   674→    if (!selectedStudent) {
+   675→      setYearlyPaid(0);
+   676→      return;
+   677→    }
+   678→    const currentYear = new Date().getFullYear();
+   679→    (async () => {
+   680→      try {
+   681→        const res = await fetch(
+   682→          `/api/payments?studentId=${selectedStudent.id}&year=${currentYear}`
+   683→        );
+   684→        if (!res.ok) return;
+   685→        const yearPayments: Payment[] = await res.json();
+   686→        const total = yearPayments.reduce((s, p) => s + p.paidAmount, 0);
+   687→        setYearlyPaid(total);
+   688→      } catch {
+   689→        setYearlyPaid(0);
+   690→      }
+   691→    })();
+   692→  }, [selectedStudent]);
+   693→
+   694→  // ── Overdue fetching ──────────────────────────────────────────────────
+   695→
+   696→  const fetchOverdue = useCallback(async () => {
+   697→    setOverdueLoading(true);
+   698→    try {
+   699→      const res = await fetch('/api/payments/overdue');
+   700→      if (!res.ok) throw new Error();
+   701→      const json = await res.json();
+   702→      setOverdueData(json);
+   703→    } catch {
+   704→      toast.error(t.payments.overdueFetchError);
+   705→    } finally {
+   706→      setOverdueLoading(false);
+   707→    }
+   708→  }, [t]);
+   709→
+   710→  const handleOpenOverdue = () => {
+   711→    setOverdueOpen(true);
+   712→    fetchOverdue();
+   713→  };
+   714→
+   715→  const handleCreateInvoiceForOverdue = async (student: OverdueStudent) => {
+   716→    // Use the scheduled due date from the API (format: dd/mm/yyyy)
+   717→    // This ensures the invoice is created for the CORRECT cycle month, not the current month
+   718→    let invoiceMonth = MONTH_KEYS[new Date().getMonth()];
+   719→    let invoiceYear = new Date().getFullYear();
+   720→    let invoicePaymentDate: string | null = null;
+   721→
+   722→    if (student.nextDueDate) {
+   723→      // Parse dd/mm/yyyy
+   724→      const parts = student.nextDueDate.split('/').map(Number);
+   725→      if (parts.length === 3) {
+   726→        const dueDay = parts[0];
+   727→        const dueMonth = parts[1]; // 1-based
+   728→        const dueYear = parts[2];
+   729→        invoiceMonth = MONTH_KEYS[dueMonth - 1] || invoiceMonth;
+   730→        invoiceYear = dueYear;
+   731→        // Set payment date to the scheduled due date (yyyy-mm-dd)
+   732→        invoicePaymentDate = `${dueYear}-${String(dueMonth).padStart(2, '0')}-${String(dueDay).padStart(2, '0')}`;
+   733→      }
+   734→    }
+   735→
+   736→    setCreatingInvoice(student.studentId);
+   737→    try {
+   738→      const res = await fetch('/api/payments', {
+   739→        method: 'POST',
+   740→        headers: { 'Content-Type': 'application/json' },
+   741→        body: JSON.stringify({
+   742→          studentId: student.studentId,
+   743→          amount: student.monthlyFee,
+   744→          paidAmount: 0,
+   745→          discount: 0,
+   746→          packMonths: 1,
+   747→          month: invoiceMonth,
+   748→          year: invoiceYear,
+   749→          paymentDate: invoicePaymentDate,
+   750→          method: 'cash',
+   751→          notes: '',
+   752→          status: 'pending',
+   753→        }),
+   754→      });
+   755→      if (!res.ok) throw new Error('Failed to create');
+   756→      toast.success(t.payments.invoiceCreatedQuick);
+   757→      // Refresh overdue data
+   758→      fetchOverdue();
+   759→      // Also refresh main payments list
+   760→      fetchPayments();
+   761→    } catch {
+   762→      toast.error(t.common.saveError);
+   763→    } finally {
+   764→      setCreatingInvoice(null);
+   765→    }
+   766→  };
+   767→
+   768→  // ── Form handling ──────────────────────────────────────────────────────
+   769→
+   770→  const handleOpenDialog = (payment?: Payment) => {
+   771→    if (payment) {
+   772→      setEditingPayment(payment);
+   773→      setSelectedStudent({
+   774→        id: payment.student.id,
+   775→        fullName: payment.student.fullName,
+   776→        phone: payment.student.phone,
+   777→        parentName: payment.student.parentName,
+   778→        parentPhone: payment.student.parentPhone,
+   779→        monthlyFee: payment.student.monthlyFee,
+   780→        level: payment.student.level,
+   781→        teacher: payment.student.teacher,
+   782→      });
+   783→      setFormData({
+   784→        studentId: payment.studentId,
+   785→        amount: payment.amount,
+   786→        paidAmount: payment.paidAmount,
+   787→        discount: payment.discount || 0,
+   788→        packMonths: payment.packMonths || 1,
+   789→        month: payment.month,
+   790→        year: payment.year,
+   791→        paymentDate:
+   792→          payment.paymentDate?.split('T')[0] ||
+   793→          new Date().toISOString().split('T')[0],
+   794→        method: payment.method || 'cash',
+   795→        notes: payment.notes || '',
+   796→        status: payment.status,
+   797→      });
+   798→    } else {
+   799→      setEditingPayment(null);
+   800→      setSelectedStudent(null);
+   801→      setStudentSearchQuery('');
+   802→      setStudentSearchResults([]);
+   803→      setFormData(defaultFormData);
+   804→      // Load all students once when opening add dialog
+   805→      if (!studentsLoaded.current) {
+   806→        studentsLoaded.current = true;
+   807→        loadAllStudents();
+   808→      } else {
+   809→        // Already loaded, just show them
+   810→        setStudentSearchResults(allStudents);
+   811→      }
+   812→    }
+   813→    setDialogOpen(true);
+   814→  };
+   815→
+   816→  const handleSelectStudent = (student: StudentSearchResult) => {
+   817→    setSelectedStudent(student);
+   818→    setStudentSearchQuery('');
+   819→    setFormData((prev) => ({
+   820→      ...prev,
+   821→      studentId: student.id,
+   822→      amount: student.monthlyFee || '',
+   823→      packMonths: student.level?.subject?.service?.id === 'service_langues'
+   824→        ? (student.packMonths || prev.packMonths)
+   825→        : 1,
+   826→    }));
+   827→  };
+   828→
+   829→  const handleClearStudent = () => {
+   830→    setSelectedStudent(null);
+   831→    setStudentSearchQuery('');
+   832→    setFormData((prev) => ({ ...prev, studentId: '', amount: '', packMonths: 1 }));
+   833→  };
+   834→
+   835→  // Computed amounts
+   836→  const discountValue =
+   837→    typeof formData.discount === 'number' ? formData.discount : 0;
+   838→  const netAmount =
+   839→    (typeof formData.amount === 'number' ? formData.amount : 0) - discountValue;
+   840→  const remainingAmount =
+   841→    typeof formData.amount === 'number' && typeof formData.paidAmount === 'number'
+   842→      ? netAmount - formData.paidAmount
+   843→      : 0;
+   844→
+   845→  // Auto-detect status
+   846→  const autoStatus =
+   847→    typeof formData.amount === 'number' && typeof formData.paidAmount === 'number'
+   848→      ? formData.paidAmount >= netAmount
+   849→        ? 'paid'
+   850→        : formData.paidAmount > 0
+   851→          ? 'partial'
+   852→          : 'pending'
+   853→      : formData.status;
+   854→
+   855→  const handleSubmit = async () => {
+   856→    if (!formData.studentId) {
+   857→      toast.error(t.payments.studentRequired);
+   858→      return;
+   859→    }
+   860→    if (!formData.amount || Number(formData.amount) <= 0) {
+   861→      toast.error(t.payments.amountRequired);
+   862→      return;
+   863→    }
+   864→    if (!formData.month) {
+   865→      toast.error(t.payments.monthRequired);
+   866→      return;
+   867→    }
+   868→
+   869→    setSubmitting(true);
+   870→    try {
+   871→      const payload = {
+   872→        ...formData,
+   873→        amount: Number(formData.amount),
+   874→        paidAmount: Number(formData.paidAmount) || 0,
+   875→        discount: Number(formData.discount) || 0,
+   876→        packMonths: formData.packMonths || 1,
+   877→        year: Number(formData.year),
+   878→        remainingAmount:
+   879→          netAmount - (Number(formData.paidAmount) || 0),
+   880→        status: autoStatus,
+   881→      };
+   882→
+   883→      const url = editingPayment
+   884→        ? `/api/payments/${editingPayment.id}`
+   885→        : '/api/payments';
+   886→      const method = editingPayment ? 'PUT' : 'POST';
+   887→      const res = await fetch(url, {
+   888→        method,
+   889→        headers: { 'Content-Type': 'application/json' },
+   890→        body: JSON.stringify(payload),
+   891→      });
+   892→      if (!res.ok) throw new Error();
+   893→      toast.success(
+   894→        editingPayment ? t.payments.updateSuccess : t.payments.addSuccess
+   895→      );
+   896→
+   897→      // Offer to print bon for new payments
+   898→      if (!editingPayment) {
+   899→        const savedPayment = await res.json();
+   900→        setDialogOpen(false);
+   901→        fetchPayments();
+   902→        setTimeout(() => {
+   903→          if (confirm(t.common.printQuestion)) {
+   904→            generateBon(savedPayment);
+   905→          }
+   906→        }, 300);
+   907→        return;
+   908→      }
+   909→
+   910→      setDialogOpen(false);
+   911→      fetchPayments();
+   912→    } catch {
+   913→      toast.error(t.common.saveError);
+   914→    } finally {
+   915→      setSubmitting(false);
+   916→    }
+   917→  };
+   918→
+   919→  const handleDelete = async () => {
+   920→    if (!deletingPayment) return;
+   921→    try {
+   922→      const res = await fetch(`/api/payments/${deletingPayment.id}`, {
+   923→        method: 'DELETE',
+   924→      });
+   925→      if (!res.ok) throw new Error();
+   926→      toast.success(t.payments.deleteSuccess);
+   927→      setDeleteOpen(false);
+   928→      setDeletingPayment(null);
+   929→      fetchPayments();
+   930→    } catch {
+   931→      toast.error(t.common.deleteError);
+   932→    }
+   933→  };
+   934→
+   935→  // ── Totals ─────────────────────────────────────────────────────────────
+   936→
+   937→  const totalAmount = filteredPayments.reduce((s, p) => s + p.amount, 0);
+   938→  const totalDiscount = filteredPayments.reduce((s, p) => s + (p.discount || 0), 0);
+   939→  const totalPaid = filteredPayments.reduce((s, p) => s + p.paidAmount, 0);
+   940→  const totalRemaining = filteredPayments.reduce(
+   941→    (s, p) => s + p.remainingAmount,
+   942→    0
+   943→  );
+   944→
+   945→  const grandTotalOverdue = overdueData.reduce(
+   946→    (s, svc) => s + svc.totalOverdue,
+   947→    0
+   948→  );
+   949→
+   950→  // ── Render ─────────────────────────────────────────────────────────────
+   951→
+   952→  return (
+   953→    <div className="space-y-4">
+   954→      {/* Header & Actions */}
+   955→      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+   956→        <div className="flex items-center gap-2 text-muted-foreground">
+   957→          <Wallet className="h-5 w-5" />
+   958→          <span className="text-sm">{filteredPayments.length} {t.payments.paymentCount}</span>
+   959→        </div>
+   960→        <div className="flex items-center gap-2">
+   961→          <Button
+   962→            variant="outline"
+   963→            onClick={handleOpenOverdue}
+   964→            className="gap-2 border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+   965→          >
+   966→            <AlertTriangle className="h-4 w-4" />
+   967→            {t.payments.overdue}
+   968→          </Button>
+   969→          <Button onClick={() => handleOpenDialog()} className="gap-2">
+   970→            <Plus className="h-4 w-4" />
+   971→            {t.payments.addPayment}
+   972→          </Button>
+   973→        </div>
+   974→      </div>
+   975→
+   976→      {/* Summary Cards - Admin only */}
+   977→      {isAdmin && (
+   978→      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+   979→        <Card>
+   980→          <CardContent className="p-3 text-center">
+   981→            <p className="text-xs text-muted-foreground">{t.payments.requiredAmount}</p>
+   982→            <p className="text-lg font-bold mt-1">
+   983→              {totalAmount.toLocaleString()}{' '}
+   984→              <span className="text-xs font-normal">{t.common.dh}</span>
+   985→            </p>
+   986→          </CardContent>
+   987→        </Card>
+   988→        <Card>
+   989→          <CardContent className="p-3 text-center">
+   990→            <p className="text-xs text-muted-foreground">{t.payments.discount}</p>
+   991→            <p className="text-lg font-bold text-amber-600 mt-1">
+   992→              {totalDiscount.toLocaleString()}{' '}
+   993→              <span className="text-xs font-normal">{t.common.dh}</span>
+   994→            </p>
+   995→          </CardContent>
+   996→        </Card>
+   997→        <Card>
+   998→          <CardContent className="p-3 text-center">
+   999→            <p className="text-xs text-muted-foreground">{t.payments.paid}</p>
+  1000→            <p className="text-lg font-bold text-emerald-600 mt-1">
+  1001→              {totalPaid.toLocaleString()}{' '}
+  1002→              <span className="text-xs font-normal">{t.common.dh}</span>
+  1003→            </p>
+  1004→          </CardContent>
+  1005→        </Card>
+  1006→        <Card>
+  1007→          <CardContent className="p-3 text-center">
+  1008→            <p className="text-xs text-muted-foreground">{t.payments.remaining}</p>
+  1009→            <p className="text-lg font-bold text-red-600 mt-1">
+  1010→              {totalRemaining.toLocaleString()}{' '}
+  1011→              <span className="text-xs font-normal">{t.common.dh}</span>
+  1012→            </p>
+  1013→          </CardContent>
+  1014→        </Card>
+  1015→      </div>
+  1016→      )}
+  1017→
+  1018→      {/* Filters */}
+  1019→      <Card>
+  1020→        <CardContent className="p-4">
+  1021→          {/* Student search row */}
+  1022→          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-3">
+  1023→            <div className="relative flex-1 w-full">
+  1024→              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+  1025→              <Input
+  1026→                placeholder="بحث بالاسم أو رقم الهاتف..."
+  1027→                value={paymentSearch}
+  1028→                onChange={(e) => setPaymentSearch(e.target.value)}
+  1029→                className="pr-9"
+  1030→              />
+  1031→            </div>
+  1032→          </div>
+  1033→          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+  1034→            <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
+  1035→            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-1 w-full">
+  1036→              <Select value={filterServiceId} onValueChange={setFilterServiceId}>
+  1037→                <SelectTrigger className="w-full">
+  1038→                  <SelectValue placeholder={t.students.filterByService || 'الخدمة'} />
+  1039→                </SelectTrigger>
+  1040→                <SelectContent>
+  1041→                  <SelectItem value="all">{t.students.filterByService || 'كل الخدمات'}</SelectItem>
+  1042→                  {services.map((s) => (
+  1043→                    <SelectItem key={s.id} value={s.id}>
+  1044→                      {s.nameAr || s.name}
+  1045→                    </SelectItem>
+  1046→                  ))}
+  1047→                </SelectContent>
+  1048→              </Select>
+  1049→              <Select value={filterSubjectId} onValueChange={setFilterSubjectId} disabled={filterServiceId === 'all'}>
+  1050→                <SelectTrigger className="w-full">
+  1051→                  <SelectValue placeholder={t.students.filterBySubject || 'المادة'} />
+  1052→                </SelectTrigger>
+  1053→                <SelectContent>
+  1054→                  <SelectItem value="all">{t.students.filterBySubject || 'كل المواد'}</SelectItem>
+  1055→                  {filterSubjects.map((subj) => (
+  1056→                    <SelectItem key={subj.id} value={subj.id}>
+  1057→                      {subj.nameAr || subj.name}
+  1058→                    </SelectItem>
+  1059→                  ))}
+  1060→                </SelectContent>
+  1061→              </Select>
+  1062→              <Select value={filterLevelId} onValueChange={setFilterLevelId} disabled={filterSubjectId === 'all'}>
+  1063→                <SelectTrigger className="w-full">
+  1064→                  <SelectValue placeholder={t.students.filterByLevel || 'المستوى'} />
+  1065→                </SelectTrigger>
+  1066→                <SelectContent>
+  1067→                  <SelectItem value="all">{t.students.filterByLevel || 'كل المستويات'}</SelectItem>
+  1068→                  {filterLevels.map((lvl) => (
+  1069→                    <SelectItem key={lvl.id} value={lvl.id}>
+  1070→                      {lvl.nameAr || lvl.name}
+  1071→                    </SelectItem>
+  1072→                  ))}
+  1073→                </SelectContent>
+  1074→              </Select>
+  1075→            </div>
+  1076→          </div>
+  1077→          {/* Second row: month, year, status */}
+  1078→          {(filterServiceId !== 'all' || filterSubjectId !== 'all' || filterLevelId !== 'all') && (
+  1079→            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mt-3 pt-3 border-t border-gray-100">
+  1080→              <div className="w-4 shrink-0" />
+  1081→              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-1 w-full">
+  1082→                <Select value={filterMonth} onValueChange={setFilterMonth}>
+  1083→                  <SelectTrigger className="w-full">
+  1084→                    <SelectValue placeholder={t.payments.allMonths} />
+  1085→                  </SelectTrigger>
+  1086→                  <SelectContent>
+  1087→                    <SelectItem value="all">{t.payments.allMonths}</SelectItem>
+  1088→                    {MONTHS.map((m) => (
+  1089→                      <SelectItem key={m.value} value={m.value}>
+  1090→                        {m.label}
+  1091→                      </SelectItem>
+  1092→                    ))}
+  1093→                  </SelectContent>
+  1094→                </Select>
+  1095→                <Input
+  1096→                  type="number"
+  1097→                  placeholder={t.payments.year}
+  1098→                  value={filterYear}
+  1099→                  onChange={(e) => setFilterYear(e.target.value)}
+  1100→                  dir="ltr"
+  1101→                  className="w-full"
+  1102→                />
+  1103→                <Select value={filterStatus} onValueChange={setFilterStatus}>
+  1104→                  <SelectTrigger className="w-full">
+  1105→                    <SelectValue placeholder={t.payments.allStatuses} />
+  1106→                  </SelectTrigger>
+  1107→                  <SelectContent>
+  1108→                    <SelectItem value="all">{t.payments.allStatuses}</SelectItem>
+  1109→                    <SelectItem value="paid">{t.payments.statusPaid}</SelectItem>
+  1110→                    <SelectItem value="partial">{t.payments.statusPartial}</SelectItem>
+  1111→                    <SelectItem value="pending">{t.payments.statusPending}</SelectItem>
+  1112→                  </SelectContent>
+  1113→                </Select>
+  1114→              </div>
+  1115→            </div>
+  1116→          )}
+  1117→          {(filterServiceId !== 'all' || filterSubjectId !== 'all' || filterLevelId !== 'all') && (
+  1118→            <div className="mt-2 flex justify-end">
+  1119→              <Button
+  1120→                variant="ghost"
+  1121→                size="sm"
+  1122→                className="text-xs text-muted-foreground hover:text-red-600"
+  1123→                onClick={() => {
+  1124→                  setFilterServiceId('all');
+  1125→                  setFilterSubjectId('all');
+  1126→                  setFilterLevelId('all');
+  1127→                }}
+  1128→              >
+  1129→                <X className="h-3 w-3 mr-1" />
+  1130→                {t.common.clear || 'مسح الفلاتر'}
+  1131→              </Button>
+  1132→            </div>
+  1133→          )}
+  1134→        </CardContent>
+  1135→      </Card>
+  1136→
+  1137→      {/* Table */}
+  1138→      <Card>
+  1139→        <CardContent className="p-0">
+  1140→          {loading ? (
+  1141→            <TableSkeleton />
+  1142→          ) : filteredPayments.length === 0 ? (
+  1143→            <div className="text-center py-12 text-muted-foreground">
+  1144→              <Receipt className="h-12 w-12 mx-auto mb-3 opacity-30" />
+  1145→              <p className="font-medium">{paymentSearch ? 'لا توجد نتائج' : t.payments.noPayments}</p>
+  1146→              <p className="text-sm mt-1">
+  1147→                {paymentSearch ? 'جرب كلمة بحث أخرى' : t.payments.addFirst}
+  1148→              </p>
+  1149→            </div>
+  1150→          ) : (
+  1151→            <div className="overflow-x-auto max-h-[500px]">
+  1152→              <Table>
+  1153→                <TableHeader>
+  1154→                  <TableRow>
+  1155→                    <TableHead className="text-right">{t.payments.studentCol}</TableHead>
+  1156→                    <TableHead className="text-right">{t.payments.monthYearCol}</TableHead>
+  1157→                    {isAdmin && (
+  1158→                    <>
+  1159→                    <TableHead className="text-right hidden md:table-cell">
+  1160→                      {t.payments.amountCol}
+  1161→                    </TableHead>
+  1162→                    <TableHead className="text-right hidden md:table-cell">
+  1163→                      {t.payments.paidCol}
+  1164→                    </TableHead>
+  1165→                    <TableHead className="text-right hidden lg:table-cell">
+  1166→                      {t.payments.remainingCol}
+  1167→                    </TableHead>
+  1168→                    <TableHead className="text-right hidden lg:table-cell">
+  1169→                      {t.payments.discountCol}
+  1170→                    </TableHead>
+  1171→                    </>
+  1172→                    )}
+  1173→                    <TableHead className="text-right hidden lg:table-cell">
+  1174→                      {t.payments.dateCol}
+  1175→                    </TableHead>
+  1176→                    <TableHead className="text-right">{t.common.status}</TableHead>
+  1177→                    <TableHead className="text-right">{t.common.actions}</TableHead>
+  1178→                  </TableRow>
+  1179→                </TableHeader>
+  1180→                <TableBody>
+  1181→                  {filteredPayments.map((payment) => (
+  1182→                    <TableRow key={payment.id}>
+  1183→                      <TableCell className="text-right">
+  1184→                        <div>
+  1185→                          <p className="font-medium text-sm">
+  1186→                            {payment.student.fullName}
+  1187→                          </p>
+  1188→                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+  1189→                            {payment.student.level && payment.student.level.subject && (
+  1190→                              <span>
+  1191→                                {payment.student.level.subject.nameAr} -{' '}
+  1192→                                {payment.student.level.nameAr}
+  1193→                              </span>
+  1194→                            )}
+  1195→                          </div>
+  1196→                        </div>
+  1197→                      </TableCell>
+  1198→                      <TableCell className="text-right text-sm">
+  1199→                        <div className="flex items-center gap-1.5 flex-wrap">
+  1200→                          <span>
+  1201→                            {MONTH_NAMES[payment.month] || payment.month}{' '}
+  1202→                            {payment.year}
+  1203→                          </span>
+  1204→                          {payment.packMonths > 1 && (
+  1205→                            <Badge className="bg-violet-100 text-violet-700 border-violet-200 hover:bg-violet-100 text-[10px] px-1.5 py-0">
+  1206→                              {t.payments.packBadge} {payment.packMonths} {t.payments.packMonthsUnit}
+  1207→                            </Badge>
+  1208→                          )}
+  1209→                        </div>
+  1210→                      </TableCell>
+  1211→                      {isAdmin && (
+  1212→                      <>
+  1213→                      <TableCell className="text-right hidden md:table-cell font-medium">
+  1214→                        {payment.amount.toLocaleString()}{' '}
+  1215→                        <span className="text-xs font-normal">{t.common.dh}</span>
+  1216→                      </TableCell>
+  1217→                      <TableCell className="text-right hidden md:table-cell text-emerald-600">
+  1218→                        {payment.paidAmount.toLocaleString()}{' '}
+  1219→                        <span className="text-xs font-normal">{t.common.dh}</span>
+  1220→                      </TableCell>
+  1221→                      <TableCell className="text-right hidden lg:table-cell text-red-600">
+  1222→                        {payment.remainingAmount.toLocaleString()}{' '}
+  1223→                        <span className="text-xs font-normal">{t.common.dh}</span>
+  1224→                      </TableCell>
+  1225→                      <TableCell className="text-right hidden lg:table-cell text-amber-600">
+  1226→                        {payment.discount > 0 ? (
+  1227→                          <span>
+  1228→                            {payment.discount.toLocaleString()}{' '}
+  1229→                            <span className="text-xs font-normal">{t.common.dh}</span>
+  1230→                          </span>
+  1231→                        ) : (
+  1232→                          <span className="text-muted-foreground">—</span>
+  1233→                        )}
+  1234→                      </TableCell>
+  1235→                      </>
+  1236→                      )}
+  1237→                      <TableCell className="text-right hidden lg:table-cell text-sm text-muted-foreground">
+  1238→                        {payment.paymentDate
+  1239→                          ? formatDate(payment.paymentDate)
+  1240→                          : '—'}
+  1241→                      </TableCell>
+  1242→                      <TableCell className="text-right">
+  1243→                        {getStatusBadge(payment.status)}
+  1244→                      </TableCell>
+  1245→                      <TableCell className="text-right">
+  1246→                        <div className="flex items-center gap-1">
+  1247→                          <Button
+  1248→                            variant="ghost"
+  1249→                            size="icon"
+  1250→                            className="h-8 w-8"
+  1251→                            onClick={() => generateBon(payment)}
+  1252→                            title={t.common.printBon}
+  1253→                          >
+  1254→                            <FileText className="h-3.5 w-3.5" />
+  1255→                          </Button>
+  1256→                          <Button
+  1257→                            variant="ghost"
+  1258→                            size="icon"
+  1259→                            className="h-8 w-8"
+  1260→                            onClick={() => handleOpenDialog(payment)}
+  1261→                          >
+  1262→                            <Pencil className="h-3.5 w-3.5" />
+  1263→                          </Button>
+  1264→                          <Button
+  1265→                            variant="ghost"
+  1266→                            size="icon"
+  1267→                            className="h-8 w-8 text-destructive hover:text-destructive"
+  1268→                            onClick={() => {
+  1269→                              setDeletingPayment(payment);
+  1270→                              setDeleteOpen(true);
+  1271→                            }}
+  1272→                          >
+  1273→                            <Trash2 className="h-3.5 w-3.5" />
+  1274→                          </Button>
+  1275→                        </div>
+  1276→                      </TableCell>
+  1277→                    </TableRow>
+  1278→                  ))}
+  1279→                </TableBody>
+  1280→              </Table>
+  1281→            </div>
+  1282→          )}
+  1283→        </CardContent>
+  1284→      </Card>
+  1285→
+  1286→      {/* ═══════════════════════════════════════════════════════════════════
+  1287→          ADD / EDIT PAYMENT DIALOG
+  1288→          ═══════════════════════════════════════════════════════════════════ */}
+  1289→      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+  1290→        <DialogContent className="sm:max-w-2xl p-0 gap-0 max-h-[90vh] flex flex-col">
+  1291→          <DialogHeader className="shrink-0 px-8 pt-6 pb-2">
+  1292→            <DialogTitle>
+  1293→              {editingPayment ? t.payments.editPayment : t.payments.addNew}
+  1294→            </DialogTitle>
+  1295→            <DialogDescription>
+  1296→              {editingPayment
+  1297→                ? t.payments.editDesc
+  1298→                : t.payments.addDesc}
+  1299→            </DialogDescription>
+  1300→          </DialogHeader>
+  1301→
+  1302→          <div className="overflow-y-auto flex-1 min-h-0 px-8 py-4">
+  1303→            <div className="grid gap-4">
+  1304→              {/* ── Student Search ─────────────────────────────────────── */}
+  1305→              {!editingPayment && !selectedStudent && (
+  1306→                <div className="space-y-3">
+  1307→                  <Label className="text-sm font-semibold">
+  1308→                    {t.payments.searchStudent}
+  1309→                  </Label>
+  1310→                  <div className="relative">
+  1311→                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+  1312→                    <Input
+  1313→                      placeholder={t.payments.searchStudentPlaceholder}
+  1314→                      value={studentSearchQuery}
+  1315→                      onChange={(e) =>
+  1316→                        setStudentSearchQuery(e.target.value)
+  1317→                      }
+  1318→                      className="pr-10"
+  1319→                    />
+  1320→                  </div>
+  1321→
+  1322→                  {/* Search results as profile cards */}
+  1323→                  {studentSearching && (
+  1324→                    <div className="flex items-center justify-center py-4">
+  1325→                      <Skeleton className="h-12 w-full" />
+  1326→                    </div>
+  1327→                  )}
+  1328→
+  1329→                  {!studentSearching &&
+  1330→                    filteredStudents.length > 0 &&
+  1331→                    !selectedStudent && (
+  1332→                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto">
+  1333→                        {filteredStudents.map((s) => (
+  1334→                          <button
+  1335→                            key={s.id}
+  1336→                            type="button"
+  1337→                            onClick={() => handleSelectStudent(s)}
+  1338→                            className="flex items-start gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 hover:border-primary/40 transition-colors text-right w-full"
+  1339→                          >
+  1340→                            <div className="h-9 w-9 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center shrink-0 mt-0.5">
+  1341→                              <User className="h-4 w-4" />
+  1342→                            </div>
+  1343→                            <div className="flex-1 min-w-0">
+  1344→                              <p className="font-semibold text-sm truncate">
+  1345→                                {s.fullName}
+  1346→                              </p>
+  1347→                              {s.phone && (
+  1348→                                <p
+  1349→                                  className="text-xs text-muted-foreground truncate"
+  1350→                                  dir="ltr"
+  1351→                                >
+  1352→                                  {s.phone}
+  1353→                                </p>
+  1354→                              )}
+  1355→                              <div className="flex items-center gap-2 mt-1 flex-wrap">
+  1356→                                {s.level && s.level.subject && (
+  1357→                                  <span className="text-[10px] bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded">
+  1358→                                    {s.level.subject.nameAr} -{' '}
+  1359→                                    {s.level.nameAr}
+  1360→                                  </span>
+  1361→                                )}
+  1362→                                {s.monthlyFee > 0 && (
+  1363→                                  <span className="text-[10px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded">
+  1364→                                    {s.monthlyFee.toLocaleString()} {t.common.month}
+  1365→                                  </span>
+  1366→                                )}
+  1367→                              </div>
+  1368→                            </div>
+  1369→                          </button>
+  1370→                        ))}
+  1371→                      </div>
+  1372→                    )}
+  1373→
+  1374→                  {!studentSearching &&
+  1375→                    allStudents.length > 0 &&
+  1376→                    filteredStudents.length === 0 &&
+  1377→                    !selectedStudent && (
+  1378→                      <div className="text-center py-6 text-muted-foreground text-sm">
+  1379→                        {t.payments.noStudentFound}
+  1380→                      </div>
+  1381→                    )}
+  1382→                </div>
+  1383→              )}
+  1384→
+  1385→              {/* ── Selected Student Profile Card ──────────────────────── */}
+  1386→              {selectedStudent && (
+  1387→                <div className="space-y-3">
+  1388→                  <div className="flex items-center justify-between">
+  1389→                    <Label className="text-sm font-semibold">
+  1390→                      {t.payments.selectedStudent}
+  1391→                    </Label>
+  1392→                    {!editingPayment && (
+  1393→                      <Button
+  1394→                        variant="ghost"
+  1395→                        size="sm"
+  1396→                        onClick={handleClearStudent}
+  1397→                        className="h-7 text-xs text-muted-foreground"
+  1398→                      >
+  1399→                        <X className="h-3 w-3 ml-1" />
+  1400→                        {t.common.edit}
+  1401→                      </Button>
+  1402→                    )}
+  1403→                  </div>
+  1404→
+  1405→                  <div className="rounded-lg border bg-gradient-to-br from-teal-50/50 to-white p-4">
+  1406→                    <div className="flex items-start gap-4">
+  1407→                      <div className="h-12 w-12 rounded-full bg-teal-600 text-white flex items-center justify-center shrink-0">
+  1408→                        <User className="h-5 w-5" />
+  1409→                      </div>
+  1410→                      <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+  1411→                        <div>
+  1412→                          <span className="text-muted-foreground">
+  1413→                            {t.common.name}:{' '}
+  1414→                          </span>
+  1415→                          <span className="font-bold">
+  1416→                            {selectedStudent.fullName}
+  1417→                          </span>
+  1418→                        </div>
+  1419→                        <div>
+  1420→                          <span className="text-muted-foreground">
+  1421→                            {t.common.phone}:{' '}
+  1422→                          </span>
+  1423→                          <span className="font-medium" dir="ltr">
+  1424→                            {selectedStudent.phone || '—'}
+  1425→                          </span>
+  1426→                        </div>
+  1427→                        {selectedStudent.parentName && (
+  1428→                          <div>
+  1429→                            <span className="text-muted-foreground">
+  1430→                              {t.students.parentName}:{' '}
+  1431→                            </span>
+  1432→                            <span className="font-medium">
+  1433→                              {selectedStudent.parentName}
+  1434→                            </span>
+  1435→                          </div>
+  1436→                        )}
+  1437→                        {selectedStudent.parentPhone && (
+  1438→                          <div>
+  1439→                            <span className="text-muted-foreground">
+  1440→                              {t.students.parentPhone}:{' '}
+  1441→                            </span>
+  1442→                            <span
+  1443→                              className="font-medium"
+  1444→                              dir="ltr"
+  1445→                            >
+  1446→                              {selectedStudent.parentPhone}
+  1447→                            </span>
+  1448→                          </div>
+  1449→                        )}
+  1450→                        <div>
+  1451→                          <span className="text-muted-foreground">
+  1452→                            {t.students.monthlyFeeSection}:{' '}
+  1453→                          </span>
+  1454→                          <span className="font-bold text-teal-700">
+  1455→                            {selectedStudent.monthlyFee.toLocaleString()}{' '}
+  1456→                            {t.common.dh}
+  1457→                          </span>
+  1458→                        </div>
+  1459→                        {selectedStudent.level && selectedStudent.level.subject && (
+  1460→                          <div>
+  1461→                            <span className="text-muted-foreground">
+  1462→                              {t.students.level}:{' '}
+  1463→                            </span>
+  1464→                            <span className="font-medium">
+  1465→                              {selectedStudent.level.subject.nameAr} -{' '}
+  1466→                              {selectedStudent.level.nameAr}
+  1467→                            </span>
+  1468→                          </div>
+  1469→                        )}
+  1470→                        {isAdmin && (
+  1471→                        <div className="sm:col-span-2">
+  1472→                          <span className="text-muted-foreground">
+  1473→                            {t.common.dh} ({new Date().getFullYear()}):{' '}
+  1474→                          </span>
+  1475→                          <span className="font-bold text-emerald-600">
+  1476→                            {yearlyPaid.toLocaleString()} {t.common.dh}
+  1477→                          </span>
+  1478→                        </div>
+  1479→                        )}
+  1480→                      </div>
+  1481→                    </div>
+  1482→                  </div>
+  1483→                </div>
+  1484→              )}
+  1485→
+  1486→              <Separator />
+  1487→
+  1488→              {/* ── Payment Details ────────────────────────────────────── */}
+  1489→              <div className="space-y-3">
+  1490→                <h4 className="text-sm font-semibold flex items-center gap-2">
+  1491→                  <Wallet className="h-4 w-4 text-primary" />
+  1492→                  {t.common.amount}
+  1493→                </h4>
+  1494→                <div className={`grid gap-3 ${isAdmin ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2 sm:grid-cols-2'}`}>
+  1495→                  {isAdmin && (
+  1496→                  <>
+  1497→                  <div className="space-y-1.5">
+  1498→                    <Label htmlFor="amount">{t.payments.bonAmountDh} *</Label>
+  1499→                    <Input
+  1500→                      id="amount"
+  1501→                      type="number"
+  1502→                      min="0"
+  1503→                      value={formData.amount}
+  1504→                      onChange={(e) =>
+  1505→                        setFormData({
+  1506→                          ...formData,
+  1507→                          amount: Number(e.target.value) || '',
+  1508→                        })
+  1509→                      }
+  1510→                      placeholder="0"
+  1511→                      dir="ltr"
+  1512→                    />
+  1513→                  </div>
+  1514→                  <div className="space-y-1.5">
+  1515→                    <Label htmlFor="discount">{t.payments.bonDiscount} ({t.common.dh})</Label>
+  1516→                    <Input
+  1517→                      id="discount"
+  1518→                      type="number"
+  1519→                      min="0"
+  1520→                      value={formData.discount}
+  1521→                      onChange={(e) =>
+  1522→                        setFormData({
+  1523→                          ...formData,
+  1524→                          discount: Number(e.target.value) || 0,
+  1525→                        })
+  1526→                      }
+  1527→                      placeholder="0"
+  1528→                      dir="ltr"
+  1529→                    />
+  1530→                  </div>
+  1531→                  <div className="space-y-1.5">
+  1532→                    <Label htmlFor="paidAmount">{t.payments.bonPaid} ({t.common.dh})</Label>
+  1533→                    <Input
+  1534→                      id="paidAmount"
+  1535→                      type="number"
+  1536→                      min="0"
+  1537→                      value={formData.paidAmount}
+  1538→                      onChange={(e) =>
+  1539→                        setFormData({
+  1540→                          ...formData,
+  1541→                          paidAmount: Number(e.target.value) || '',
+  1542→                        })
+  1543→                      }
+  1544→                      placeholder="0"
+  1545→                      dir="ltr"
+  1546→                    />
+  1547→                  </div>
+  1548→                  <div className="space-y-1.5">
+  1549→                    <Label>{t.payments.remaining}</Label>
+  1550→                    <div className="flex items-center h-9 px-3 rounded-md border bg-muted text-sm">
+  1551→                      <span dir="ltr">
+  1552→                        {Math.max(0, remainingAmount).toLocaleString()}
+  1553→                      </span>
+  1554→                      <span className="mr-1 text-muted-foreground text-xs">
+  1555→                        {t.common.dh}
+  1556→                      </span>
+  1557→                    </div>
+  1558→                  </div>
+  1559→                  </>
+  1560→                  )}
+  1561→                  {!isAdmin && (
+  1562→                  <>
+  1563→                  <div className="space-y-1.5">
+  1564→                    <Label htmlFor="amount">{t.payments.bonAmountDh} *</Label>
+  1565→                    <Input
+  1566→                      id="amount"
+  1567→                      type="number"
+  1568→                      min="0"
+  1569→                      value={formData.amount}
+  1570→                      onChange={(e) =>
+  1571→                        setFormData({
+  1572→                          ...formData,
+  1573→                          amount: Number(e.target.value) || '',
+  1574→                        })
+  1575→                      }
+  1576→                      placeholder="0"
+  1577→                      dir="ltr"
+  1578→                    />
+  1579→                  </div>
+  1580→                  <div className="space-y-1.5">
+  1581→                    <Label htmlFor="paidAmount">{t.payments.bonPaid} ({t.common.dh})</Label>
+  1582→                    <Input
+  1583→                      id="paidAmount"
+  1584→                      type="number"
+  1585→                      min="0"
+  1586→                      value={formData.paidAmount}
+  1587→                      onChange={(e) =>
+  1588→                        setFormData({
+  1589→                          ...formData,
+  1590→                          paidAmount: Number(e.target.value) || '',
+  1591→                        })
+  1592→                      }
+  1593→                      placeholder="0"
+  1594→                      dir="ltr"
+  1595→                    />
+  1596→                  </div>
+  1597→                  </>
+  1598→                  )}
+  1599→                </div>
+  1600→                {isAdmin && discountValue > 0 && (
+  1601→                  <div className="text-xs text-amber-600 bg-amber-50 rounded-md p-2">
+  1602→                    {t.payments.bonAfterDiscount}:{' '}
+  1603→                    <strong>{netAmount.toLocaleString()} {t.common.dh}</strong>
+  1604→                  </div>
+  1605→                )}
+  1606→                {formData.packMonths > 1 && typeof formData.amount === 'number' && formData.amount > 0 && (
+  1607→                  <div className="text-xs bg-teal-50 text-teal-700 rounded-md p-2">
+  1608→                    {t.payments.packMonthlyEquiv}:{' '}
+  1609→                    <strong>{Math.round(formData.amount / formData.packMonths).toLocaleString()} {t.common.dh} / {t.common.month}</strong>
+  1610→                  </div>
+  1611→                )}
+  1612→              </div>
+  1613→
+  1614→              {/* ── Pack Type (Langues only) ───────────────────────────── */}
+  1615→              {isLanguesService && (
+  1616→                <div className="space-y-1.5">
+  1617→                  <Label>{t.payments.packType}</Label>
+  1618→                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+  1619→                    {PACK_OPTIONS.map((opt) => (
+  1620→                      <button
+  1621→                        key={opt.value}
+  1622→                        type="button"
+  1623→                        onClick={() =>
+  1624→                          setFormData({ ...formData, packMonths: opt.value })
+  1625→                        }
+  1626→                        className={`px-3 py-2 rounded-lg border-2 text-sm font-medium transition-colors ${
+  1627→                          formData.packMonths === opt.value
+  1628→                            ? 'border-teal-500 bg-teal-50 text-teal-700'
+  1629→                            : 'border-muted bg-card hover:border-teal-200 hover:bg-teal-50/50 text-foreground'
+  1630→                        }`}
+  1631→                      >
+  1632→                        {opt.label}
+  1633→                      </button>
+  1634→                    ))}
+  1635→                  </div>
+  1636→                </div>
+  1637→              )}
+  1638→
+  1639→              {/* ── Month / Year / Date / Method ────────────────────────── */}
+  1640→              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+  1641→                <div className="space-y-1.5">
+  1642→                  <Label>{t.payments.month} *</Label>
+  1643→                  <Select
+  1644→                    value={formData.month}
+  1645→                    onValueChange={(val) =>
+  1646→                      setFormData({ ...formData, month: val })
+  1647→                    }
+  1648→                  >
+  1649→                    <SelectTrigger className="w-full">
+  1650→                      <SelectValue placeholder={t.payments.chooseMonth} />
+  1651→                    </SelectTrigger>
+  1652→                    <SelectContent>
+  1653→                      {MONTHS.map((m) => (
+  1654→                        <SelectItem key={m.value} value={m.value}>
+  1655→                          {m.label}
+  1656→                        </SelectItem>
+  1657→                      ))}
+  1658→                    </SelectContent>
+  1659→                  </Select>
+  1660→                </div>
+  1661→                <div className="space-y-1.5">
+  1662→                  <Label>{t.payments.year} *</Label>
+  1663→                  <Input
+  1664→                    type="number"
+  1665→                    min="2020"
+  1666→                    max="2040"
+  1667→                    value={formData.year}
+  1668→                    onChange={(e) =>
+  1669→                      setFormData({
+  1670→                        ...formData,
+  1671→                        year: Number(e.target.value) || '',
+  1672→                      })
+  1673→                    }
+  1674→                    dir="ltr"
+  1675→                  />
+  1676→                </div>
+  1677→                <div className="space-y-1.5">
+  1678→                  <Label>{t.payments.bonPaymentDate}</Label>
+  1679→                  <Input
+  1680→                    type="date"
+  1681→                    value={formData.paymentDate}
+  1682→                    onChange={(e) =>
+  1683→                      setFormData({
+  1684→                        ...formData,
+  1685→                        paymentDate: e.target.value,
+  1686→                      })
+  1687→                    }
+  1688→                    dir="ltr"
+  1689→                  />
+  1690→                </div>
+  1691→                <div className="space-y-1.5">
+  1692→                  <Label>{t.payments.paymentMethod}</Label>
+  1693→                  <Select
+  1694→                    value={formData.method}
+  1695→                    onValueChange={(val) =>
+  1696→                      setFormData({ ...formData, method: val })
+  1697→                    }
+  1698→                  >
+  1699→                    <SelectTrigger className="w-full">
+  1700→                      <SelectValue />
+  1701→                    </SelectTrigger>
+  1702→                    <SelectContent>
+  1703→                      {PAYMENT_METHODS.map((m) => (
+  1704→                        <SelectItem key={m.value} value={m.value}>
+  1705→                          {m.label}
+  1706→                        </SelectItem>
+  1707→                      ))}
+  1708→                    </SelectContent>
+  1709→                  </Select>
+  1710→                </div>
+  1711→              </div>
+  1712→
+  1713→              {/* ── Notes ──────────────────────────────────────────────── */}
+  1714→              <div className="space-y-1.5">
+  1715→                <Label htmlFor="notes">{t.common.notes}</Label>
+  1716→                <Textarea
+  1717→                  id="notes"
+  1718→                  value={formData.notes}
+  1719→                  onChange={(e) =>
+  1720→                    setFormData({ ...formData, notes: e.target.value })
+  1721→                  }
+  1722→                  placeholder={`${t.common.notes} (${t.common.optional})`}
+  1723→                  rows={2}
+  1724→                />
+  1725→              </div>
+  1726→            </div>
+  1727→          </div>
+  1728→
+  1729→          <DialogFooter className="shrink-0 px-8 py-4 border-t">
+  1730→            <div className="flex items-center justify-between w-full">
+  1731→              <div className="text-xs text-muted-foreground">
+  1732→                {t.common.status}:{' '}
+  1733→                {autoStatus === 'paid'
+  1734→                  ? t.payments.statusPaid
+  1735→                  : autoStatus === 'partial'
+  1736→                    ? t.payments.statusPartial
+  1737→                    : t.payments.statusPending}
+  1738→              </div>
+  1739→              <div className="flex items-center gap-2">
+  1740→                <Button
+  1741→                  variant="outline"
+  1742→                  onClick={() => setDialogOpen(false)}
+  1743→                  className="gap-2"
+  1744→                >
+  1745→                  {t.common.cancel}
+  1746→                </Button>
+  1747→                <Button
+  1748→                  onClick={handleSubmit}
+  1749→                  disabled={submitting}
+  1750→                  className="gap-2 bg-emerald-600 hover:bg-emerald-700"
+  1751→                >
+  1752→                  {submitting ? (
+  1753→                    <span className="animate-spin">⏳</span>
+  1754→                  ) : (
+  1755→                    <span>✓</span>
+  1756→                  )}
+  1757→                  {editingPayment ? t.common.saveChanges : t.payments.addPayment}
+  1758→                </Button>
+  1759→              </div>
+  1760→            </div>
+  1761→          </DialogFooter>
+  1762→        </DialogContent>
+  1763→      </Dialog>
+  1764→
+  1765→      {/* ═══════════════════════════════════════════════════════════════════
+  1766→          OVERDUE PAYMENTS DIALOG
+  1767→          ═══════════════════════════════════════════════════════════════════ */}
+  1768→      <Dialog open={overdueOpen} onOpenChange={setOverdueOpen}>
+  1769→        <DialogContent className="sm:max-w-3xl p-0 gap-0 max-h-[90vh] flex flex-col">
+  1770→          <DialogHeader className="shrink-0 px-8 pt-6 pb-2">
+  1771→            <DialogTitle className="flex items-center gap-2">
+  1772→              <AlertTriangle className="h-5 w-5 text-amber-500" />
+  1773→              {t.payments.overdue}
+  1774→            </DialogTitle>
+  1775→            <DialogDescription>
+  1776→              {t.payments.overdueDesc}
+  1777→            </DialogDescription>
+  1778→          </DialogHeader>
+  1779→
+  1780→          {overdueLoading ? (
+  1781→            <div className="px-8 py-8">
+  1782→              <div className="space-y-3">
+  1783→                {Array.from({ length: 3 }).map((_, i) => (
+  1784→                  <Skeleton key={i} className="h-16 w-full" />
+  1785→                ))}
+  1786→              </div>
+  1787→            </div>
+  1788→          ) : overdueData.length === 0 ? (
+  1789→            <div className="px-8 py-12 text-center text-muted-foreground">
+  1790→              <AlertTriangle className="h-12 w-12 mx-auto mb-3 text-emerald-400 opacity-50" />
+  1791→              <p className="font-medium">{t.common.noData}</p>
+  1792→              <p className="text-sm mt-1">{t.common.noData}</p>
+  1793→            </div>
+  1794→          ) : (
+  1795→            <>
+  1796→              {/* Grand total bar */}
+  1797→              <div className="mx-8 mt-2 mb-3 p-3 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-between">
+  1798→                <span className="text-sm font-semibold text-amber-800">
+  1799→                  {t.common.total}
+  1800→                </span>
+  1801→                <span className="text-lg font-bold text-amber-700">
+  1802→                  {grandTotalOverdue.toLocaleString()}{' '}
+  1803→                  <span className="text-sm font-normal">{t.common.dh}</span>
+  1804→                </span>
+  1805→              </div>
+  1806→
+  1807→              <div className="overflow-y-auto flex-1 min-h-0 px-8 pb-6 max-h-[65vh]">
+  1808→                <div className="space-y-6">
+  1809→                  {overdueData.map((service) => (
+  1810→                    <div key={service.service}>
+  1811→                      {/* Service header */}
+  1812→                      <div className="flex items-center gap-2 mb-3">
+  1813→                        <div className="h-1 w-4 rounded bg-amber-400" />
+  1814→                        <h3 className="font-bold text-base">
+  1815→                          {service.service}
+  1816→                        </h3>
+  1817→                        <Badge
+  1818→                          variant="outline"
+  1819→                          className="text-xs border-amber-300 text-amber-700"
+  1820→                        >
+  1821→                          {service.studentCount} {t.students.studentCount} —{' '}
+  1822→                          {service.totalOverdue.toLocaleString()} {t.common.dh}
+  1823→                        </Badge>
+  1824→                      </div>
+  1825→
+  1826→                      {/* Levels */}
+  1827→                      {service.levels.map((level) => (
+  1828→                        <div
+  1829→                          key={level.level}
+  1830→                          className="mb-4 mr-4"
+  1831→                        >
+  1832→                          <h4 className="text-sm font-semibold text-muted-foreground mb-2">
+  1833→                            {level.level}
+  1834→                          </h4>
+  1835→                          <div className="space-y-2">
+  1836→                            {level.students.map((student) => (
+  1837→                              <div
+  1838→                                key={student.studentId}
+  1839→                                className="flex items-center gap-3 p-3 rounded-lg border hover:bg-accent/30 transition-colors"
+  1840→                              >
+  1841→                                <div className="h-9 w-9 rounded-full bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+  1842→                                  <AlertTriangle className="h-4 w-4" />
+  1843→                                </div>
+  1844→                                <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-3 gap-1 text-sm">
+  1845→                                  <div>
+  1846→                                    <span className="font-semibold">
+  1847→                                      {student.studentName}
+  1848→                                    </span>
+  1849→                                    {student.parentName && (
+  1850→                                      <span className="text-xs text-muted-foreground block">
+  1851→                                        {t.students.guardian}{student.parentName}
+  1852→                                      </span>
+  1853→                                    )}
+  1854→                                    {student.subjectName && (
+  1855→                                      <span className="text-[11px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded inline-block mt-0.5">
+  1856→                                        {student.subjectName}
+  1857→                                      </span>
+  1858→                                    )}
+  1859→                                  </div>
+  1860→                                  <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+  1861→                                    {student.phone && (
+  1862→                                      <span
+  1863→                                        className="flex items-center gap-1"
+  1864→                                        dir="ltr"
+  1865→                                      >
+  1866→                                        <Phone className="h-3 w-3" />
+  1867→                                        {student.phone}
+  1868→                                      </span>
+  1869→                                    )}
+  1870→                                    {student.parentPhone && (
+  1871→                                      <span
+  1872→                                        className="flex items-center gap-1"
+  1873→                                        dir="ltr"
+  1874→                                      >
+  1875→                                        <UserCheck className="h-3 w-3" />
+  1876→                                        {student.parentPhone}
+  1877→                                      </span>
+  1878→                                    )}
+  1879→                                  </div>
+  1880→                                  <div className="flex items-center gap-2 flex-wrap">
+  1881→                                    <span className="font-bold text-red-600">
+  1882→                                      {student.totalOverdue.toLocaleString()}{' '}
+  1883→                                      {t.common.dh}
+  1884→                                    </span>
+  1885→                                    <Badge
+  1886→                                      variant="outline"
+  1887→                                      className="text-[10px] border-red-200 text-red-600"
+  1888→                                    >
+  1889→                                      {student.monthsOverdue} {t.payments.month}
+  1890→                                    </Badge>
+  1891→                                    {student.nextDueDate && (
+  1892→                                      <span className="flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200" dir="ltr">
+  1893→                                        <CalendarClock className="h-3 w-3 text-amber-500" />
+  1894→                                        {student.nextDueDate}
+  1895→                                      </span>
+  1896→                                    )}
+  1897→                                  </div>
+  1898→                                </div>
+  1899→                                <Button
+  1900→                                  size="sm"
+  1901→                                  className="gap-1.5 bg-red-500 hover:bg-red-600 text-white shrink-0"
+  1902→                                  onClick={() => handleCreateInvoiceForOverdue(student)}
+  1903→                                  disabled={creatingInvoice === student.studentId}
+  1904→                                >
+  1905→                                  {creatingInvoice === student.studentId ? (
+  1906→                                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+  1907→                                  ) : (
+  1908→                                    <Plus className="w-3.5 h-3.5" />
+  1909→                                  )}
+  1910→                                  {t.payments.addInvoiceQuick}
+  1911→                                </Button>
+  1912→                              </div>
+  1913→                            ))}
+  1914→                          </div>
+  1915→                        </div>
+  1916→                      ))}
+  1917→                    </div>
+  1918→                  ))}
+  1919→                </div>
+  1920→              </div>
+  1921→            </>
+  1922→          )}
+  1923→        </DialogContent>
+  1924→      </Dialog>
+  1925→
+  1926→      {/* ═══════════════════════════════════════════════════════════════════
+  1927→          DELETE CONFIRMATION
+  1928→          ═══════════════════════════════════════════════════════════════════ */}
+  1929→      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+  1930→        <AlertDialogContent>
+  1931→          <AlertDialogHeader>
+  1932→            <AlertDialogTitle>{t.common.deleteConfirm}</AlertDialogTitle>
+  1933→            <AlertDialogDescription>
+  1934→              {t.common.deleteConfirmMsg} {t.common.cannotUndo}
+  1935→            </AlertDialogDescription>
+  1936→          </AlertDialogHeader>
+  1937→          <AlertDialogFooter>
+  1938→            <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
+  1939→            <AlertDialogAction
+  1940→              onClick={handleDelete}
+  1941→              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+  1942→            >
+  1943→              {t.common.delete}
+  1944→            </AlertDialogAction>
+  1945→          </AlertDialogFooter>
+  1946→        </AlertDialogContent>
+  1947→      </AlertDialog>
+  1948→    </div>
+  1949→  );
+  1950→}
+  1951→

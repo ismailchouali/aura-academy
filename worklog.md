@@ -168,3 +168,23 @@ Stage Summary:
 - Quick invoice creation uses scheduled due date (e.g., 28/06/2026) not current date (17/07/2026)
 - Majda Bourmich (enrolled 11/06, paid 11/06): if payment exists with remainingAmount=0, should now correctly show in due payments with nextDueDate 11/07/2026
 - Cycle day is permanently fixed from enrollment date - never drifts
+
+---
+Task ID: 2
+Agent: Main
+Task: Fix payment date bug + investigate Majda Bourmich overdue issue
+
+Work Log:
+- Read and analyzed overdue API (src/app/api/payments/overdue/route.ts), payments view (src/components/views/payments-view.tsx), and students API
+- Found BUG: In handleOpenDialog (edit form), `payment.paymentDate?.split('T')[0]` was called on a Date object from Prisma. Date objects don't have .split() method, so it returned undefined, causing fallback to `new Date().toISOString().split('T')[0]` = TODAY's date. This meant every time a user opened a payment to edit/mark as paid, the date field showed today instead of the original scheduled date.
+- Fixed: Changed to check `typeof payment.paymentDate === 'string'` before calling .split(), use `.toISOString().split('T')[0]` for Date objects
+- Also fixed `formatDate()` to accept both `string | Date` types
+- Traced through buildCoverageSets algorithm for Majda Bourmich case: enrolled 11/06, paid 11/06, today 17/07 → should show as overdue with next due 11/07. Algorithm is correct. Issue is likely data-related (e.g., remainingAmount not 0, or enrollment date stored differently).
+- Added temporary debug endpoint: /api/debug/student?name=Majda to check raw data and coverage analysis on production
+- Pushed all changes to GitHub for Vercel auto-deploy
+
+Stage Summary:
+- Fixed: payment date in edit form was always showing today's date (Date object .split() bug)
+- Added: debug endpoint /api/debug/student?name=<name> for investigating student overdue data
+- Pending: Need to check debug endpoint on production to diagnose Majda Bourmich issue
+- Commits: 963cf2d (fix payment date), c05bfa1 (debug endpoint)
