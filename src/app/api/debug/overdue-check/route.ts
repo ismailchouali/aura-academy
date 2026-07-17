@@ -90,6 +90,10 @@ export async function GET(request: Request) {
       return {
         name: s.fullName,
         status: s.status,
+        levelId: s.levelId,
+        levelName: s.level?.nameAr || null,
+        subjectName: s.level?.subject?.nameAr || null,
+        serviceName: s.level?.subject?.service?.nameAr || null,
         enrollmentDate: enrollmentDate.toISOString(),
         enrollmentYM,
         cycleDay,
