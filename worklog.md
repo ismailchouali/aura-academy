@@ -144,3 +144,27 @@ Stage Summary:
 - No more self-referencing fetch that caused Vercel errors
 - Payment coverage algorithm corrected to match user's end-of-month payment workflow
 - Files modified: src/app/api/teacher-payments/bon/route.ts, src/app/api/teacher-payments/route.ts
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix payment cycle day drift (Logic A) and quick invoice date issues
+
+Work Log:
+- Analyzed 6 uploaded screenshots showing due payments bugs
+- Identified core bug: `coveredMonths` built using `addCalendarMonths(paymentDate, i)` causes late payments to cover wrong month
+- Implemented Logic A (queue-based coverage) in 3 backend files:
+  - `src/app/api/payments/overdue/route.ts` - main overdue API
+  - `src/app/api/classrooms/[id]/overdue/route.ts` - classroom-specific overdue
+  - `src/app/api/students/route.ts` - students list API
+- Added `buildCoverageSets()` function: sorts paid payments by date, assigns to enrollment cycle months in queue order
+- Fixed `handleCreateInvoiceForOverdue` in `payments-view.tsx` to parse `nextDueDate` (dd/mm/yyyy) and use the scheduled due month/year/paymentDate instead of current date
+- Fixed Step 1 (unpaid payments) to use month/year field instead of paymentDate for endYM calculation
+- Removed unused functions: `addCalendarMonths`, `isLastDayOfMonth`, `getPaymentEndYM`
+- Removed `packDueDate` early-exit check in Step 2 (now uses direct iteration)
+- Committed and pushed to GitHub (commit bbd3212)
+
+Stage Summary:
+- Salsabil Abounada (enrolled 28/03): payments [28/03, 25/04, 09/06] now correctly cover March, April, May. Next due shows 28/06/2026 instead of wrong 28/05/2026
+- Quick invoice creation uses scheduled due date (e.g., 28/06/2026) not current date (17/07/2026)
+- Majda Bourmich (enrolled 11/06, paid 11/06): if payment exists with remainingAmount=0, should now correctly show in due payments with nextDueDate 11/07/2026
+- Cycle day is permanently fixed from enrollment date - never drifts
