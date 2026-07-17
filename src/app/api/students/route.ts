@@ -10,28 +10,17 @@ function getMonthIndex(month: string): number {
   return MONTH_ORDER.indexOf(month);
 }
 
-/** Get current date/time in Africa/Casablanca timezone */
-function getMoroccoNow(): Date {
-  return new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Casablanca' }));
-}
-
 function toYM(date: Date): number {
   return date.getFullYear() * 12 + date.getMonth();
 }
 
-/**
- * Add N calendar months to a date, keeping the same day of month.
- * JavaScript's Date constructor already clamps to the last day of the month.
- */
 function addCalendarMonths(date: Date, months: number): Date {
   const day = date.getDate();
-  return new Date(date.getFullYear(), date.getMonth() + months, day);
-}
-
-/** Get the effective cycle day for a given month */
-function getEffectiveCycleDay(cycleDay: number, year: number, month: number): number {
-  const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
-  return Math.min(cycleDay, lastDayOfMonth);
+  const result = new Date(date.getFullYear(), date.getMonth() + months, day);
+  if (result.getDate() !== day) {
+    result.setDate(0);
+  }
+  return result;
 }
 
 export async function GET(request: NextRequest) {
@@ -76,54 +65,60 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
     });
 
-    const now = getMoroccoNow();
+    const now = new Date();
     const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const currentYM = toYM(now);
 
     // Calculate payment status for each student
     const enrichedStudents = students.map((student) => {
       const payments = student.payments;
-      const enrollmentDate = student.enrollmentDate
-        ? (student.enrollmentDate instanceof Date ? student.enrollmentDate : new Date(student.enrollmentDate))
-        : new Date();
-      const cycleDay = enrollmentDate.getDate();
-
       let isPackPaid = false;
       let nextDueDate: string | null = null;
 
       if (payments.length > 0) {
-        // Build set of months covered by fully-paid payments
-        const coveredMonths = new Set<number>();
+        // Find the latest payment by paymentDate
+        let latestPayment: typeof payments[0] | null = null;
+        let latestDate: Date | null = null;
+
         for (const p of payments) {
-          if (p.remainingAmount !== 0) continue;
-          const startDate = p.paymentDate
+          const pDate = p.paymentDate
             ? (p.paymentDate instanceof Date ? p.paymentDate : new Date(p.paymentDate))
             : new Date(p.year, getMonthIndex(p.month), 1);
-          for (let i = 0; i < (p.packMonths || 1); i++) {
-            const coveredDate = addCalendarMonths(startDate, i);
-            coveredMonths.add(toYM(coveredDate));
+          if (!latestDate || pDate >= latestDate) {
+            latestDate = pDate;
+            latestPayment = p;
           }
         }
 
-        // Check if current month is covered
-        isPackPaid = coveredMonths.has(currentYM);
+        if (latestPayment && latestDate) {
+          const dueDate = addCalendarMonths(latestDate, latestPayment.packMonths || 1);
+          const day = String(dueDate.getDate()).padStart(2, '0');
+          const month = String(dueDate.getMonth() + 1).padStart(2, '0');
+          const year = dueDate.getFullYear();
+          nextDueDate = `${day}/${month}/${year}`;
+        }
 
-        // Calculate next due date: first uncovered month's cycle day
-        for (let offset = 0; offset <= 60; offset++) {
-          const expectedDate = addCalendarMonths(enrollmentDate, offset);
-          const monthYM = toYM(expectedDate);
-          if (monthYM > currentYM) break;
-          if (!coveredMonths.has(monthYM)) {
-            const effectiveDay = getEffectiveCycleDay(cycleDay, expectedDate.getFullYear(), expectedDate.getMonth());
-            const day = String(effectiveDay).padStart(2, '0');
-            const month = String(expectedDate.getMonth() + 1).padStart(2, '0');
-            const year = expectedDate.getFullYear();
-            nextDueDate = `${day}/${month}/${year}`;
-            break;
+        // Pack is considered paid if ANY fully-paid payment's coverage
+        // period includes the current month (not just the latest payment)
+        for (const p of payments) {
+          if (p.remainingAmount === 0) {
+            let pStartDate: Date;
+            if (p.paymentDate) {
+              pStartDate = p.paymentDate instanceof Date ? p.paymentDate : new Date(p.paymentDate);
+            } else {
+              pStartDate = new Date(p.year, getMonthIndex(p.month), 1);
+            }
+            const pDueDate = addCalendarMonths(pStartDate, p.packMonths || 1);
+            // Check if current month is within [startMonth, dueMonth)
+            if (toYM(pStartDate) <= currentYM && currentYM < toYM(pDueDate)) {
+              isPackPaid = true;
+              break;
+            }
           }
         }
       }
 
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { payments: _payments, ...studentWithoutPayments } = student;
 
       return {
