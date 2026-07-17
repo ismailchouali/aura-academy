@@ -34,22 +34,6 @@ function formatDate(date: Date): string {
   return `${day}/${month}/${year}`;
 }
 
-/**
- * Add N calendar months to a date, keeping the same day of month.
- * JS Date constructor already clamps to last day when day doesn't exist
- * (e.g. Jan 31 → Feb 28). No setDate(0) needed.
- */
-function addCalendarMonths(date: Date, months: number): Date {
-  const day = date.getDate();
-  return new Date(date.getFullYear(), date.getMonth() + months, day);
-}
-
-/** Check if a date is the last day of its month */
-function isLastDayOfMonth(date: Date): boolean {
-  const nextDay = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
-  return nextDay.getMonth() !== date.getMonth();
-}
-
 /** Get the effective cycle day for a given month (handles months with fewer days) */
 function getEffectiveCycleDay(cycleDay: number, year: number, monthIndex: number): number {
   const lastDayOfMonth = new Date(year, monthIndex + 1, 0).getDate();
@@ -66,27 +50,66 @@ function getCycleDate(year: number, monthIndex: number, cycleDay: number): Date 
 }
 
 /**
- * Calculate the end month (as YM) of a payment's coverage period.
- * Uses addCalendarMonths to compute the actual due date, then returns its YM.
- * This correctly handles months with different day counts (e.g., Jan 31 → Feb 28).
+ * Build coverage sets using Logic A: FIXED cycle day from enrollment.
+ * Fully-paid payments are sorted by date and assigned to enrollment cycle months
+ * in queue order. This prevents cycle day drift when payments are made late.
+ *
+ * Example: enrolled 28/03, payments on [28/03, 25/04, 09/06]
+ * → Queue covers: March, April, May (NOT June, even though 3rd payment was on 09/06)
  */
-function getPaymentEndYM(payment: {
-  paymentDate?: Date | string | null;
-  month: string;
-  year: number;
-  packMonths: number;
-}): number {
-  let startDate: Date;
-  if (payment.paymentDate) {
-    startDate =
-      payment.paymentDate instanceof Date
-        ? payment.paymentDate
-        : new Date(payment.paymentDate);
-  } else {
-    startDate = new Date(payment.year, getMonthIndex(payment.month), 1);
+function buildCoverageSets(
+  enrollmentDate: Date,
+  payments: Array<{
+    remainingAmount: number;
+    paymentDate: Date | string | null;
+    month: string;
+    year: number;
+    packMonths: number;
+  }>
+): { coveredMonths: Set<number>; anyPaymentMonths: Set<number> } {
+  const coveredMonths = new Set<number>();
+  const anyPaymentMonths = new Set<number>();
+
+  // Queue-based: sort fully-paid payments by date ascending
+  const sortedPaid = payments
+    .filter(p => p.remainingAmount === 0)
+    .map(p => ({
+      date: p.paymentDate
+        ? (p.paymentDate instanceof Date ? p.paymentDate : new Date(p.paymentDate))
+        : new Date(p.year, getMonthIndex(p.month), 1),
+      packMonths: p.packMonths || 1,
+    }))
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  // Assign each paid payment to the next N cycle months from enrollment
+  let nextCycleOffset = 0;
+  for (const payment of sortedPaid) {
+    for (let i = 0; i < payment.packMonths && nextCycleOffset < 60; i++) {
+      const mi = enrollmentDate.getMonth() + nextCycleOffset;
+      const ty = enrollmentDate.getFullYear() + Math.floor(mi / 12);
+      const tm = mi % 12;
+      const ym = ty * 12 + tm;
+      coveredMonths.add(ym);
+      anyPaymentMonths.add(ym);
+      nextCycleOffset++;
+    }
   }
-  const dueDate = addCalendarMonths(startDate, payment.packMonths);
-  return toYM(dueDate);
+
+  // For unpaid/partial payments: use their month/year field
+  for (const p of payments) {
+    if (p.remainingAmount > 0) {
+      const baseYM = p.year * 12 + getMonthIndex(p.month);
+      anyPaymentMonths.add(baseYM);
+      for (let i = 1; i < p.packMonths; i++) {
+        const mi = getMonthIndex(p.month) + i;
+        const ty = p.year + Math.floor(mi / 12);
+        const tm = mi % 12;
+        anyPaymentMonths.add(ty * 12 + tm);
+      }
+    }
+  }
+
+  return { coveredMonths, anyPaymentMonths };
 }
 
 /* ------------------------------------------------------------------ */
@@ -138,18 +161,8 @@ function getNextDueDate(
   const now = getMoroccoNow();
   const currentYM = toYM(now);
 
-  // Build covered months from fully-paid payments
-  const coveredMonths = new Set<number>();
-  for (const p of payments) {
-    if (p.remainingAmount !== 0) continue;
-    const startDate = p.paymentDate
-      ? (p.paymentDate instanceof Date ? p.paymentDate : new Date(p.paymentDate))
-      : new Date(p.year, getMonthIndex(p.month), 1);
-    for (let i = 0; i < (p.packMonths || 1); i++) {
-      const coveredDate = addCalendarMonths(startDate, i);
-      coveredMonths.add(toYM(coveredDate));
-    }
-  }
+  // Build covered months using queue-based Logic A (fixed cycle day from enrollment)
+  const { coveredMonths } = buildCoverageSets(enrollmentDate, payments);
 
   // Find the first month from enrollment that's not covered
   for (let offset = 1; offset <= 60; offset++) {
@@ -259,6 +272,10 @@ function calculateStudentOverdue(
 
   /* ── Case B: Student has payments ───────────────────────────── */
 
+  const enrollmentDate = student.enrollmentDate instanceof Date
+    ? student.enrollmentDate
+    : new Date(student.enrollmentDate);
+
   // Sort by paymentDate descending (fallback to month/year), then id as tiebreaker
   const sorted = [...payments].sort((a, b) => {
     const aTime = a.paymentDate
@@ -271,46 +288,9 @@ function calculateStudentOverdue(
     return b.id.localeCompare(a.id);
   });
 
-  // Build two sets:
-  // - anyPaymentMonths: months with ANY payment record (paid or unpaid) — prevents double-counting with Step 1
-  // - coveredMonths: months covered by FULLY PAID payments only — used for sequential gap detection
-  //
-  // Key fix: use the actual due date (addCalendarMonths) to determine coverage.
-  // The due date's month is included ONLY if it's the last day of the month.
-  const coveredMonths = new Set<number>();
-  const anyPaymentMonths = new Set<number>();
+  // Build coverage sets using queue-based Logic A (fixed cycle day from enrollment)
+  const { coveredMonths, anyPaymentMonths } = buildCoverageSets(enrollmentDate, payments);
 
-  for (const p of payments) {
-    let startDate: Date;
-    if (p.paymentDate) {
-      startDate = p.paymentDate instanceof Date ? p.paymentDate : new Date(p.paymentDate);
-    } else {
-      startDate = new Date(p.year, getMonthIndex(p.month), 1);
-    }
-    const startYM = toYM(startDate);
-    const dueDate = addCalendarMonths(startDate, p.packMonths);
-    const dueDateYM = toYM(dueDate);
-
-    // Track months with ANY payment record (for double-count prevention with Step 1)
-    anyPaymentMonths.add(startYM);
-    for (let m = startYM + 1; m < dueDateYM; m++) {
-      anyPaymentMonths.add(m);
-    }
-    if (isLastDayOfMonth(dueDate)) {
-      anyPaymentMonths.add(dueDateYM);
-    }
-
-    // Only track months from FULLY PAID payments (for sequential gap detection)
-    if (p.remainingAmount === 0) {
-      coveredMonths.add(startYM);
-      for (let m = startYM + 1; m < dueDateYM; m++) {
-        coveredMonths.add(m);
-      }
-      if (isLastDayOfMonth(dueDate)) {
-        coveredMonths.add(dueDateYM);
-      }
-    }
-  }
 
   /* Step 1 — Unpaid payments whose coverage period has passed */
   let unpaidOverdue = 0;
@@ -319,7 +299,8 @@ function calculateStudentOverdue(
 
   for (const p of payments) {
     if (p.remainingAmount > 0) {
-      const endYM = getPaymentEndYM(p);
+      // Use month/year field (not paymentDate) to determine coverage end
+      const endYM = p.year * 12 + getMonthIndex(p.month) + (p.packMonths || 1);
       if (currentYM >= endYM) {
         const monthsLate = Math.max(1, currentYM - endYM);
         unpaidOverdue += p.remainingAmount;
@@ -344,76 +325,57 @@ function calculateStudentOverdue(
   const latestPaid = sorted.find((p) => p.remainingAmount === 0);
 
   if (latestPaid) {
-    const enrollmentDate = student.enrollmentDate instanceof Date
-      ? student.enrollmentDate
-      : new Date(student.enrollmentDate);
     const enrollmentDay = enrollmentDate.getDate();
-    const enrollmentYM = toYM(enrollmentDate);
 
-    // Compute the latest paid payment's end date for the early exit check
-    let packStartDate: Date;
-    if (latestPaid.paymentDate) {
-      packStartDate =
-        latestPaid.paymentDate instanceof Date
-          ? latestPaid.paymentDate
-          : new Date(latestPaid.paymentDate);
-    } else {
-      packStartDate = new Date(
-        latestPaid.year,
-        getMonthIndex(latestPaid.month),
-        1
-      );
-    }
-    const packDueDate = addCalendarMonths(packStartDate, latestPaid.packMonths);
+    // Iterate month-by-month from enrollment, using FIXED cycle day (Logic A)
+    // Sequential logic: stop at the first month not covered by a PAID payment.
+    let lastOverdueMonthYM = -1;
+    for (let offset = 1; offset <= 48; offset++) {
+      const monthIndex = enrollmentDate.getMonth() + offset;
+      const targetYear = enrollmentDate.getFullYear() + Math.floor(monthIndex / 12);
+      const targetMonth = monthIndex % 12;
+      const monthYM = targetYear * 12 + targetMonth;
 
-    // Use month-level comparison to correctly iterate through overdue months
-    if (todayDate >= packDueDate) {
-      // Iterate month-by-month from enrollment, using FIXED cycle day
-      // Sequential logic: stop at the first month not covered by a PAID payment.
-      for (let offset = 1; offset <= 48; offset++) {
-        const monthIndex = enrollmentDate.getMonth() + offset;
-        const targetYear = enrollmentDate.getFullYear() + Math.floor(monthIndex / 12);
-        const targetMonth = monthIndex % 12;
-        const monthYM = targetYear * 12 + targetMonth;
+      // Stop if future month
+      if (monthYM > currentYM) break;
 
-        // Stop if future month
-        if (monthYM > currentYM) break;
-
-        // For the current month, only count if the cycle day has arrived
-        if (monthYM === currentYM) {
-          const effectiveCycleDay = getEffectiveCycleDay(enrollmentDay, now.getFullYear(), now.getMonth());
-          if (todayDate.getDate() < effectiveCycleDay) {
-            break;
-          }
-        }
-
-        // Only count if not covered by a PAID payment AND not already counted by Step 1
-        if (!coveredMonths.has(monthYM) && !anyPaymentMonths.has(monthYM)) {
-          packOverdue += student.monthlyFee;
-          packMonthsExpired++;
-        }
-
-        // Sequential: stop at the first month that's not fully covered by a PAID payment.
-        if (!coveredMonths.has(monthYM)) {
+      // For the current month, only count if the cycle day has arrived
+      if (monthYM === currentYM) {
+        const effectiveCycleDay = getEffectiveCycleDay(enrollmentDay, now.getFullYear(), now.getMonth());
+        if (todayDate.getDate() < effectiveCycleDay) {
           break;
         }
       }
 
-      if (packMonthsExpired > 0) {
-        maxMonthsOverdue = Math.max(maxMonthsOverdue, packMonthsExpired);
-
-        const endMonthName = MONTH_ORDER[packDueDate.getMonth()];
-
-        overduePayments.push({
-          id: `pack_expired_${latestPaid.id}`,
-          month: endMonthName,
-          monthLabel: MONTH_LABELS[endMonthName] || endMonthName,
-          year: packDueDate.getFullYear(),
-          remainingAmount: packOverdue,
-          monthsOverdue: packMonthsExpired,
-          type: 'expired_pack',
-        });
+      // Only count if not covered by a PAID payment AND not already counted by Step 1
+      if (!coveredMonths.has(monthYM) && !anyPaymentMonths.has(monthYM)) {
+        packOverdue += student.monthlyFee;
+        packMonthsExpired++;
+        lastOverdueMonthYM = monthYM;
       }
+
+      // Sequential: stop at the first month that's not fully covered by a PAID payment.
+      if (!coveredMonths.has(monthYM)) {
+        break;
+      }
+    }
+
+    if (packMonthsExpired > 0) {
+      maxMonthsOverdue = Math.max(maxMonthsOverdue, packMonthsExpired);
+
+      const endMonthIndex = lastOverdueMonthYM % 12;
+      const endYear = Math.floor(lastOverdueMonthYM / 12);
+      const endMonthName = MONTH_ORDER[endMonthIndex];
+
+      overduePayments.push({
+        id: `pack_expired_${latestPaid.id}`,
+        month: endMonthName,
+        monthLabel: MONTH_LABELS[endMonthName] || endMonthName,
+        year: endYear,
+        remainingAmount: packOverdue,
+        monthsOverdue: packMonthsExpired,
+        type: 'expired_pack',
+      });
     }
   }
 

@@ -713,9 +713,25 @@ export function PaymentsView() {
   };
 
   const handleCreateInvoiceForOverdue = async (student: OverdueStudent) => {
-    const now = new Date();
-    const currentMonth = MONTH_KEYS[now.getMonth()];
-    const currentYear = now.getFullYear();
+    // Use the scheduled due date from the API (format: dd/mm/yyyy)
+    // This ensures the invoice is created for the CORRECT cycle month, not the current month
+    let invoiceMonth = MONTH_KEYS[new Date().getMonth()];
+    let invoiceYear = new Date().getFullYear();
+    let invoicePaymentDate: string | null = null;
+
+    if (student.nextDueDate) {
+      // Parse dd/mm/yyyy
+      const parts = student.nextDueDate.split('/').map(Number);
+      if (parts.length === 3) {
+        const dueDay = parts[0];
+        const dueMonth = parts[1]; // 1-based
+        const dueYear = parts[2];
+        invoiceMonth = MONTH_KEYS[dueMonth - 1] || invoiceMonth;
+        invoiceYear = dueYear;
+        // Set payment date to the scheduled due date (yyyy-mm-dd)
+        invoicePaymentDate = `${dueYear}-${String(dueMonth).padStart(2, '0')}-${String(dueDay).padStart(2, '0')}`;
+      }
+    }
 
     setCreatingInvoice(student.studentId);
     try {
@@ -728,9 +744,9 @@ export function PaymentsView() {
           paidAmount: 0,
           discount: 0,
           packMonths: 1,
-          month: currentMonth,
-          year: currentYear,
-          paymentDate: null,
+          month: invoiceMonth,
+          year: invoiceYear,
+          paymentDate: invoicePaymentDate,
           method: 'cash',
           notes: '',
           status: 'pending',

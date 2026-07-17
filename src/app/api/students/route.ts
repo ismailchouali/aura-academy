@@ -19,10 +19,10 @@ function toYM(date: Date): number {
   return date.getFullYear() * 12 + date.getMonth();
 }
 
-/** Add N calendar months — JS auto-clamps to last day (e.g. Jan 31 → Feb 28) */
-function addCalendarMonths(date: Date, months: number): Date {
-  const day = date.getDate();
-  return new Date(date.getFullYear(), date.getMonth() + months, day);
+/** Get the effective cycle day for a given month (handles months with fewer days) */
+function getEffectiveCycleDay(cycleDay: number, year: number, monthIndex: number): number {
+  const lastDayOfMonth = new Date(year, monthIndex + 1, 0).getDate();
+  return Math.min(cycleDay, lastDayOfMonth);
 }
 
 export async function GET(request: NextRequest) {
@@ -83,16 +83,26 @@ export async function GET(request: NextRequest) {
           : new Date();
         const cycleDay = enrollmentDate.getDate();
 
-        // Build covered months from fully-paid payments
-        const coveredMonths = new Set<number>();
-        for (const p of payments) {
-          if (p.remainingAmount === 0) {
-            const pStartDate = p.paymentDate
+        // Build covered months using queue-based Logic A (fixed cycle day from enrollment)
+        const sortedPaid = payments
+          .filter(p => p.remainingAmount === 0)
+          .map(p => ({
+            date: p.paymentDate
               ? (p.paymentDate instanceof Date ? p.paymentDate : new Date(p.paymentDate))
-              : new Date(p.year, getMonthIndex(p.month), 1);
-            for (let i = 0; i < (p.packMonths || 1); i++) {
-              coveredMonths.add(toYM(addCalendarMonths(pStartDate, i)));
-            }
+              : new Date(p.year, getMonthIndex(p.month), 1),
+            packMonths: p.packMonths || 1,
+          }))
+          .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+        const coveredMonths = new Set<number>();
+        let nextCycleOffset = 0;
+        for (const payment of sortedPaid) {
+          for (let i = 0; i < payment.packMonths && nextCycleOffset < 60; i++) {
+            const mi = enrollmentDate.getMonth() + nextCycleOffset;
+            const ty = enrollmentDate.getFullYear() + Math.floor(mi / 12);
+            const tm = mi % 12;
+            coveredMonths.add(ty * 12 + tm);
+            nextCycleOffset++;
           }
         }
 
@@ -107,8 +117,7 @@ export async function GET(request: NextRequest) {
           const monthYM = targetYear * 12 + targetMonth;
           if (monthYM > currentYM) break;
           if (!coveredMonths.has(monthYM)) {
-            const lastDayOfMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
-            const effectiveDay = Math.min(cycleDay, lastDayOfMonth);
+            const effectiveDay = getEffectiveCycleDay(cycleDay, targetYear, targetMonth);
             const day = String(effectiveDay).padStart(2, '0');
             const month = String(targetMonth + 1).padStart(2, '0');
             const year = targetYear;
