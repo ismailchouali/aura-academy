@@ -446,41 +446,16 @@ export async function GET() {
 
     // 4. Calculate overdue for each student
     const overdueStudents: OverdueStudent[] = [];
-    const skippedStudents: Array<{ name: string; reason: string; paymentCount: number; monthlyFee: number; enrollmentDate: string; status: string }> = [];
     for (const student of students) {
       const payments = paymentsByStudent.get(student.id) || [];
-      try {
-        const result = calculateStudentOverdue(student, payments);
-        if (result) {
-          // Attach subject/level info from the student record
-          result.subjectName = student?.level?.subject?.nameAr || null;
-          result.levelName = student?.level?.nameAr || null;
-          overdueStudents.push(result);
-        } else {
-          const enroll = student.enrollmentDate instanceof Date ? student.enrollmentDate : new Date(student.enrollmentDate);
-          skippedStudents.push({
-            name: student.fullName,
-            reason: 'calculateStudentOverdue returned null',
-            paymentCount: payments.length,
-            monthlyFee: student.monthlyFee,
-            enrollmentDate: enroll.toISOString(),
-            status: student.status,
-          });
-        }
-      } catch (err) {
-        skippedStudents.push({
-          name: student.fullName,
-          reason: `ERROR: ${String(err)}`,
-          paymentCount: payments.length,
-          monthlyFee: student.monthlyFee,
-          enrollmentDate: 'unknown',
-          status: student.status,
-        });
+      const result = calculateStudentOverdue(student, payments);
+      if (result) {
+        // Attach subject/level info from the student record
+        result.subjectName = student?.level?.subject?.nameAr || null;
+        result.levelName = student?.level?.nameAr || null;
+        overdueStudents.push(result);
       }
     }
-
-    // TEMP DEBUG: add skipped students to response (remove after fixing)
-    const _debug = { skippedStudents };
 
     if (overdueStudents.length === 0) {
       return NextResponse.json([]);
@@ -564,7 +539,7 @@ export async function GET() {
     // 8. Sort services by total overdue (descending)
     result.sort((a, b) => b.totalOverdue - a.totalOverdue);
 
-    return NextResponse.json({ services: result, _debug });
+    return NextResponse.json(result);
   } catch (error) {
     console.error('Error fetching overdue payments:', error);
     return NextResponse.json(
