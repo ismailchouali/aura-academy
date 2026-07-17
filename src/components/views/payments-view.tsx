@@ -204,9 +204,9 @@ const MONTH_KEYS = [
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function formatDate(dayMonthYear: string): string {
+function formatDate(dayMonthYear: string | Date): string {
   if (!dayMonthYear) return '—';
-  const d = new Date(dayMonthYear);
+  const d = dayMonthYear instanceof Date ? dayMonthYear : new Date(dayMonthYear);
   const day = String(d.getDate()).padStart(2, '0');
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const year = d.getFullYear();
@@ -788,9 +788,11 @@ export function PaymentsView() {
         packMonths: payment.packMonths || 1,
         month: payment.month,
         year: payment.year,
-        paymentDate:
-          payment.paymentDate?.split('T')[0] ||
-          new Date().toISOString().split('T')[0],
+        paymentDate: payment.paymentDate
+          ? (typeof payment.paymentDate === 'string'
+              ? payment.paymentDate.split('T')[0]
+              : payment.paymentDate.toISOString().split('T')[0])
+          : new Date().toISOString().split('T')[0],
         method: payment.method || 'cash',
         notes: payment.notes || '',
         status: payment.status,
