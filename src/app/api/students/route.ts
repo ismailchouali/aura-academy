@@ -10,17 +10,19 @@ function getMonthIndex(month: string): number {
   return MONTH_ORDER.indexOf(month);
 }
 
+/** Get current date/time in Africa/Casablanca timezone */
+function getMoroccoNow(): Date {
+  return new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Casablanca' }));
+}
+
 function toYM(date: Date): number {
   return date.getFullYear() * 12 + date.getMonth();
 }
 
+/** Add N calendar months — JS auto-clamps to last day (e.g. Jan 31 → Feb 28) */
 function addCalendarMonths(date: Date, months: number): Date {
   const day = date.getDate();
-  const result = new Date(date.getFullYear(), date.getMonth() + months, day);
-  if (result.getDate() !== day) {
-    result.setDate(0);
-  }
-  return result;
+  return new Date(date.getFullYear(), date.getMonth() + months, day);
 }
 
 export async function GET(request: NextRequest) {
@@ -118,7 +120,6 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { payments: _payments, ...studentWithoutPayments } = student;
 
       return {

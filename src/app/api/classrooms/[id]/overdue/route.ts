@@ -16,6 +16,11 @@ function getMonthIndex(month: string): number {
   return MONTH_ORDER.indexOf(month);
 }
 
+/** Get current date/time in Africa/Casablanca timezone */
+function getMoroccoNow(): Date {
+  return new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Casablanca' }));
+}
+
 /** Convert a Date to year*12 + monthIndex for easy month-level arithmetic */
 function toYM(date: Date): number {
   return date.getFullYear() * 12 + date.getMonth();
@@ -29,14 +34,10 @@ function formatDate(date: Date): string {
   return `${day}/${month}/${year}`;
 }
 
-/** Add N calendar months to a date, keeping the same day of month */
+/** Add N calendar months — JS auto-clamps to last day (e.g. Jan 31 → Feb 28) */
 function addCalMonths(date: Date, months: number): Date {
   const day = date.getDate();
-  const result = new Date(date.getFullYear(), date.getMonth() + months, day);
-  if (result.getDate() !== day) {
-    result.setDate(0); // clamp to last day of month (e.g. Jan 31 → Feb 28)
-  }
-  return result;
+  return new Date(date.getFullYear(), date.getMonth() + months, day);
 }
 
 /** Check if a date is the last day of its month */
@@ -149,7 +150,7 @@ export async function GET(
     }
 
     // 3. Calculate overdue for each student
-    const now = new Date();
+    const now = getMoroccoNow();
     const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const currentYM = toYM(now);
     const currentMonth = MONTH_ORDER[now.getMonth()];
@@ -258,7 +259,7 @@ export async function GET(
         if (firstDueYM === currentYM) {
           const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
           const effectiveCycleDay = Math.min(enrollmentDay, lastDayOfMonth);
-          if (now.getDate() < effectiveCycleDay) continue;
+          if (todayDate.getDate() < effectiveCycleDay) continue;
         }
 
         // Sequential: only show 1 overdue month at a time
@@ -369,7 +370,7 @@ export async function GET(
               if (monthYM === currentYM) {
                 const lastDayOfCurrentMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
                 const effectiveCycleDay = Math.min(enrollmentDay, lastDayOfCurrentMonth);
-                if (now.getDate() < effectiveCycleDay) {
+                if (todayDate.getDate() < effectiveCycleDay) {
                   break;
                 }
               }

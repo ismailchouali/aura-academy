@@ -16,6 +16,11 @@ function getMonthIndex(month: string): number {
   return MONTH_ORDER.indexOf(month);
 }
 
+/** Get current date/time in Africa/Casablanca timezone */
+function getMoroccoNow(): Date {
+  return new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Casablanca' }));
+}
+
 /** Convert a Date to year*12 + monthIndex for easy month-level arithmetic */
 function toYM(date: Date): number {
   return date.getFullYear() * 12 + date.getMonth();
@@ -29,15 +34,14 @@ function formatDate(date: Date): string {
   return `${day}/${month}/${year}`;
 }
 
-/** Add N calendar months to a date, keeping the same day of month */
+/**
+ * Add N calendar months to a date, keeping the same day of month.
+ * JS Date constructor already clamps to last day when day doesn't exist
+ * (e.g. Jan 31 → Feb 28). No setDate(0) needed.
+ */
 function addCalendarMonths(date: Date, months: number): Date {
   const day = date.getDate();
-  const result = new Date(date.getFullYear(), date.getMonth() + months, day);
-  // If day overflowed (e.g. Jan 31 → Feb 30 doesn't exist), clamp to last day
-  if (result.getDate() !== day) {
-    result.setDate(0); // last day of previous month
-  }
-  return result;
+  return new Date(date.getFullYear(), date.getMonth() + months, day);
 }
 
 /** Check if a date is the last day of its month */
@@ -185,7 +189,7 @@ function calculateStudentOverdue(
     paymentDate: Date | string | null;
   }>
 ): OverdueStudent | null {
-  const now = new Date();
+  const now = getMoroccoNow();
   const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const currentYM = toYM(now);
 
@@ -219,7 +223,7 @@ function calculateStudentOverdue(
     if (firstDueYM === currentYM) {
       const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
       const effectiveCycleDay = Math.min(enrollmentDay, lastDayOfMonth);
-      if (now.getDate() < effectiveCycleDay) return null;
+      if (todayDate.getDate() < effectiveCycleDay) return null;
     }
 
     // Sequential: only show 1 overdue month at a time
@@ -365,7 +369,7 @@ function calculateStudentOverdue(
         if (monthYM === currentYM) {
           const lastDayOfCurrentMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
           const effectiveCycleDay = Math.min(enrollmentDay, lastDayOfCurrentMonth);
-          if (now.getDate() < effectiveCycleDay) {
+          if (todayDate.getDate() < effectiveCycleDay) {
             break;
           }
         }
