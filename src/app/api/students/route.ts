@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
     });
 
-    const now = new Date();
+    const now = getMoroccoNow();
     const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const currentYM = toYM(now);
 
@@ -78,44 +78,42 @@ export async function GET(request: NextRequest) {
       let nextDueDate: string | null = null;
 
       if (payments.length > 0) {
-        // Find the latest payment by paymentDate
-        let latestPayment: typeof payments[0] | null = null;
-        let latestDate: Date | null = null;
+        const enrollmentDate = student.enrollmentDate
+          ? (student.enrollmentDate instanceof Date ? student.enrollmentDate : new Date(student.enrollmentDate))
+          : new Date();
+        const cycleDay = enrollmentDate.getDate();
 
+        // Build covered months from fully-paid payments
+        const coveredMonths = new Set<number>();
         for (const p of payments) {
-          const pDate = p.paymentDate
-            ? (p.paymentDate instanceof Date ? p.paymentDate : new Date(p.paymentDate))
-            : new Date(p.year, getMonthIndex(p.month), 1);
-          if (!latestDate || pDate >= latestDate) {
-            latestDate = pDate;
-            latestPayment = p;
+          if (p.remainingAmount === 0) {
+            const pStartDate = p.paymentDate
+              ? (p.paymentDate instanceof Date ? p.paymentDate : new Date(p.paymentDate))
+              : new Date(p.year, getMonthIndex(p.month), 1);
+            for (let i = 0; i < (p.packMonths || 1); i++) {
+              coveredMonths.add(toYM(addCalendarMonths(pStartDate, i)));
+            }
           }
         }
 
-        if (latestPayment && latestDate) {
-          const dueDate = addCalendarMonths(latestDate, latestPayment.packMonths || 1);
-          const day = String(dueDate.getDate()).padStart(2, '0');
-          const month = String(dueDate.getMonth() + 1).padStart(2, '0');
-          const year = dueDate.getFullYear();
-          nextDueDate = `${day}/${month}/${year}`;
-        }
+        // isPackPaid: current month is covered
+        isPackPaid = coveredMonths.has(currentYM);
 
-        // Pack is considered paid if ANY fully-paid payment's coverage
-        // period includes the current month (not just the latest payment)
-        for (const p of payments) {
-          if (p.remainingAmount === 0) {
-            let pStartDate: Date;
-            if (p.paymentDate) {
-              pStartDate = p.paymentDate instanceof Date ? p.paymentDate : new Date(p.paymentDate);
-            } else {
-              pStartDate = new Date(p.year, getMonthIndex(p.month), 1);
-            }
-            const pDueDate = addCalendarMonths(pStartDate, p.packMonths || 1);
-            // Check if current month is within [startMonth, dueMonth)
-            if (toYM(pStartDate) <= currentYM && currentYM < toYM(pDueDate)) {
-              isPackPaid = true;
-              break;
-            }
+        // nextDueDate: first uncovered month using FIXED cycle day
+        for (let offset = 0; offset <= 60; offset++) {
+          const monthIdx = enrollmentDate.getMonth() + offset;
+          const targetYear = enrollmentDate.getFullYear() + Math.floor(monthIdx / 12);
+          const targetMonth = monthIdx % 12;
+          const monthYM = targetYear * 12 + targetMonth;
+          if (monthYM > currentYM) break;
+          if (!coveredMonths.has(monthYM)) {
+            const lastDayOfMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
+            const effectiveDay = Math.min(cycleDay, lastDayOfMonth);
+            const day = String(effectiveDay).padStart(2, '0');
+            const month = String(targetMonth + 1).padStart(2, '0');
+            const year = targetYear;
+            nextDueDate = `${day}/${month}/${year}`;
+            break;
           }
         }
       }
