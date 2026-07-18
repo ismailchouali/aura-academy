@@ -173,6 +173,8 @@ interface OverdueStudent {
   nextDueDate: string | null;
   subjectName: string | null;
   levelName: string | null;
+  serviceId: string | null;
+  enrollmentDate: string | null;
   overduePayments: {
     id: string;
     month: string;
@@ -580,7 +582,7 @@ export function PaymentsView() {
   const [overdueOpen, setOverdueOpen] = useState(false);
   const [overdueData, setOverdueData] = useState<OverdueService[]>([]);
   const [overdueLoading, setOverdueLoading] = useState(false);
-  const [creatingInvoice, setCreatingInvoice] = useState<string | null>(null);
+
 
   // ── Data fetching ──────────────────────────────────────────────────────
 
@@ -712,12 +714,12 @@ export function PaymentsView() {
     fetchOverdue();
   };
 
-  const handleCreateInvoiceForOverdue = async (student: OverdueStudent) => {
-    // Use the scheduled due date from the API (format: dd/mm/yyyy)
-    // This ensures the invoice is created for the CORRECT cycle month, not the current month
+  const handleCreateInvoiceForOverdue = (student: OverdueStudent) => {
+    // Open the payment dialog with pre-filled data from the overdue entry
+    // Date = enrollment day + due month (e.g. enrolled 28/03 → due 28/06)
     let invoiceMonth = MONTH_KEYS[new Date().getMonth()];
     let invoiceYear = new Date().getFullYear();
-    let invoicePaymentDate: string | null = null;
+    let invoicePaymentDate = new Date().toISOString().split('T')[0];
 
     if (student.nextDueDate) {
       // Parse dd/mm/yyyy
@@ -728,73 +730,52 @@ export function PaymentsView() {
         const dueYear = parts[2];
         invoiceMonth = MONTH_KEYS[dueMonth - 1] || invoiceMonth;
         invoiceYear = dueYear;
-        // Set payment date to the scheduled due date (yyyy-mm-dd)
+        // Payment date = enrollment cycle day + due month
         invoicePaymentDate = `${dueYear}-${String(dueMonth).padStart(2, '0')}-${String(dueDay).padStart(2, '0')}`;
       }
     }
 
-    setCreatingInvoice(student.studentId);
-    try {
-      const res = await fetch('/api/payments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          studentId: student.studentId,
-          amount: student.monthlyFee,
-          paidAmount: student.monthlyFee,
-          discount: 0,
-          packMonths: 1,
-          month: invoiceMonth,
-          year: invoiceYear,
-          paymentDate: invoicePaymentDate,
-          method: 'cash',
-          notes: '',
-          status: 'paid',
-        }),
-      });
-      if (!res.ok) throw new Error('Failed to create');
-      toast.success(t.payments.invoiceCreatedQuick);
-      // Refresh overdue data
-      fetchOverdue();
-      // Also refresh main payments list
-      fetchPayments();
-    } catch {
-      toast.error(t.common.saveError);
-    } finally {
-      setCreatingInvoice(null);
-    }
+    // Pre-select the student so the form shows their profile card
+    setSelectedStudent({
+      id: student.studentId,
+      fullName: student.studentName,
+      phone: student.phone,
+      parentName: student.parentName,
+      parentPhone: student.parentPhone,
+      monthlyFee: student.monthlyFee,
+      level: student.levelName || student.subjectName
+        ? {
+            nameAr: student.levelName || '',
+            subject: student.subjectName
+              ? { nameAr: student.subjectName, service: student.serviceId ? { nameAr: '', id: student.serviceId } : null }
+              : null,
+          }
+        : null,
+      teacher: null,
+    });
+
+    // Pre-fill form: amount from monthlyFee, paid = 0 (user fills manually), status = pending
+    setFormData({
+      studentId: student.studentId,
+      amount: student.monthlyFee,
+      paidAmount: '',
+      discount: '',
+      packMonths: 1,
+      month: invoiceMonth,
+      year: invoiceYear,
+      paymentDate: invoicePaymentDate,
+      method: 'cash',
+      notes: '',
+      status: 'pending',
+    });
+
+    setEditingPayment(null);
+    setDialogOpen(true);
   };
 
-  /** Quick mark a payment as fully paid (for pending invoices from overdue quick-add) */
-  const handleQuickPay = async (payment: Payment) => {
-    try {
-      const res = await fetch(`/api/payments/${payment.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...payment,
-          amount: payment.amount,
-          paidAmount: payment.amount - (payment.discount || 0),
-          discount: payment.discount || 0,
-          remainingAmount: 0,
-          packMonths: payment.packMonths || 1,
-          year: payment.year,
-          paymentDate: payment.paymentDate
-            ? (typeof payment.paymentDate === 'string'
-                ? payment.paymentDate.split('T')[0]
-                : payment.paymentDate.toISOString().split('T')[0])
-            : null,
-          method: payment.method || 'cash',
-          notes: payment.notes || '',
-          status: 'paid',
-        }),
-      });
-      if (!res.ok) throw new Error();
-      toast.success('تم تسديد الفاتورة بنجاح ✅');
-      fetchPayments();
-    } catch {
-      toast.error(t.common.saveError);
-    }
+  /** Quick mark a payment as fully paid — opens the edit dialog with date preserved */
+  const handleQuickPay = (payment: Payment) => {
+    handleOpenDialog(payment);
   };
 
   // ── Form handling ──────────────────────────────────────────────────────
@@ -1945,13 +1926,8 @@ export function PaymentsView() {
                                   size="sm"
                                   className="gap-1.5 bg-red-500 hover:bg-red-600 text-white shrink-0"
                                   onClick={() => handleCreateInvoiceForOverdue(student)}
-                                  disabled={creatingInvoice === student.studentId}
                                 >
-                                  {creatingInvoice === student.studentId ? (
-                                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                  ) : (
-                                    <Plus className="w-3.5 h-3.5" />
-                                  )}
+                                  <Plus className="w-3.5 h-3.5" />
                                   {t.payments.addInvoiceQuick}
                                 </Button>
                               </div>
