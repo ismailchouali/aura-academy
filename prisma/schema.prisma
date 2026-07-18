@@ -3,9 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
 }
 
 model Setting {
@@ -23,6 +22,7 @@ model Service {
   icon        String?
   order       Int      @default(0)
   subjects    Subject[]
+  enrollments StudentEnrollment[]
   createdAt   DateTime @default(now())
 }
 
@@ -36,20 +36,22 @@ model Subject {
   levels     Level[]
   teachers   TeacherSubject[]
   schedules  Schedule[]
+  enrollments StudentEnrollment[] @relation("EnrollmentSubject")
   order      Int       @default(0)
   createdAt  DateTime  @default(now())
 }
 
 model Level {
-  id        String  @id @default(cuid())
-  name      String
-  nameAr    String
-  nameFr    String
-  subjectId String
-  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  order     Int     @default(0)
-  students  Student[]
-  schedules Schedule[]
+  id          String  @id @default(cuid())
+  name        String
+  nameAr      String
+  nameFr      String
+  subjectId   String
+  subject     Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  order       Int     @default(0)
+  students    Student[]
+  schedules   Schedule[]
+  enrollments StudentEnrollment[] @relation("EnrollmentLevel")
 }
 
 model Teacher {
@@ -68,6 +70,7 @@ model Teacher {
   schedules     Schedule[]
   payments      TeacherPayment[]
   students      Student[]
+  enrollments   StudentEnrollment[] @relation("EnrollmentTeacher")
 }
 
 model TeacherSubject {
@@ -108,12 +111,34 @@ model Student {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   payments      Payment[]
+  enrollments   StudentEnrollment[] @relation("StudentEnrollments")
+}
+
+model StudentEnrollment {
+  id             String   @id @default(cuid())
+  studentId      String
+  student        Student  @relation("StudentEnrollments", fields: [studentId], references: [id], onDelete: Cascade)
+  serviceId      String
+  service        Service  @relation(fields: [serviceId], references: [id])
+  subjectId      String?
+  subject        Subject? @relation("EnrollmentSubject", fields: [subjectId], references: [id])
+  levelId        String?
+  level          Level?   @relation("EnrollmentLevel", fields: [levelId], references: [id])
+  teacherId      String?
+  teacher        Teacher? @relation("EnrollmentTeacher", fields: [teacherId], references: [id], onDelete: SetNull)
+  monthlyFee     Float    @default(0)
+  status         String   @default("active")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  payments       Payment[]
 }
 
 model Payment {
   id             String   @id @default(cuid())
   studentId      String
   student        Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  enrollmentId   String?
+  enrollment     StudentEnrollment? @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
   amount         Float
   paidAmount     Float    @default(0)
   remainingAmount Float

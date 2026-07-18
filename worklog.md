@@ -1,190 +1,224 @@
+# Aura Academy Worklog
+
 ---
 Task ID: 1
 Agent: Main
-Task: Fix git state, remove WhatsApp/PDF, hide financial fields from secretary, deploy
+Task: Add StudentEnrollment model to Prisma schema
 
 Work Log:
-- Reset git to origin/main (904a623) to get full project state
-- Identified and removed WhatsApp/PDF send feature from payments-view.tsx (generateBonPdf, sendBonWhatsApp functions, MessageCircle icon)
-- Identified and removed WhatsApp/PDF send feature from teacher-payments-view.tsx (handleSendWhatsApp function, MessageCircle icon, WhatsApp button)
-- Removed /api/payments/bon-pdf/ and /api/teacher-payments/bon-pdf/ API routes
-- Removed @react-pdf/renderer from package.json and ran bun install
-- Removed public/fonts/ (Tajawal-Bold.ttf, Tajawal-Medium.ttf, Tajawal-Regular.ttf)
-- Added isAdmin role checks to students-view.tsx: hidden monthly fee column, payment status column, and monthly fee form section from secretary
-- Fixed Next.js slug conflict: merged services/[id]/route.ts into services/[serviceId]/route.ts
-- Pushed to GitHub: https://github.com/ismailchouali/aura-academy.git (commit 145e2fd)
-- Deployed to Vercel: https://my-project-one-sand-89.vercel.app
+- Added StudentEnrollment model with relations to Student, Service, Subject, Level, Teacher
+- Added enrollmentId to Payment model
+- Added reverse relations to Student, Service, Subject, Level, Teacher models
+- Changed local datasource to SQLite for development
+- Pushed schema to database successfully
 
 Stage Summary:
-- WhatsApp/PDF feature completely removed from both payment views
-- Financial fields (monthly fee, payment status) hidden from secretary in students view
-- Payments view already had proper isAdmin guards (المطلوب, الخصم, المدفوع, المتبقي)
-- App compiles and runs successfully on dev server (200)
-- Vercel production build successful (no bon-pdf routes in build output)
+- New table: StudentEnrollment (studentId, serviceId, subjectId, levelId, teacherId, monthlyFee, status)
+- Payment now has optional enrollmentId field
+- Backward compatible: existing students/payments work without enrollments
 
 ---
 Task ID: 2
-Agent: Main
-Task: Auto-remove expired trial sessions from schedule
+Agent: fullstack-dev
+Task: Update payment API routes for per-enrollment payments
 
 Work Log:
-- Analyzed schedule system: trial sessions had no specific date, just dayOfWeek
-- Added trialDate DateTime? field to Schedule model in Prisma schema
-- Pushed schema to Neon PostgreSQL database (via aura-academy Vercel project env)
-- Modified GET /api/schedules: auto-delete expired trials (trialDate < today), filter remaining
-- Modified POST /api/schedules: save trialDate when sessionType is 'trial'
-- Modified PUT /api/schedules/[id]: update trialDate
-- Modified GET /api/dashboard: exclude expired trials from todaySessions
-- Updated schedule-view.tsx form: added date picker for trial sessions with validation
-- Updated schedule-view.tsx tooltips and print view to show trial date
-- Updated description text: "كتحيد من الجدول بعد ما تعدي"
+- Extracted shared `paymentInclude` constant with enrollment + nested student relations (satisfies Prisma.PaymentInclude)
+- GET /api/payments: added `enrollmentId` optional query param for filtering
+- GET /api/payments: added enrollment include (service, subject, teacher) to response
+- POST /api/payments: added `enrollmentId` optional field for single payment mode
+- POST /api/payments: added batch `enrollmentPayments` array mode using db.$transaction
+  - Auto-calculates remainingAmount = amount - discount - paidAmount
+  - Auto-determines status: paid / partial / pending
+  - Returns array of created payments
+- GET /api/payments/[id]: added enrollment include to response
+- PUT /api/payments/[id]: accepts `enrollmentId` update (only applied when explicitly provided)
+- PUT /api/payments/[id]: added enrollment include to response
+- Verified: no new TypeScript errors introduced
 
 Stage Summary:
-- Trial sessions now require a specific date
-- Expired trial sessions are auto-deleted on every schedule fetch
-- Dashboard todaySessions excludes expired trials
-- All time comparisons use Africa/Casablanca timezone
+- Both payment route files fully support the new StudentEnrollment relation
+- Backward compatible: existing single-payment flows unaffected
+- New batch payment endpoint enables per-enrollment payments in a single transaction
+
+---
+Task ID: 2
+Agent: Fullstack Dev
+Task: Create enrollment API routes
+
+Work Log:
+- Created GET /api/enrollments?studentId=xxx — returns all enrollments for a student with service, subject, level, teacher relations
+- Created POST /api/enrollments — creates enrollment; on first enrollment for a student, also updates student.levelId/teacherId/monthlyFee for backward compatibility
+- Created PUT /api/enrollments/[id] — updates any of: subjectId, levelId, teacherId, monthlyFee, status
+- Created DELETE /api/enrollments/[id] — deletes enrollment; if it was the student's primary enrollment (matches student.levelId), clears student.levelId/teacherId/monthlyFee
+- All routes use Next.js 16 App Router pattern with `params: Promise<{id}>` and `await params`
+- Verified no new type errors introduced (all pre-existing)
+
+Stage Summary:
+- New files: src/app/api/enrollments/route.ts, src/app/api/enrollments/[id]/route.ts
+- 5 endpoints: GET (list), POST (create), PUT (update), DELETE (remove)
+- Backward compat maintained: first enrollment syncs to student record; deletion of primary enrollment clears it
 
 ---
 Task ID: 3
-Agent: Main
-Task: Fix financial reports - teacher expenses based on student payment coverage, not TeacherPayment records
+Agent: fullstack-dev
+Task: Update student API routes for multi-enrollment support
 
 Work Log:
-- Analyzed user complaint: April showing 0 professor expenses, but professors were paid in May for April's work
-- Root cause: dashboard API used TeacherPayment records (when payment was made) instead of calculating what professors EARNED for teaching in each month
-- Replaced monthlyTeacherPayments calculation in /api/dashboard/route.ts with student-payment-coverage-based algorithm
-- New algorithm (same as teacher-payments API calculate=true mode):
-  - For each active student's payment, calculate monthlyAmount = paidAmount / packMonths
-  - Determine effectiveStart month based on payment date (day 1-15 → next month, day 16-end → month after next)
-  - Check if each month of targetYear falls within payment coverage period
-  - Teacher expense = monthlyAmount × teacher.percentage / 100
-- Added year query parameter support to dashboard API for cross-year filtering
-- Updated financial-reports-view.tsx to re-fetch data when year filter changes (added useRef + useEffect for year changes)
-- Code compiles and runs correctly (verified via dev server)
+- Refactored GET /api/students to extract shared `calcPaymentStatus()` helper from inline enrichment logic
+- GET /api/students now includes `enrollments` with nested service/subject/level/teacher + per-enrollment payments
+- Multi-enrollment enrichment: calculates isPackPaid + nextDueDate per enrollment; student-level isPackPaid = ALL enrollments paid
+- Legacy path preserved: students without enrollments use student-level payments (existing logic)
+- POST /api/students: accepts `enrollments` array in body; uses `db.$transaction` for atomic student + enrollments creation
+- POST /api/students: sets student.levelId/teacherId/monthlyFee from first enrollment for backward compatibility
+- POST /api/students: falls back to old behavior (body.levelId/teacherId/monthlyFee) when no enrollments array
+- GET /api/students/[id]: added enrollments include with full nested relations
+- PUT /api/students/[id]: accepts `enrollments` array; uses transaction to delete old + create new enrollments atomically
+- PUT /api/students/[id]: updates student.levelId/teacherId/monthlyFee from first enrollment; falls back to old behavior otherwise
+- All response shapes include enrollments array (empty for legacy students)
+- Verified: no new TypeScript errors in student API files
 
 Stage Summary:
-- Expenses now correctly reflect what professors EARNED for teaching in each month
-- If student paid in April, professor teaches from May (effective start), so expense shows under May
-- Year filtering now works: changing year in financial reports re-fetches data from API
-- Files modified: src/app/api/dashboard/route.ts, src/components/views/financial-reports-view.tsx
+- Updated files: src/app/api/students/route.ts, src/app/api/students/[id]/route.ts
+- GET list: per-enrollment payment enrichment with student-level aggregation
+- POST/PUT: transactional enrollment creation/replacement with backward-compatible student field sync
+- Fully backward compatible: existing students without enrollments work identically
 
 ---
 Task ID: 4
-Agent: Main
-Task: Fix expense calculation - use Payment.month instead of effectiveStart delay
+Agent: fullstack-dev
+Task: Update teacher payments API for multi-enrollment system
 
 Work Log:
-- User reported April still showing 0 expenses and May showing 7,070 expenses
-- Root cause: previous fix used effectiveStart algorithm which pushes expense to NEXT month after student pays
-- The effectiveStart algorithm is for determining WHEN to pay the teacher, not which month the expense belongs to
-- User's workflow: student pays April → professor teaches April → professor gets PAID in May
-- Expense should be in April (month taught), not May (month paid)
-- Completely rewrote calculateTeacherExpenses: now uses Payment.month directly
-- New logic: expense for month X = sum of (paidAmount × teacher.percentage / 100) for all payments where Payment.month = X
-- This is consistent with how revenue is calculated (also uses Payment.month directly)
-- Applied same Langues pack division logic (divide by packMonths only for Langues service)
-- Simplified the code: no more effectiveStart, addMonths helper functions, or separate calculateTeacherExpenses function
-- Code compiles and runs correctly
+- Extracted shared `calcPaymentContribution()` helper from duplicated inline payment coverage logic in both route files
+- GET /api/teacher-payments?calculate=true — complete rewrite of calculation mode:
+  - Fetches active StudentEnrollments (with student, service, subject, level, teacher includes) instead of filtering students by teacherId
+  - Fetches legacy students (teacherId on student, `enrollments: { none: {} }`) for backward compatibility
+  - Fetches enrollment-linked payments (where enrollmentId IN teacher's enrollment IDs) separately from legacy payments
+  - Calculates per-enrollment contribution map: `contributionByEnrollment` using the pack coverage algorithm
+  - Calculates per-legacy-student contribution map: `legacyContributionByStudent` using same algorithm
+  - Per teacher: merges enrollment students + legacy students; totalStudents = unique students (Set), not enrollment count
+  - Groups now use enrollment's service/subject/level (new system) or student's level (legacy), with unique student counting per group via Set
+  - Student details aggregate multi-enrollment students into single row with summed monthly amount
+  - Removed dead `paymentsByStudent` map (built but never used in response)
+- GET /api/teacher-payments/bon — same hybrid enrollment + legacy approach for receipt generation:
+  - Replaced `db.student.findMany({ where: { teacherId } })` with enrollment fetch + legacy fetch
+  - Same contribution calculation split (enrollment-linked vs legacy)
+  - Groups use enrollment's level/subject for grouping
+  - Student details aggregate per unique student
+  - HTML template unchanged
+- Kept all existing helper functions (getPrevMonth, getNextMonth, addMonths, isSameMonth, getLastDayOfMonth)
+- Verified: no new TypeScript errors introduced (all errors are pre-existing in unrelated files)
 
 Stage Summary:
-- April expenses now correctly show professor's share for April student payments
-- May expenses will show 0 until students pay for May (professors haven't taught May yet)
-- Files modified: src/app/api/dashboard/route.ts
+- Updated files: src/app/api/teacher-payments/route.ts, src/app/api/teacher-payments/bon/route.ts
+- Calculation mode now supports multi-enrollment: students linked via StudentEnrollment with per-enrollment payment attribution
+- Legacy students (no enrollments, teacherId on student) continue to work with original logic
+- Student counts are unique per teacher, group counts are unique per group
+- Bon (receipt) generation fully supports the enrollment system
 
 ---
 Task ID: 5
-Agent: Main
-Task: Revert ALL previous modifications to financial system
+Agent: fullstack-dev
+Task: Update overdue API routes for per-enrollment overdue calculation
 
 Work Log:
-- User requested complete revert of all financial report modifications
-- User explained new workflow: teachers will be paid at END of each month (not beginning of next month)
-- With new workflow, TeacherPayment.month naturally matches the work month
-- Reverted 3 files using git checkout to commit f6d7716:
-  1. src/app/api/dashboard/route.ts - removed year query param, monthlyTeacherPayments, expense calculation changes
-  2. src/components/views/financial-reports-view.tsx - removed month/year filter, expense chart column, net profit card
-  3. src/components/views/teacher-payments-view.tsx - removed displayMonth/displayYear for totalThisMonth/totalThisYear
-- Reverted database: 6 TeacherPayment records changed from month="4" back to month="5" (year=2026)
-- Created temporary /api/revert-teacher-payments endpoint, deployed, called it (6 records updated), then deleted
-- Created temporary /api/check-payments endpoint to verify, then deleted
-- Final clean commit pushed and deployed
+- Added `enrollmentId?: string`, `serviceName?: string`, `levelNameForGroup?: string` to OverdueStudent interface in /api/payments/overdue/route.ts
+- Added `serviceId: null` and `enrollmentDate: null` to both return paths in `calculateStudentOverdue` to satisfy the OverdueStudent type
+- Rewrote GET /api/payments/overdue handler:
+  - Fetches active students with `enrollments` (include service, subject, level, teacher) and legacy `level` (include subject→service)
+  - Batch-fetches enrollment-linked payments via `enrollmentId: { in: allEnrollmentIds }` (optimized, no N+1)
+  - Batch-fetches legacy payments via `studentId: { in: legacyStudentIds }, enrollmentId: null`
+  - Groups enrollment payments by enrollmentId, legacy payments by studentId
+  - For students WITH enrollments: iterates each enrollment, calls `calculateStudentOverdue` with `enrollment.monthlyFee`, sets `enrollmentId`/`subjectName`/`levelName`/`serviceId`/`serviceName`/`levelNameForGroup` from enrollment
+  - For students WITHOUT enrollments: legacy path identical to original behavior
+  - Grouping now uses `overdue.serviceName` and `overdue.levelNameForGroup` directly (no studentById lookup needed)
+  - Response format unchanged: Service → Level → Students, but students can appear in multiple groups
+- Updated /api/classrooms/[id]/overdue/route.ts:
+  - Added `enrollmentId?: string` to OverdueStudentInfo interface
+  - Extracted inline overdue logic into local `calcClassroomOverdue()` helper (parametric: monthlyFee, enrollmentDate, payments)
+  - Added `enrollments` (with service, subject, level) to student include in classroom query
+  - Batch-fetches enrollment-linked payments after building studentMap
+  - For students WITH enrollments: iterates each enrollment, calls `calcClassroomOverdue` with enrollment.monthlyFee + enrollment payments
+  - For students WITHOUT enrollments: calls `calcClassroomOverdue` with student.monthlyFee + student.payments (legacy)
+  - Enrollment entries use enrollment's level/subject names; legacy entries use schedule's level/subject names
+- All existing Logic A helper functions preserved unchanged
+- Timezone remains Africa/Casablanca
+- Backward compatible: students without enrollments follow original code paths
+- Verified: zero new TypeScript errors in both files
 
 Stage Summary:
-- All code restored to original state (before any financial modifications)
-- Database data restored: 6 TeacherPayment records back to month="5" (as originally recorded)
-- User's new process: pay teachers end of month → TeacherPayment.month will match work month naturally
-- Vercel deployed clean version without temporary endpoints
+- Updated files: src/app/api/payments/overdue/route.ts, src/app/api/classrooms/[id]/overdue/route.ts
+- Per-enrollment overdue: each active enrollment generates its own OverdueStudent entry with independent Logic A calculation
+- Batch-optimized payment fetching (no per-enrollment queries in loops)
+- Legacy students (no enrollments) work identically to before
+- A student can appear in multiple Service→Level groups (one per enrollment)
 
 ---
 Task ID: 6
-Agent: Main
-Task: Rewrite teacher bon printing with proper format, student details, and fixed calculation algorithm
+Agent: fullstack-dev
+Task: Update payments-view.tsx for per-enrollment payments
 
 Work Log:
-- User reported bon printing was broken (error messages when trying to print)
-- User uploaded PDF showing the expected bon format for teacher "majda bou-louidane"
-- Analyzed PDF structure: header (academy name/logo), teacher info, student summary by level, student detail table with payment amounts, total collected from students, teacher's share with percentage, footer
-- Root cause of bon errors: the bon API endpoint was doing a self-referencing HTTP fetch to calculate data, which fails on Vercel
-- Completely rewrote /api/teacher-payments/bon/route.ts:
-  - Removed self-referencing fetch (was causing errors)
-  - All calculation now done inline using direct Prisma queries
-  - Bon now shows: student summary by level with counts, individual student payments with amounts, total collected from students, teacher's percentage and calculated share
-  - Format matches the uploaded PDF example
-  - Proper print button and print CSS
-- Fixed payment coverage algorithm in BOTH bon endpoint AND teacher-payments/route.ts:
-  - OLD: paid 1-15 → effectiveStart = next month; paid 16+ → month after next
-  - NEW: paid 1-15 → effectiveStart = SAME month; paid 16+ → next month
-  - This matches user's workflow: teachers paid at end of month, so if student pays before 15th, teacher gets paid this month
-- Pushed 2 commits to GitHub (bon rewrite + algorithm fix)
-- Auto-deploy via Vercel GitHub integration
+- Added `StudentEnrollmentInfo` and `EnrollmentPaymentInput` interfaces
+- Updated `Payment` interface to include optional `enrollmentId` and `enrollment` (with nested service/subject/teacher)
+- Updated `StudentSearchResult` to include optional `enrollments?: StudentEnrollmentInfo[]`
+- Updated `OverdueStudent` to include `enrollmentId: string | null`
+- Added `enrollmentPayments` state (useState<EnrollmentPaymentInput[]>([]))
+- Added computed values: `totalEnrollmentAmount`, `totalEnrollmentPaid`
+- Added `updateEnrollmentPayment` helper for modifying individual enrollment payment fields
+- Modified `handleSelectStudent`: when student has enrollments, populates `enrollmentPayments` array and clears `formData.amount`; otherwise uses legacy single-amount behavior
+- Modified `handleClearStudent`: resets `enrollmentPayments` to []
+- Modified `handleOpenDialog`: resets `enrollmentPayments` when opening add dialog; pre-fills from `payment.enrollmentId` when editing
+- Modified `handleCreateInvoiceForOverdue`: if overdue entry has `enrollmentId`, pre-fills single enrollment payment
+- Modified `handleSubmit`: three code paths — batch enrollmentPayments (POST with enrollmentPayments array), single enrollment edit (PUT with enrollmentId), legacy single payment
+- Modified payment dialog `onOpenChange` to reset `enrollmentPayments` when dialog closes
+- Modified payment form UI: conditional rendering — when `enrollmentPayments.length > 0`, shows per-enrollment grid (service/teacher, amount, paid, discount, pack months selectors) with total row; otherwise shows legacy single-amount fields
+- Modified payment table: student column now shows `payment.enrollment.service.nameAr` as teal badge when enrollment exists, falling back to legacy level/subject display
+- Modified dialog footer auto-status: enrollment-aware (compares totalEnrollmentPaid vs totalEnrollmentAmount)
+- Hidden pack type selector for Langues when in enrollment mode (each enrollment has its own pack selector)
+- Added Arabic/French translation keys: amountPerEnrollment, enrollmentAmount, enrollmentPaid, enrollmentDiscount, enrollmentPackMonths, enrollmentService, enrollmentTeacher, noTeacher, totalEnrollmentPayments
 
 Stage Summary:
-- Bon endpoint now returns proper HTML with student details and teacher share breakdown
-- No more self-referencing fetch that caused Vercel errors
-- Payment coverage algorithm corrected to match user's end-of-month payment workflow
-- Files modified: src/app/api/teacher-payments/bon/route.ts, src/app/api/teacher-payments/route.ts
----
-Task ID: 1
-Agent: Main Agent
-Task: Fix payment cycle day drift (Logic A) and quick invoice date issues
-
-Work Log:
-- Analyzed 6 uploaded screenshots showing due payments bugs
-- Identified core bug: `coveredMonths` built using `addCalendarMonths(paymentDate, i)` causes late payments to cover wrong month
-- Implemented Logic A (queue-based coverage) in 3 backend files:
-  - `src/app/api/payments/overdue/route.ts` - main overdue API
-  - `src/app/api/classrooms/[id]/overdue/route.ts` - classroom-specific overdue
-  - `src/app/api/students/route.ts` - students list API
-- Added `buildCoverageSets()` function: sorts paid payments by date, assigns to enrollment cycle months in queue order
-- Fixed `handleCreateInvoiceForOverdue` in `payments-view.tsx` to parse `nextDueDate` (dd/mm/yyyy) and use the scheduled due month/year/paymentDate instead of current date
-- Fixed Step 1 (unpaid payments) to use month/year field instead of paymentDate for endYM calculation
-- Removed unused functions: `addCalendarMonths`, `isLastDayOfMonth`, `getPaymentEndYM`
-- Removed `packDueDate` early-exit check in Step 2 (now uses direct iteration)
-- Committed and pushed to GitHub (commit bbd3212)
-
-Stage Summary:
-- Salsabil Abounada (enrolled 28/03): payments [28/03, 25/04, 09/06] now correctly cover March, April, May. Next due shows 28/06/2026 instead of wrong 28/05/2026
-- Quick invoice creation uses scheduled due date (e.g., 28/06/2026) not current date (17/07/2026)
-- Majda Bourmich (enrolled 11/06, paid 11/06): if payment exists with remainingAmount=0, should now correctly show in due payments with nextDueDate 11/07/2026
-- Cycle day is permanently fixed from enrollment date - never drifts
+- Updated files: src/components/views/payments-view.tsx, src/lib/translations.ts
+- Full per-enrollment payment support in the payment dialog form
+- Batch creation via POST /api/payments with enrollmentPayments array
+- Single enrollment edit preserves enrollmentId on PUT
+- Service badge shown in payments table for enrollment-linked payments
+- Backward compatible: students without enrollments use legacy single-amount flow
+- Zero new TypeScript errors introduced (all pre-existing)
 
 ---
-Task ID: 2
-Agent: Main
-Task: Fix payment date bug + investigate Majda Bourmich overdue issue
+Task ID: 6
+Agent: fullstack-dev
+Task: Rewrite students-view multi-service enrollment wizard
 
 Work Log:
-- Read and analyzed overdue API (src/app/api/payments/overdue/route.ts), payments view (src/components/views/payments-view.tsx), and students API
-- Found BUG: In handleOpenDialog (edit form), `payment.paymentDate?.split('T')[0]` was called on a Date object from Prisma. Date objects don't have .split() method, so it returned undefined, causing fallback to `new Date().toISOString().split('T')[0]` = TODAY's date. This meant every time a user opened a payment to edit/mark as paid, the date field showed today instead of the original scheduled date.
-- Fixed: Changed to check `typeof payment.paymentDate === 'string'` before calling .split(), use `.toISOString().split('T')[0]` for Date objects
-- Also fixed `formatDate()` to accept both `string | Date` types
-- Traced through buildCoverageSets algorithm for Majda Bourmich case: enrolled 11/06, paid 11/06, today 17/07 → should show as overdue with next due 11/07. Algorithm is correct. Issue is likely data-related (e.g., remainingAmount not 0, or enrollment date stored differently).
-- Added temporary debug endpoint: /api/debug/student?name=Majda to check raw data and coverage analysis on production
-- Pushed all changes to GitHub for Vercel auto-deploy
+- Added `StudentEnrollment` and `EnrollmentSelection` interfaces after existing type definitions
+- Added `enrollments?: StudentEnrollment[]` to the `Student` interface
+- Added `enrollmentList` (EnrollmentSelection[]) and `currentFee` (string) state variables
+- Updated `resetWizard` to clear `enrollmentList` and `currentFee`
+- Updated `studentCountsMap` to use Set-based unique student counting across enrollments + legacy teacherId
+- Updated `displayedStudents` filter to check both enrollments (serviceId/subjectId/levelId) and legacy student fields
+- Rewrote `handleOpenDialog` for edit mode: pre-populates `enrollmentList` from `student.enrollments` (new system) or from `student.level/teacher/monthlyFee` (legacy), always skips to step 5
+- Modified `handleSelectTeacher` and `handleSkipTeacher` to go to step 4 (enrollment review) instead of step 5
+- Added `saveCurrentSelection` helper: saves current wizard selection + fee to enrollmentList, clears wizard state, navigates to target step
+- Rewrote `handleSubmit`: sends `enrollments` array when `enrollmentList.length > 0`, falls back to legacy payload (levelId/teacherId/monthlyFee) otherwise; removed selectedLevel validation when using enrollments
+- Redesigned step 4 with two sub-modes:
+  - Teacher selection (when no teacher selected): shows teacher list as before
+  - Enrollment review (when teacher selected or noTeacher): shows summary card with service/subject/level/teacher badges, fee input, "Add another service" button (→ step 1), "Continue to info" button (→ step 5), and list of already-added enrollments with delete buttons
+- Updated step 5 summary badges: shows enrollmentList items (service/subject/level/teacher/fee badges) when enrollments exist, falls back to single-selection badges for legacy
+- Monthly fee section in step 5 now only shown in legacy mode (enrollmentList.length === 0)
+- Updated student table: level cell shows service+level badges for enrollment students, legacy display otherwise; teacher cell shows comma-joined teacher names for enrollment students; fee cell shows summed enrollment fees
+- Updated footer: skip button only shown in teacher selection sub-mode of step 4; back button works from step 5 with enrollments (→ step 1); save button disabled condition handles both enrollment and legacy modes
 
 Stage Summary:
-- Fixed: payment date in edit form was always showing today's date (Date object .split() bug)
-- Added: debug endpoint /api/debug/student?name=<name> for investigating student overdue data
-- Pending: Need to check debug endpoint on production to diagnose Majda Bourmich issue
-- Commits: 963cf2d (fix payment date), c05bfa1 (debug endpoint)
+- Updated file: src/components/views/students-view.tsx (1543 → 1864 lines)
+- Full multi-service enrollment support in student creation wizard
+- Step 4 now serves dual purpose: teacher selection → enrollment review
+- "Add another service" flow preserves enrollmentList across service selections
+- Edit mode pre-populates from student.enrollments (skips wizard to step 5)
+- Student table displays enrollment-aware badges and summed fees
+- Teacher count per student uses Set-based unique counting across enrollments
+- Backward compatible: legacy single-service students work identically
+- Zero new TypeScript errors (all 4 errors in file are pre-existing)

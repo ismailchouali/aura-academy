@@ -1,5 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { Prisma } from '@prisma/client';
+
+const paymentInclude = {
+  enrollment: {
+    include: {
+      service: true,
+      subject: true,
+      teacher: true,
+    },
+  },
+  student: {
+    include: {
+      level: {
+        include: {
+          subject: { include: { service: true } },
+        },
+      },
+      teacher: true,
+    },
+  },
+} as const satisfies Prisma.PaymentInclude;
 
 export async function GET(
   request: NextRequest,
@@ -9,18 +30,7 @@ export async function GET(
     const { id } = await params;
     const payment = await db.payment.findUnique({
       where: { id },
-      include: {
-        student: {
-          include: {
-            level: {
-              include: {
-                subject: { include: { service: true } },
-              },
-            },
-            teacher: true,
-          },
-        },
-      },
+      include: paymentInclude,
     });
 
     if (!payment) {
@@ -42,33 +52,28 @@ export async function PUT(
     const { id } = await params;
     const body = await request.json();
 
+    const data: Record<string, unknown> = {
+      amount: body.amount,
+      paidAmount: body.paidAmount,
+      remainingAmount: body.remainingAmount,
+      month: body.month,
+      year: body.year,
+      paymentDate: body.paymentDate ? new Date(body.paymentDate) : null,
+      discount: body.discount || 0,
+      packMonths: body.packMonths || 1,
+      method: body.method,
+      notes: body.notes,
+      status: body.status,
+    };
+
+    if (body.enrollmentId !== undefined) {
+      data.enrollmentId = body.enrollmentId || null;
+    }
+
     const payment = await db.payment.update({
       where: { id },
-      data: {
-        amount: body.amount,
-        paidAmount: body.paidAmount,
-        remainingAmount: body.remainingAmount,
-        month: body.month,
-        year: body.year,
-        paymentDate: body.paymentDate ? new Date(body.paymentDate) : null,
-        discount: body.discount || 0,
-        packMonths: body.packMonths || 1,
-        method: body.method,
-        notes: body.notes,
-        status: body.status,
-      },
-      include: {
-        student: {
-          include: {
-            level: {
-              include: {
-                subject: { include: { service: true } },
-              },
-            },
-            teacher: true,
-          },
-        },
-      },
+      data,
+      include: paymentInclude,
     });
 
     return NextResponse.json(payment);

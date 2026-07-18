@@ -70,6 +70,7 @@ import { useAppStore } from '@/store/store';
 interface Payment {
   id: string;
   studentId: string;
+  enrollmentId?: string | null;
   student: {
     id: string;
     fullName: string;
@@ -83,6 +84,12 @@ interface Payment {
     } | null;
     teacher: { id: string; fullName: string } | null;
   };
+  enrollment?: {
+    id: string;
+    service?: { id: string; name: string; nameAr: string } | null;
+    subject?: { id: string; name: string; nameAr: string } | null;
+    teacher?: { id: string; fullName: string } | null;
+  } | null;
   amount: number;
   paidAmount: number;
   remainingAmount: number;
@@ -95,6 +102,27 @@ interface Payment {
   notes: string | null;
   status: string;
   createdAt: string;
+}
+
+interface StudentEnrollmentInfo {
+  id: string;
+  serviceId: string;
+  subjectId: string | null;
+  levelId: string | null;
+  teacherId: string | null;
+  monthlyFee: number;
+  service?: { id: string; name: string; nameAr: string } | null;
+  subject?: { id: string; name: string; nameAr: string } | null;
+  level?: { id: string; name: string; nameAr: string } | null;
+  teacher?: { id: string; fullName: string } | null;
+}
+
+interface EnrollmentPaymentInput {
+  enrollmentId: string;
+  amount: number | '';
+  paidAmount: number | '';
+  discount: number | '';
+  packMonths: number;
 }
 
 interface StudentSearchResult {
@@ -110,6 +138,7 @@ interface StudentSearchResult {
     subject: { nameAr: string; service?: { nameAr: string; id: string } | null } | null;
   } | null;
   teacher: { id: string; fullName: string } | null;
+  enrollments?: StudentEnrollmentInfo[];
 }
 
 interface Service {
@@ -174,6 +203,7 @@ interface OverdueStudent {
   subjectName: string | null;
   levelName: string | null;
   serviceId: string | null;
+  enrollmentId: string | null;
   enrollmentDate: string | null;
   overduePayments: {
     id: string;
@@ -573,6 +603,7 @@ export function PaymentsView() {
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
   const [formData, setFormData] = useState<PaymentFormData>(defaultFormData);
   const [submitting, setSubmitting] = useState(false);
+  const [enrollmentPayments, setEnrollmentPayments] = useState<EnrollmentPaymentInput[]>([]);
 
   // Delete state
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -769,6 +800,19 @@ export function PaymentsView() {
       status: 'pending',
     });
 
+    // If overdue entry has an enrollmentId, pre-fill enrollment payments for that specific enrollment
+    if (student.enrollmentId) {
+      setEnrollmentPayments([{
+        enrollmentId: student.enrollmentId,
+        amount: student.monthlyFee,
+        paidAmount: '',
+        discount: '',
+        packMonths: 1,
+      }]);
+    } else {
+      setEnrollmentPayments([]);
+    }
+
     setEditingPayment(null);
     setDialogOpen(true);
   };
@@ -804,18 +848,31 @@ export function PaymentsView() {
         paymentDate: payment.paymentDate
           ? (typeof payment.paymentDate === 'string'
               ? payment.paymentDate.split('T')[0]
-              : payment.paymentDate.toISOString().split('T')[0])
+              : new Date(payment.paymentDate as Date).toISOString().split('T')[0])
           : new Date().toISOString().split('T')[0],
         method: payment.method || 'cash',
         notes: payment.notes || '',
         status: payment.status,
       });
+      // Pre-fill enrollmentPayments when editing a payment that has an enrollmentId
+      if (payment.enrollmentId) {
+        setEnrollmentPayments([{
+          enrollmentId: payment.enrollmentId,
+          amount: payment.amount,
+          paidAmount: payment.paidAmount,
+          discount: payment.discount || 0,
+          packMonths: payment.packMonths || 1,
+        }]);
+      } else {
+        setEnrollmentPayments([]);
+      }
     } else {
       setEditingPayment(null);
       setSelectedStudent(null);
       setStudentSearchQuery('');
       setStudentSearchResults([]);
       setFormData(defaultFormData);
+      setEnrollmentPayments([]);
       // Load all students once when opening add dialog
       if (!studentsLoaded.current) {
         studentsLoaded.current = true;
@@ -831,19 +888,42 @@ export function PaymentsView() {
   const handleSelectStudent = (student: StudentSearchResult) => {
     setSelectedStudent(student);
     setStudentSearchQuery('');
-    setFormData((prev) => ({
-      ...prev,
-      studentId: student.id,
-      amount: student.monthlyFee || '',
-      packMonths: student.level?.subject?.service?.id === 'service_langues'
-        ? (student.packMonths || prev.packMonths)
-        : 1,
-    }));
+
+    // If student has enrollments, set up per-enrollment payment fields
+    if (student.enrollments && student.enrollments.length > 0) {
+      setEnrollmentPayments(
+        student.enrollments.map((e) => ({
+          enrollmentId: e.id,
+          amount: e.monthlyFee,
+          paidAmount: '',
+          discount: '',
+          packMonths: 1,
+        }))
+      );
+      setFormData((prev) => ({
+        ...prev,
+        studentId: student.id,
+        amount: '', // not auto-filled since there are multiple enrollments
+        packMonths: 1,
+      }));
+    } else {
+      // Legacy: no enrollments
+      setEnrollmentPayments([]);
+      setFormData((prev) => ({
+        ...prev,
+        studentId: student.id,
+        amount: student.monthlyFee || '',
+        packMonths: student.level?.subject?.service?.id === 'service_langues'
+          ? (student.packMonths || prev.packMonths)
+          : 1,
+      }));
+    }
   };
 
   const handleClearStudent = () => {
     setSelectedStudent(null);
     setStudentSearchQuery('');
+    setEnrollmentPayments([]);
     setFormData((prev) => ({ ...prev, studentId: '', amount: '', packMonths: 1 }));
   };
 
@@ -856,6 +936,27 @@ export function PaymentsView() {
     typeof formData.amount === 'number' && typeof formData.paidAmount === 'number'
       ? netAmount - formData.paidAmount
       : 0;
+
+  // Computed: total for enrollment payments
+  const totalEnrollmentAmount = enrollmentPayments.reduce(
+    (sum, ep) => sum + (typeof ep.amount === 'number' ? ep.amount : 0),
+    0
+  );
+  const totalEnrollmentPaid = enrollmentPayments.reduce(
+    (sum, ep) => sum + (typeof ep.paidAmount === 'number' ? ep.paidAmount : 0),
+    0
+  );
+
+  // Helper to update a single enrollment payment field
+  const updateEnrollmentPayment = (
+    index: number,
+    field: keyof EnrollmentPaymentInput,
+    value: number | ''
+  ) => {
+    setEnrollmentPayments((prev) =>
+      prev.map((ep, i) => (i === index ? { ...ep, [field]: value } : ep))
+    );
+  };
 
   // Auto-detect status
   const autoStatus =
@@ -872,10 +973,6 @@ export function PaymentsView() {
       toast.error(t.payments.studentRequired);
       return;
     }
-    if (!formData.amount || Number(formData.amount) <= 0) {
-      toast.error(t.payments.amountRequired);
-      return;
-    }
     if (!formData.month) {
       toast.error(t.payments.monthRequired);
       return;
@@ -883,6 +980,83 @@ export function PaymentsView() {
 
     setSubmitting(true);
     try {
+      // ── Multi-enrollment payment (batch) ──
+      if (enrollmentPayments.length > 0 && !editingPayment) {
+        const hasAmount = enrollmentPayments.some(
+          (ep) => typeof ep.amount === 'number' && ep.amount > 0
+        );
+        if (!hasAmount) {
+          toast.error(t.payments.amountRequired);
+          setSubmitting(false);
+          return;
+        }
+
+        const payload = {
+          studentId: formData.studentId,
+          month: formData.month,
+          year: Number(formData.year),
+          paymentDate: formData.paymentDate,
+          method: formData.method,
+          notes: formData.notes,
+          enrollmentPayments: enrollmentPayments.map((ep) => ({
+            enrollmentId: ep.enrollmentId,
+            amount: Number(ep.amount) || 0,
+            paidAmount: Number(ep.paidAmount) || 0,
+            discount: Number(ep.discount) || 0,
+            packMonths: ep.packMonths || 1,
+          })),
+        };
+
+        const res = await fetch('/api/payments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error();
+        toast.success(t.payments.addSuccess);
+        setDialogOpen(false);
+        fetchPayments();
+        return;
+      }
+
+      // ── Single enrollment payment (editing a payment with enrollmentId) ──
+      if (editingPayment && enrollmentPayments.length === 1) {
+        const ep = enrollmentPayments[0];
+        const epNet = (Number(ep.amount) || 0) - (Number(ep.discount) || 0);
+        const epPaid = Number(ep.paidAmount) || 0;
+        const epStatus = epPaid >= epNet ? 'paid' : epPaid > 0 ? 'partial' : 'pending';
+
+        const payload = {
+          ...formData,
+          enrollmentId: ep.enrollmentId,
+          amount: Number(ep.amount) || 0,
+          paidAmount: epPaid,
+          discount: Number(ep.discount) || 0,
+          packMonths: ep.packMonths || 1,
+          year: Number(formData.year),
+          remainingAmount: epNet - epPaid,
+          status: epStatus,
+        };
+
+        const res = await fetch(`/api/payments/${editingPayment.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error();
+        toast.success(t.payments.updateSuccess);
+        setDialogOpen(false);
+        fetchPayments();
+        return;
+      }
+
+      // ── Legacy single payment ──
+      if (!formData.amount || Number(formData.amount) <= 0) {
+        toast.error(t.payments.amountRequired);
+        setSubmitting(false);
+        return;
+      }
+
       const payload = {
         ...formData,
         amount: Number(formData.amount),
@@ -1200,13 +1374,17 @@ export function PaymentsView() {
                           <p className="font-medium text-sm">
                             {payment.student.fullName}
                           </p>
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            {payment.student.level && payment.student.level.subject && (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                            {payment.enrollment?.service ? (
+                              <span className="bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded text-[10px] font-medium">
+                                {payment.enrollment.service.nameAr}
+                              </span>
+                            ) : payment.student.level && payment.student.level.subject ? (
                               <span>
                                 {payment.student.level.subject.nameAr} -{' '}
                                 {payment.student.level.nameAr}
                               </span>
-                            )}
+                            ) : null}
                           </div>
                         </div>
                       </TableCell>
@@ -1312,7 +1490,12 @@ export function PaymentsView() {
       {/* ═══════════════════════════════════════════════════════════════════
           ADD / EDIT PAYMENT DIALOG
           ═══════════════════════════════════════════════════════════════════ */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => {
+        setDialogOpen(open);
+        if (!open) {
+          setEnrollmentPayments([]);
+        }
+      }}>
         <DialogContent className="sm:max-w-2xl p-0 gap-0 max-h-[90vh] flex flex-col">
           <DialogHeader className="shrink-0 px-8 pt-6 pb-2">
             <DialogTitle>
@@ -1511,7 +1694,157 @@ export function PaymentsView() {
 
               <Separator />
 
-              {/* ── Payment Details ────────────────────────────────────── */}
+              {/* ── Per-Enrollment Payment Fields ───────────────────────── */}
+              {enrollmentPayments.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold flex items-center gap-2">
+                    <Wallet className="h-4 w-4 text-primary" />
+                    {t.payments.amountPerEnrollment}
+                  </h4>
+
+                  {/* Header row */}
+                  <div className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-2 items-center text-xs font-medium text-muted-foreground px-1">
+                    <span>{t.payments.enrollmentService} / {t.payments.enrollmentTeacher}</span>
+                    <span className="w-20 text-center">{t.payments.enrollmentAmount}</span>
+                    {isAdmin && <span className="w-20 text-center">{t.payments.enrollmentPaid}</span>}
+                    {isAdmin && <span className="w-20 text-center">{t.payments.enrollmentDiscount}</span>}
+                    <span className="w-20 text-center">{t.payments.enrollmentPackMonths}</span>
+                  </div>
+
+                  {/* Enrollment rows */}
+                  {enrollmentPayments.map((ep, idx) => {
+                    const enrollment = selectedStudent?.enrollments?.find(
+                      (e) => e.id === ep.enrollmentId
+                    );
+                    const epDiscount = typeof ep.discount === 'number' ? ep.discount : 0;
+                    const epNet = (typeof ep.amount === 'number' ? ep.amount : 0) - epDiscount;
+                    const epPaid = typeof ep.paidAmount === 'number' ? ep.paidAmount : 0;
+                    const epRemaining = Math.max(0, epNet - epPaid);
+                    const epStatus = epPaid >= epNet ? 'paid' : epPaid > 0 ? 'partial' : 'pending';
+
+                    return (
+                      <div key={ep.enrollmentId} className="space-y-1">
+                        <div className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-2 items-center bg-muted/30 rounded-lg p-2">
+                          {/* Service / Teacher info */}
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">
+                              {enrollment?.service?.nameAr || '—'}
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {enrollment?.teacher?.fullName || t.payments.noTeacher}
+                              {enrollment?.subject?.nameAr ? ` — ${enrollment.subject.nameAr}` : ''}
+                            </p>
+                          </div>
+                          {/* Amount */}
+                          <div className="w-20">
+                            <Input
+                              type="number"
+                              min="0"
+                              value={ep.amount}
+                              onChange={(e) =>
+                                updateEnrollmentPayment(idx, 'amount', Number(e.target.value) || '')
+                              }
+                              placeholder="0"
+                              dir="ltr"
+                              className="h-8 text-sm"
+                            />
+                          </div>
+                          {isAdmin && (
+                            <>
+                              {/* Paid Amount */}
+                              <div className="w-20">
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  value={ep.paidAmount}
+                                  onChange={(e) =>
+                                    updateEnrollmentPayment(idx, 'paidAmount', Number(e.target.value) || '')
+                                  }
+                                  placeholder="0"
+                                  dir="ltr"
+                                  className="h-8 text-sm"
+                                />
+                              </div>
+                              {/* Discount */}
+                              <div className="w-20">
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  value={ep.discount}
+                                  onChange={(e) =>
+                                    updateEnrollmentPayment(idx, 'discount', Number(e.target.value) || '')
+                                  }
+                                  placeholder="0"
+                                  dir="ltr"
+                                  className="h-8 text-sm"
+                                />
+                              </div>
+                            </>
+                          )}
+                          {/* Pack months */}
+                          <div className="w-20">
+                            <Select
+                              value={String(ep.packMonths)}
+                              onValueChange={(val) =>
+                                updateEnrollmentPayment(idx, 'packMonths', Number(val))
+                              }
+                            >
+                              <SelectTrigger className="h-8 text-sm w-20">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {PACK_OPTIONS.map((opt) => (
+                                  <SelectItem key={opt.value} value={String(opt.value)}>
+                                    {opt.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        {/* Per-enrollment status row (admin only) */}
+                        {isAdmin && (
+                          <div className="flex items-center gap-3 text-[11px] text-muted-foreground px-2">
+                            {epDiscount > 0 && (
+                              <span className="text-amber-600">
+                                {t.payments.bonAfterDiscount}: {epNet.toLocaleString()} {t.common.dh}
+                              </span>
+                            )}
+                            <span className={epStatus === 'paid' ? 'text-emerald-600' : epStatus === 'partial' ? 'text-amber-600' : 'text-red-600'}>
+                              {epStatus === 'paid' ? t.payments.statusPaid : epStatus === 'partial' ? t.payments.statusPartial : t.payments.statusPending}
+                            </span>
+                            {epRemaining > 0 && (
+                              <span className="text-red-500">
+                                {t.payments.remaining}: {epRemaining.toLocaleString()} {t.common.dh}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {/* Total row */}
+                  <div className="flex items-center justify-between bg-teal-50 border border-teal-200 rounded-lg p-3">
+                    <span className="text-sm font-semibold text-teal-800">
+                      {t.payments.totalEnrollmentPayments}
+                    </span>
+                    <div className="flex items-center gap-4 text-sm">
+                      <span className="font-bold text-teal-700" dir="ltr">
+                        {totalEnrollmentAmount.toLocaleString()} {t.common.dh}
+                      </span>
+                      {isAdmin && totalEnrollmentPaid > 0 && (
+                        <span className="font-medium text-emerald-600" dir="ltr">
+                          {t.payments.paid}: {totalEnrollmentPaid.toLocaleString()} {t.common.dh}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Legacy Single Payment Details ────────────────────────── */}
+              {enrollmentPayments.length === 0 && (
               <div className="space-y-3">
                 <h4 className="text-sm font-semibold flex items-center gap-2">
                   <Wallet className="h-4 w-4 text-primary" />
@@ -1636,9 +1969,10 @@ export function PaymentsView() {
                   </div>
                 )}
               </div>
+              )}
 
               {/* ── Pack Type (Langues only) ───────────────────────────── */}
-              {isLanguesService && (
+              {isLanguesService && enrollmentPayments.length === 0 && (
                 <div className="space-y-1.5">
                   <Label>{t.payments.packType}</Label>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -1756,11 +2090,18 @@ export function PaymentsView() {
             <div className="flex items-center justify-between w-full">
               <div className="text-xs text-muted-foreground">
                 {t.common.status}:{' '}
-                {autoStatus === 'paid'
-                  ? t.payments.statusPaid
-                  : autoStatus === 'partial'
-                    ? t.payments.statusPartial
-                    : t.payments.statusPending}
+                {enrollmentPayments.length > 0
+                  ? (totalEnrollmentPaid >= totalEnrollmentAmount
+                      ? t.payments.statusPaid
+                      : totalEnrollmentPaid > 0
+                        ? t.payments.statusPartial
+                        : t.payments.statusPending)
+                  : (autoStatus === 'paid'
+                      ? t.payments.statusPaid
+                      : autoStatus === 'partial'
+                        ? t.payments.statusPartial
+                        : t.payments.statusPending)
+                }
               </div>
               <div className="flex items-center gap-2">
                 <Button
