@@ -106,18 +106,6 @@ export async function GET(request: NextRequest) {
           }
         }
 
-        // Month-field-based: also cover months from the payment's month/year field
-        for (const p of payments) {
-          if (p.remainingAmount === 0) {
-            for (let i = 0; i < (p.packMonths || 1); i++) {
-              const mi = getMonthIndex(p.month) + i;
-              const ty = p.year + Math.floor(mi / 12);
-              const tm = mi % 12;
-              coveredMonths.add(ty * 12 + tm);
-            }
-          }
-        }
-
         // isPackPaid: current month is covered
         isPackPaid = coveredMonths.has(currentYM);
 
