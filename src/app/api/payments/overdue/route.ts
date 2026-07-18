@@ -140,9 +140,6 @@ interface OverdueStudent {
   levelName: string | null;
   serviceId: string | null;
   enrollmentDate: string | null;
-  enrollmentId?: string;
-  serviceName?: string;
-  levelNameForGroup?: string;
   overduePayments: OverduePaymentInfo[];
 }
 
@@ -271,8 +268,6 @@ function calculateStudentOverdue(
       nextDueDate,
       subjectName: null,
       levelName: null,
-      serviceId: null,
-      enrollmentDate: null,
       overduePayments: [],
     };
   }
@@ -405,8 +400,6 @@ function calculateStudentOverdue(
     nextDueDate,
     subjectName: null,
     levelName: null,
-    serviceId: null,
-    enrollmentDate: null,
     overduePayments,
   };
 }
@@ -417,20 +410,15 @@ function calculateStudentOverdue(
 
 export async function GET() {
   try {
-    // 1. Fetch ALL active students with enrollments and legacy level/subject
+    // 1. Fetch ALL active students with their service/level hierarchy
     const students = await db.student.findMany({
       where: { status: 'active' },
       include: {
-        enrollments: {
-          where: { status: 'active' },
+        level: {
           include: {
-            service: true,
-            subject: true,
-            level: true,
-            teacher: true,
+            subject: { include: { service: true } },
           },
         },
-        level: { include: { subject: { include: { service: true } } } },
       },
     });
 
@@ -438,96 +426,40 @@ export async function GET() {
       return NextResponse.json([]);
     }
 
-    // 2. Batch-fetch all payments (enrollment-linked and legacy)
+    // 2. Fetch ALL payments for these students (no remainingAmount filter)
     const studentIds = students.map((s) => s.id);
+    const allPayments = await db.payment.findMany({
+      where: { studentId: { in: studentIds } },
+    });
 
-    // Enrollment-linked payments: collect all enrollment IDs
-    const allEnrollmentIds = students
-      .filter((s) => s.enrollments.length > 0)
-      .flatMap((s) => s.enrollments.map((e) => e.id));
-
-    const enrollmentPayments = allEnrollmentIds.length > 0
-      ? await db.payment.findMany({ where: { enrollmentId: { in: allEnrollmentIds } } })
-      : [];
-
-    // Legacy payments: students without enrollments, where enrollmentId is null
-    const legacyStudentIds = students
-      .filter((s) => s.enrollments.length === 0)
-      .map((s) => s.id);
-
-    const legacyPayments = legacyStudentIds.length > 0
-      ? await db.payment.findMany({
-          where: { studentId: { in: legacyStudentIds }, enrollmentId: null },
-        })
-      : [];
-
-    // 3. Group payments by enrollmentId and by studentId (legacy)
-    const paymentsByEnrollment = new Map<string, (typeof enrollmentPayments)[number][]>();
-    for (const p of enrollmentPayments) {
-      if (p.enrollmentId) {
-        const list = paymentsByEnrollment.get(p.enrollmentId);
-        if (list) list.push(p);
-        else paymentsByEnrollment.set(p.enrollmentId, [p]);
+    // 3. Group payments by student
+    const paymentsByStudent = new Map<
+      string,
+      (typeof allPayments)[number][]
+    >();
+    for (const p of allPayments) {
+      const list = paymentsByStudent.get(p.studentId);
+      if (list) {
+        list.push(p);
+      } else {
+        paymentsByStudent.set(p.studentId, [p]);
       }
-    }
-
-    const legacyPaymentsByStudent = new Map<string, (typeof legacyPayments)[number][]>();
-    for (const p of legacyPayments) {
-      const list = legacyPaymentsByStudent.get(p.studentId);
-      if (list) list.push(p);
-      else legacyPaymentsByStudent.set(p.studentId, [p]);
     }
 
     // 4. Calculate overdue for each student
     const overdueStudents: OverdueStudent[] = [];
-
     for (const student of students) {
-      if (student.enrollments.length > 0) {
-        // ── Multi-enrollment: calculate per enrollment ──
-        for (const enrollment of student.enrollments) {
-          const ePayments = paymentsByEnrollment.get(enrollment.id) || [];
-
-          const result = calculateStudentOverdue(
-            {
-              id: student.id,
-              fullName: student.fullName,
-              phone: student.phone,
-              parentName: student.parentName,
-              parentPhone: student.parentPhone,
-              monthlyFee: enrollment.monthlyFee,
-              enrollmentDate: student.enrollmentDate,
-            },
-            ePayments
-          );
-
-          if (result) {
-            result.enrollmentId = enrollment.id;
-            result.subjectName = enrollment.subject?.nameAr || null;
-            result.levelName = enrollment.level?.nameAr || null;
-            result.serviceId = enrollment.serviceId;
-            result.serviceName = enrollment.service?.nameAr || 'بدون خدمة';
-            result.levelNameForGroup = enrollment.level?.nameAr || 'بدون مستوى';
-            result.enrollmentDate = student.enrollmentDate instanceof Date
-              ? student.enrollmentDate.toISOString()
-              : String(student.enrollmentDate);
-            overdueStudents.push(result);
-          }
-        }
-      } else {
-        // ── Legacy: existing behavior for students without enrollments ──
-        const payments = legacyPaymentsByStudent.get(student.id) || [];
-        const result = calculateStudentOverdue(student, payments);
-        if (result) {
-          result.subjectName = student?.level?.subject?.nameAr || null;
-          result.levelName = student?.level?.nameAr || null;
-          result.serviceId = student?.level?.subject?.service?.id || null;
-          result.serviceName = student?.level?.subject?.service?.nameAr || 'بدون خدمة';
-          result.levelNameForGroup = student?.level?.nameAr || 'بدون مستوى';
-          result.enrollmentDate = student.enrollmentDate instanceof Date
-            ? student.enrollmentDate.toISOString()
-            : String(student.enrollmentDate);
-          overdueStudents.push(result);
-        }
+      const payments = paymentsByStudent.get(student.id) || [];
+      const result = calculateStudentOverdue(student, payments);
+      if (result) {
+        // Attach subject/level info from the student record
+        result.subjectName = student?.level?.subject?.nameAr || null;
+        result.levelName = student?.level?.nameAr || null;
+        result.serviceId = student?.level?.subject?.service?.id || null;
+        result.enrollmentDate = student.enrollmentDate instanceof Date
+          ? student.enrollmentDate.toISOString()
+          : String(student.enrollmentDate);
+        overdueStudents.push(result);
       }
     }
 
@@ -535,12 +467,17 @@ export async function GET() {
       return NextResponse.json([]);
     }
 
-    // 5. Group by Service → Level → Students
+    // 5. Build lookup for service/level grouping
+    const studentById = new Map(students.map((s) => [s.id, s]));
+
+    // 6. Group by Service → Level → Student
     const serviceMap = new Map<string, Map<string, OverdueStudent[]>>();
 
     for (const overdue of overdueStudents) {
-      const serviceName = overdue.serviceName || 'بدون خدمة';
-      const levelName = overdue.levelNameForGroup || 'بدون مستوى';
+      const student = studentById.get(overdue.studentId);
+      const serviceName =
+        student?.level?.subject?.service?.nameAr || 'بدون خدمة';
+      const levelName = student?.level?.nameAr || 'بدون مستوى';
 
       let levelMap = serviceMap.get(serviceName);
       if (!levelMap) {
@@ -556,7 +493,7 @@ export async function GET() {
       list.push(overdue);
     }
 
-    // 6. Build response array
+    // 7. Build response array
     const result = Array.from(serviceMap.entries()).map(
       ([service, levelMap]) => {
         const levels = Array.from(levelMap.entries()).map(
@@ -605,7 +542,7 @@ export async function GET() {
       }
     );
 
-    // 7. Sort services by total overdue (descending)
+    // 8. Sort services by total overdue (descending)
     result.sort((a, b) => b.totalOverdue - a.totalOverdue);
 
     return NextResponse.json(result);

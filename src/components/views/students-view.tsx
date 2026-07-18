@@ -73,9 +73,7 @@ interface Student {
     id: string;
     name: string;
     nameAr: string;
-    nameFr: string;
-    subjectId: string;
-    subject: { id: string; name: string; nameAr: string; nameFr: string; service?: { id: string; nameAr: string; nameFr: string } };
+    subject: { name: string; nameAr: string; service?: { id: string; nameAr: string } };
   } | null;
   teacherId: string | null;
   teacher: { id: string; fullName: string } | null;
@@ -87,7 +85,6 @@ interface Student {
   enrollmentDate: string;
   isPackPaid?: boolean;
   nextDueDate?: string | null;
-  enrollments?: StudentEnrollment[];
 }
 
 interface Service {
@@ -129,35 +126,6 @@ interface Teacher {
     subjectId: string;
     subject: { id: string; name: string; nameAr: string };
   }[];
-}
-
-interface StudentEnrollment {
-  id?: string;
-  serviceId: string;
-  subjectId: string | null;
-  levelId: string | null;
-  teacherId: string | null;
-  monthlyFee: number;
-  // populated from API:
-  service?: { id: string; name: string; nameAr: string } | null;
-  subject?: { id: string; name: string; nameAr: string } | null;
-  level?: { id: string; name: string; nameAr: string } | null;
-  teacher?: { id: string; fullName: string } | null;
-  isPackPaid?: boolean;
-  nextDueDate?: string | null;
-  status?: string;
-}
-
-interface EnrollmentSelection {
-  serviceId: string;
-  serviceNameAr: string;
-  subjectId: string | null;
-  subjectNameAr: string;
-  levelId: string | null;
-  levelNameAr: string;
-  teacherId: string | null;
-  teacherName: string;
-  monthlyFee: string; // string for input
 }
 
 interface FormState {
@@ -238,8 +206,6 @@ export function StudentsView() {
   const [noTeacher, setNoTeacher] = useState(false);
   const [form, setForm] = useState<FormState>(initialForm);
   const [submitting, setSubmitting] = useState(false);
-  const [enrollmentList, setEnrollmentList] = useState<EnrollmentSelection[]>([]);
-  const [currentFee, setCurrentFee] = useState('');
 
   // ── Ref for fullName input (auto-focus only once on step 5) ─────────────
   const fullNameInputRef = useRef<HTMLInputElement>(null);
@@ -258,22 +224,13 @@ export function StudentsView() {
 
   // ── Computed: student count per teacher ─────────────────────────────────
   const studentCountsMap = useMemo(() => {
-    const map: Record<string, Set<string>> = {};
+    const map: Record<string, number> = {};
     for (const s of students) {
-      const addCount = (teacherId: string) => {
-        if (!map[teacherId]) map[teacherId] = new Set();
-        map[teacherId].add(s.id);
-      };
-      if (s.enrollments) {
-        for (const e of s.enrollments) {
-          if (e.teacherId) addCount(e.teacherId);
-        }
+      if (s.teacherId) {
+        map[s.teacherId] = (map[s.teacherId] || 0) + 1;
       }
-      if (s.teacherId) addCount(s.teacherId);
     }
-    const result: Record<string, number> = {};
-    for (const [k, v] of Object.entries(map)) result[k] = v.size;
-    return result;
+    return map;
   }, [students]);
 
   // ── Computed: filter subjects dropdown based on selected service ───
@@ -294,20 +251,9 @@ export function StudentsView() {
   // ── Computed: displayed students after all filters ──────────────────
   const displayedStudents = useMemo(() => {
     return students.filter((s) => {
-      if (filterServiceId || filterSubjectId || filterLevelId) {
-        // Check enrollments first
-        const hasEnrollmentMatch = s.enrollments && s.enrollments.length > 0 && s.enrollments.some((e) => {
-          if (filterServiceId && e.serviceId !== filterServiceId) return false;
-          if (filterSubjectId && e.subjectId !== filterSubjectId) return false;
-          if (filterLevelId && e.levelId !== filterLevelId) return false;
-          return true;
-        });
-        if (hasEnrollmentMatch) return true;
-        // Fall back to legacy student fields
-        if (filterServiceId && s.level?.subject?.service?.id !== filterServiceId) return false;
-        if (filterSubjectId && s.level?.subject?.id !== filterSubjectId) return false;
-        if (filterLevelId && s.levelId !== filterLevelId) return false;
-      }
+      if (filterServiceId && s.level?.subject?.service?.id !== filterServiceId) return false;
+      if (filterSubjectId && s.level?.subject?.id !== filterSubjectId) return false;
+      if (filterLevelId && s.levelId !== filterLevelId) return false;
       return true;
     });
   }, [students, filterServiceId, filterSubjectId, filterLevelId]);
@@ -423,13 +369,11 @@ export function StudentsView() {
     setNoTeacher(false);
     setForm({ ...initialForm });
     setEditingStudent(null);
-    setEnrollmentList([]);
-    setCurrentFee('');
   }, []);
 
   const handleOpenDialog = (student?: Student) => {
     if (student) {
-      // Edit mode: pre-fill and open to step 5
+      // Edit mode: pre-fill everything and open to step 5
       setEditingStudent(student);
       setForm({
         fullName: student.fullName,
@@ -442,71 +386,48 @@ export function StudentsView() {
           ? new Date(student.enrollmentDate).toISOString().split('T')[0]
           : new Date().toISOString().split('T')[0],
       });
-      // Pre-populate enrollmentList from student.enrollments
-      if (student.enrollments && student.enrollments.length > 0) {
-        setEnrollmentList(
-          student.enrollments.map((e) => ({
-            serviceId: e.serviceId,
-            serviceNameAr: e.service?.nameAr || '',
-            subjectId: e.subjectId,
-            subjectNameAr: e.subject?.nameAr || '',
-            levelId: e.levelId,
-            levelNameAr: e.level?.nameAr || '',
-            teacherId: e.teacherId,
-            teacherName: e.teacher?.fullName || '',
-            monthlyFee: String(e.monthlyFee),
-          }))
+      // Pre-select service, subject, level, teacher from student data
+      if (student.level?.subject) {
+        const svc = services.find(
+          (s) => s.id === student.level?.subject?.service?.id
         );
-        // Clear wizard selections — enrollments handle this
+        setSelectedService(svc || null);
+        // Find the full subject from services data to get ALL levels
+        const fullSubject = svc?.subjects.find(
+          (sub) => sub.id === student.level?.subject?.id
+        );
+        setSelectedSubject({
+          id: student.level.subject.id,
+          name: student.level.subject.name,
+          nameAr: student.level.subject.nameAr,
+          nameFr: student.level.subject.nameFr,
+          levels: fullSubject?.levels || [],
+          order: 0,
+        });
+        setSelectedLevel({
+          id: student.level.id,
+          name: student.level.name,
+          nameAr: student.level.nameAr,
+          nameFr: '',
+        });
+      } else {
         setSelectedService(null);
         setSelectedSubject(null);
         setSelectedLevel(null);
-        setSelectedTeacher(null);
+      }
+      if (student.teacherId && student.teacher) {
+        setSelectedTeacher({
+          id: student.teacher.id,
+          fullName: student.teacher.fullName,
+          phone: null,
+          email: null,
+          status: 'active',
+          subjects: [],
+        });
         setNoTeacher(false);
       } else {
-        // Legacy: pre-populate from student.level/teacher/monthlyFee
-        setEnrollmentList([]);
-        if (student.level?.subject) {
-          const svc = services.find(
-            (s) => s.id === student.level?.subject?.service?.id
-          );
-          setSelectedService(svc || null);
-          const fullSubject = svc?.subjects.find(
-            (sub) => sub.id === student.level?.subject?.id
-          );
-          setSelectedSubject({
-            id: student.level.subject.id,
-            name: student.level.subject.name,
-            nameAr: student.level.subject.nameAr,
-            nameFr: student.level.subject.nameFr,
-            levels: fullSubject?.levels || [],
-            order: 0,
-          });
-          setSelectedLevel({
-            id: student.level.id,
-            name: student.level.name,
-            nameAr: student.level.nameAr,
-            nameFr: '',
-          });
-        } else {
-          setSelectedService(null);
-          setSelectedSubject(null);
-          setSelectedLevel(null);
-        }
-        if (student.teacherId && student.teacher) {
-          setSelectedTeacher({
-            id: student.teacher.id,
-            fullName: student.teacher.fullName,
-            phone: null,
-            email: null,
-            status: 'active',
-            subjects: [],
-          });
-          setNoTeacher(false);
-        } else {
-          setSelectedTeacher(null);
-          setNoTeacher(!student.teacherId);
-        }
+        setSelectedTeacher(null);
+        setNoTeacher(!student.teacherId);
       }
       setWizardStep(5);
     } else {
@@ -542,45 +463,21 @@ export function StudentsView() {
 
   const handleSelectTeacher = (teacher: Teacher | null) => {
     if (teacher === null) {
-      // "بدون أستاذ" option → stay on step 4 to show enrollment review
+      // "بدون أستاذ" option
       setSelectedTeacher(null);
       setNoTeacher(true);
-      setWizardStep(4);
+      setWizardStep(5);
     } else {
       setSelectedTeacher(teacher);
       setNoTeacher(false);
-      setWizardStep(4);
+      setWizardStep(5);
     }
   };
 
   const handleSkipTeacher = () => {
     setSelectedTeacher(null);
     setNoTeacher(true);
-    setWizardStep(4);
-  };
-
-  // Save current wizard selection as an enrollment and optionally go to a step
-  const saveCurrentSelection = (targetStep: WizardStep) => {
-    const entry: EnrollmentSelection = {
-      serviceId: selectedService?.id || '',
-      serviceNameAr: selectedService?.nameAr || '',
-      subjectId: selectedSubject?.id || null,
-      subjectNameAr: selectedSubject?.nameAr || '',
-      levelId: selectedLevel?.id || null,
-      levelNameAr: selectedLevel?.nameAr || '',
-      teacherId: selectedTeacher?.id || null,
-      teacherName: selectedTeacher?.fullName || (noTeacher ? t.students.withoutTeacher : ''),
-      monthlyFee: currentFee,
-    };
-    setEnrollmentList((prev) => [...prev, entry]);
-    // Reset wizard selections but keep enrollmentList
-    setSelectedService(null);
-    setSelectedSubject(null);
-    setSelectedLevel(null);
-    setSelectedTeacher(null);
-    setNoTeacher(false);
-    setCurrentFee('');
-    setWizardStep(targetStep);
+    setWizardStep(5);
   };
 
   const goToStep = (step: WizardStep) => {
@@ -596,49 +493,25 @@ export function StudentsView() {
       toast.error(t.students.nameRequired);
       return;
     }
-
-    const hasEnrollments = enrollmentList.length > 0;
-
-    // For legacy mode (no enrollments), require a level
-    if (!hasEnrollments && !selectedLevel) {
+    if (!selectedLevel) {
       toast.error(t.students.selectLevel);
       return;
     }
 
     setSubmitting(true);
     try {
-      let payload: Record<string, unknown>;
-
-      if (hasEnrollments) {
-        payload = {
-          fullName: form.fullName.trim(),
-          phone: form.phone || null,
-          parentName: form.parentName || null,
-          parentPhone: form.parentPhone || null,
-          status: editingStudent?.status || 'active',
-          enrollmentDate: form.enrollmentDate || new Date().toISOString(),
-          enrollments: enrollmentList.map((e) => ({
-            serviceId: e.serviceId,
-            subjectId: e.subjectId,
-            levelId: e.levelId,
-            teacherId: e.teacherId,
-            monthlyFee: parseFloat(e.monthlyFee) || 0,
-          })),
-        };
-      } else {
-        payload = {
-          fullName: form.fullName.trim(),
-          phone: form.phone || null,
-          parentName: form.parentName || null,
-          parentPhone: form.parentPhone || null,
-          monthlyFee: parseFloat(form.monthlyFee) || 0,
-          packMonths: form.packMonths || 1,
-          levelId: selectedLevel!.id,
-          teacherId: noTeacher ? null : (selectedTeacher?.id || null),
-          status: editingStudent?.status || 'active',
-          enrollmentDate: form.enrollmentDate || new Date().toISOString(),
-        };
-      }
+      const payload = {
+        fullName: form.fullName.trim(),
+        phone: form.phone || null,
+        parentName: form.parentName || null,
+        parentPhone: form.parentPhone || null,
+        monthlyFee: parseFloat(form.monthlyFee) || 0,
+        packMonths: form.packMonths || 1,
+        levelId: selectedLevel.id,
+        teacherId: noTeacher ? null : (selectedTeacher?.id || null),
+        status: editingStudent?.status || 'active',
+        enrollmentDate: form.enrollmentDate || new Date().toISOString(),
+      };
 
       const url = editingStudent ? `/api/students/${editingStudent.id}` : '/api/students';
       const method = editingStudent ? 'PUT' : 'POST';
@@ -974,112 +847,15 @@ export function StudentsView() {
         );
 
       case 4:
-        // Two sub-modes: teacher selection OR enrollment review
-        if (!selectedTeacher && !noTeacher) {
-          // Teacher selection mode
-          return (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={() => goToStep(3)}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-                <h4 className="text-sm font-semibold text-muted-foreground">
-                  {t.students.teachersAvailable}
-                </h4>
-              </div>
-
-              {/* Without teacher option */}
-              <Card
-                className={`cursor-pointer transition-all hover:shadow-md ${
-                  noTeacher
-                    ? 'border-violet-500 bg-violet-50 shadow-md ring-1 ring-violet-200'
-                    : 'border-border hover:border-violet-300'
-                }`}
-                onClick={() => handleSelectTeacher(null)}
-              >
-                <CardContent className="p-3 flex items-center gap-3">
-                  <div
-                    className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${
-                      noTeacher
-                        ? 'bg-violet-100 text-violet-700'
-                        : 'bg-muted text-muted-foreground'
-                    }`}
-                  >
-                    <UserMinus className="h-5 w-5" />
-                  </div>
-                  <div className="flex-1">
-                    <p className={`text-sm font-medium ${noTeacher ? 'text-violet-800' : ''}`}>
-                      {t.students.withoutTeacher}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Teacher list */}
-              <div className="space-y-2">
-                {filteredTeachers.map((teacher) => {
-                  const count = studentCountsMap[teacher.id] || 0;
-                  return (
-                    <Card
-                      key={teacher.id}
-                      className="cursor-pointer transition-all hover:shadow-md border-border hover:border-teal-300"
-                      onClick={() => handleSelectTeacher(teacher)}
-                    >
-                      <CardContent className="p-3 flex items-center gap-3">
-                        <div
-                          className={`h-10 w-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${getAvatarColor(teacher.fullName)}`}
-                        >
-                          {teacher.fullName.charAt(0)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{teacher.fullName}</p>
-                          {teacher.phone && (
-                            <p className="text-xs text-muted-foreground truncate" dir="ltr">{teacher.phone}</p>
-                          )}
-                        </div>
-                        <Badge
-                          variant="secondary"
-                          className={`shrink-0 text-xs ${
-                            count > 0 ? 'bg-teal-100 text-teal-700' : 'bg-gray-100 text-gray-500'
-                          }`}
-                        >
-                          {count} {t.students.studentCountLabel}
-                        </Badge>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
-
-              {filteredTeachers.length === 0 && !noTeacher && (
-                <div className="text-center py-8 text-muted-foreground">
-                  <UserCheck className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">{t.common.noData}</p>
-                </div>
-              )}
-            </div>
-          );
-        }
-
-        // Enrollment review mode (teacher selected or noTeacher)
         return (
-          <div className="space-y-4">
+          <div className="space-y-3">
             <div className="flex items-center gap-2">
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7"
-                onClick={() => {
-                  setSelectedTeacher(null);
-                  setNoTeacher(false);
-                }}
+                onClick={() => goToStep(3)}
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>
@@ -1088,133 +864,103 @@ export function StudentsView() {
               </h4>
             </div>
 
-            {/* Current selection summary */}
-            <Card className="border-teal-200 bg-teal-50/50">
-              <CardContent className="p-3 space-y-2">
-                <div className="flex flex-wrap gap-1.5">
-                  {selectedService && (
-                    <Badge variant="outline" className="gap-1 text-xs">
-                      <Layers className="h-3 w-3" />
-                      {selectedService.nameAr}
-                    </Badge>
-                  )}
-                  {selectedSubject && (
-                    <Badge variant="outline" className="gap-1 text-xs">
-                      <BookOpen className="h-3 w-3" />
-                      {selectedSubject.nameAr}
-                    </Badge>
-                  )}
-                  {selectedLevel && (
-                    <Badge variant="outline" className="gap-1 text-xs border-teal-300 text-teal-700">
-                      <GraduationCap className="h-3 w-3" />
-                      {selectedLevel.nameAr}
-                    </Badge>
-                  )}
-                  {noTeacher ? (
-                    <Badge variant="outline" className="gap-1 text-xs border-violet-300 text-violet-700">
-                      <UserMinus className="h-3 w-3" />
-                      {t.students.withoutTeacher}
-                    </Badge>
-                  ) : selectedTeacher && (
-                    <Badge variant="outline" className="gap-1 text-xs border-teal-300 text-teal-700">
-                      <UserCheck className="h-3 w-3" />
-                      {selectedTeacher.fullName}
-                    </Badge>
-                  )}
+            {/* Without teacher option */}
+            <Card
+              className={`cursor-pointer transition-all hover:shadow-md ${
+                noTeacher
+                  ? 'border-violet-500 bg-violet-50 shadow-md ring-1 ring-violet-200'
+                  : 'border-border hover:border-violet-300'
+              }`}
+              onClick={() => handleSelectTeacher(null)}
+            >
+              <CardContent className="p-3 flex items-center gap-3">
+                <div
+                  className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${
+                    noTeacher
+                      ? 'bg-violet-100 text-violet-700'
+                      : 'bg-muted text-muted-foreground'
+                  }`}
+                >
+                  <UserMinus className="h-5 w-5" />
                 </div>
-
-                {/* Monthly fee input */}
-                <div className="space-y-1.5">
-                  <Label htmlFor="currentFee" className="text-xs">
-                    <Wallet className="h-3 w-3 inline-block ml-1 text-amber-600" />
-                    {t.students.enrollmentFeeLabel}
-                  </Label>
-                  <Input
-                    id="currentFee"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={currentFee}
-                    onChange={(e) => setCurrentFee(e.target.value)}
-                    placeholder="0"
-                    dir="ltr"
-                    className="text-left h-9"
-                  />
-                </div>
-
-                {/* Action buttons */}
-                <div className="flex flex-col gap-2 pt-1">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="w-full gap-2"
-                    onClick={() => saveCurrentSelection(1)}
+                <div className="flex-1">
+                  <p
+                    className={`text-sm font-medium ${
+                      noTeacher ? 'text-violet-800' : ''
+                    }`}
                   >
-                    <Plus className="h-4 w-4" />
-                    {t.students.addAnotherService}
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="w-full gap-2 bg-teal-600 hover:bg-teal-700"
-                    onClick={() => saveCurrentSelection(5)}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                    {t.students.continueToInfo}
-                  </Button>
+                    {t.students.withoutTeacher}
+                  </p>
                 </div>
+                {noTeacher && (
+                  <div className="h-5 w-5 rounded-full bg-violet-500 flex items-center justify-center">
+                    <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
-            {/* Already-added enrollments list */}
-            {enrollmentList.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="text-xs font-semibold text-muted-foreground">
-                  التسجيلات المضافة ({enrollmentList.length})
-                </h4>
-                {enrollmentList.map((enr, idx) => (
-                  <Card key={idx} className="border-border">
-                    <CardContent className="p-2.5 flex items-center gap-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap gap-1">
-                          <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                            {enr.serviceNameAr}
-                          </Badge>
-                          {enr.subjectNameAr && (
-                            <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                              {enr.subjectNameAr}
-                            </Badge>
-                          )}
-                          {enr.levelNameAr && (
-                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-teal-200 text-teal-700">
-                              {enr.levelNameAr}
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-[10px] text-muted-foreground">
-                            {enr.teacherName || t.students.withoutTeacher}
-                          </span>
-                          {enr.monthlyFee && parseFloat(enr.monthlyFee) > 0 && (
-                            <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[10px] px-1.5 py-0">
-                              {parseFloat(enr.monthlyFee).toLocaleString('ar-MA')} {t.common.dh}
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-destructive hover:text-destructive shrink-0"
-                        onClick={() => setEnrollmentList((prev) => prev.filter((_, i) => i !== idx))}
+            {/* Teacher list */}
+            <div className="space-y-2">
+              {filteredTeachers.map((teacher) => {
+                const isSelected = selectedTeacher?.id === teacher.id && !noTeacher;
+                const count = studentCountsMap[teacher.id] || 0;
+                return (
+                  <Card
+                    key={teacher.id}
+                    className={`cursor-pointer transition-all hover:shadow-md ${
+                      isSelected
+                        ? 'border-teal-500 bg-teal-50 shadow-md ring-1 ring-teal-200'
+                        : 'border-border hover:border-teal-300'
+                    }`}
+                    onClick={() => handleSelectTeacher(teacher)}
+                  >
+                    <CardContent className="p-3 flex items-center gap-3">
+                      <div
+                        className={`h-10 w-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
+                          isSelected
+                            ? 'bg-teal-100 text-teal-700'
+                            : getAvatarColor(teacher.fullName)
+                        }`}
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                        {teacher.fullName.charAt(0)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p
+                          className={`text-sm font-medium truncate ${
+                            isSelected ? 'text-teal-800' : ''
+                          }`}
+                        >
+                          {teacher.fullName}
+                        </p>
+                        {teacher.phone && (
+                          <p className="text-xs text-muted-foreground truncate" dir="ltr">
+                            {teacher.phone}
+                          </p>
+                        )}
+                      </div>
+                      <Badge
+                        variant="secondary"
+                        className={`shrink-0 text-xs ${
+                          count > 0
+                            ? 'bg-teal-100 text-teal-700'
+                            : 'bg-gray-100 text-gray-500'
+                        }`}
+                      >
+                        {count} {t.students.studentCountLabel}
+                      </Badge>
                     </CardContent>
                   </Card>
-                ))}
+                );
+              })}
+            </div>
+
+            {filteredTeachers.length === 0 && !noTeacher && (
+              <div className="text-center py-8 text-muted-foreground">
+                <UserCheck className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                <p className="text-sm">{t.common.noData}</p>
               </div>
             )}
           </div>
@@ -1224,86 +970,51 @@ export function StudentsView() {
         return (
           <div className="space-y-4">
             {/* Summary badges */}
-            {enrollmentList.length > 0 ? (
-              <div className="space-y-2">
-                <div className="flex flex-wrap gap-2 p-3 rounded-lg bg-muted/50 border">
-                  {enrollmentList.map((enr, idx) => (
-                    <div key={idx} className="flex items-center gap-1 flex-wrap">
-                      <Badge variant="outline" className="gap-1 text-xs">
-                        <Layers className="h-3 w-3" />
-                        {enr.serviceNameAr}
-                      </Badge>
-                      {enr.subjectNameAr && (
-                        <Badge variant="outline" className="text-xs">
-                          {enr.subjectNameAr}
-                        </Badge>
-                      )}
-                      {enr.levelNameAr && (
-                        <Badge variant="outline" className="text-xs border-teal-300 text-teal-700">
-                          {enr.levelNameAr}
-                        </Badge>
-                      )}
-                      <Badge variant="outline" className="text-xs">
-                        {enr.teacherName || t.students.withoutTeacher}
-                      </Badge>
-                      {enr.monthlyFee && parseFloat(enr.monthlyFee) > 0 && (
-                        <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-xs">
-                          {parseFloat(enr.monthlyFee).toLocaleString('ar-MA')} {t.common.dh}
-                        </Badge>
-                      )}
-                      {idx < enrollmentList.length - 1 && <span className="text-muted-foreground mx-0.5">|</span>}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <div className="flex flex-wrap gap-2 p-3 rounded-lg bg-muted/50 border">
-                  {selectedService && (
-                    <Badge variant="outline" className="gap-1 text-xs">
-                      <Layers className="h-3 w-3" />
-                      {selectedService.nameAr}
-                    </Badge>
-                  )}
-                  {selectedSubject && (
-                    <Badge variant="outline" className="gap-1 text-xs">
-                      <BookOpen className="h-3 w-3" />
-                      {selectedSubject.nameAr}
-                    </Badge>
-                  )}
-                  {selectedLevel && (
-                    <Badge variant="outline" className="gap-1 text-xs border-teal-300 text-teal-700">
-                      <GraduationCap className="h-3 w-3" />
-                      {selectedLevel.nameAr}
-                    </Badge>
-                  )}
-                  {!noTeacher && selectedTeacher ? (
-                    <Badge variant="outline" className="gap-1 text-xs border-teal-300 text-teal-700">
-                      <UserCheck className="h-3 w-3" />
-                      {selectedTeacher.fullName}
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="gap-1 text-xs border-violet-300 text-violet-700">
-                      <UserMinus className="h-3 w-3" />
-                      {t.students.withoutTeacher}
-                    </Badge>
-                  )}
-                </div>
-                {/* Back to change selections (legacy mode only) */}
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 text-xs gap-1"
-                    onClick={() => goToStep(selectedTeacher || noTeacher ? 4 : 3)}
-                  >
-                    <Pencil className="h-3 w-3" />
-                    {t.common.edit}
-                  </Button>
-                </div>
-              </div>
-            )}
+            <div className="flex flex-wrap gap-2 p-3 rounded-lg bg-muted/50 border">
+              {selectedService && (
+                <Badge variant="outline" className="gap-1 text-xs">
+                  <Layers className="h-3 w-3" />
+                  {selectedService.nameAr}
+                </Badge>
+              )}
+              {selectedSubject && (
+                <Badge variant="outline" className="gap-1 text-xs">
+                  <BookOpen className="h-3 w-3" />
+                  {selectedSubject.nameAr}
+                </Badge>
+              )}
+              {selectedLevel && (
+                <Badge variant="outline" className="gap-1 text-xs border-teal-300 text-teal-700">
+                  <GraduationCap className="h-3 w-3" />
+                  {selectedLevel.nameAr}
+                </Badge>
+              )}
+              {!noTeacher && selectedTeacher ? (
+                <Badge variant="outline" className="gap-1 text-xs border-teal-300 text-teal-700">
+                  <UserCheck className="h-3 w-3" />
+                  {selectedTeacher.fullName}
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="gap-1 text-xs border-violet-300 text-violet-700">
+                  <UserMinus className="h-3 w-3" />
+                  {t.students.withoutTeacher}
+                </Badge>
+              )}
+            </div>
+
+            {/* Back to change selections */}
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs gap-1"
+                onClick={() => goToStep(selectedTeacher ? 4 : 3)}
+              >
+                <Pencil className="h-3 w-3" />
+                {t.common.edit}
+              </Button>
+            </div>
 
             {/* Personal Info */}
             <div className="space-y-3">
@@ -1386,8 +1097,8 @@ export function StudentsView() {
               </div>
             </div>
 
-            {/* Monthly Fee - Admin only, legacy mode only */}
-            {isAdmin && enrollmentList.length === 0 && (
+            {/* Monthly Fee - Admin only */}
+            {isAdmin && (
             <div className="space-y-3">
               <h4 className="text-sm font-semibold flex items-center gap-2">
                 <Wallet className="h-4 w-4 text-amber-600" />
@@ -1594,18 +1305,7 @@ export function StudentsView() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right hidden md:table-cell">
-                        {student.enrollments && student.enrollments.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {student.enrollments.map((e, i) => (
-                              <Badge key={i} variant="outline" className="text-[10px] px-1.5 py-0 gap-0.5">
-                                {e.service?.nameAr || ''}
-                                {e.level?.nameAr && (
-                                  <span className="text-teal-700 font-medium">{e.level.nameAr}</span>
-                                )}
-                              </Badge>
-                            ))}
-                          </div>
-                        ) : student.level ? (
+                        {student.level ? (
                           <div className="text-sm">
                             <span className="text-muted-foreground">{student.level.subject?.nameAr}</span>
                             <span className="mx-1">—</span>
@@ -1616,14 +1316,7 @@ export function StudentsView() {
                         )}
                       </TableCell>
                       <TableCell className="text-right hidden lg:table-cell">
-                        {student.enrollments && student.enrollments.length > 0 ? (
-                          <div className="text-xs text-muted-foreground">
-                            {student.enrollments
-                              .filter((e) => e.teacher?.fullName)
-                              .map((e) => e.teacher!.fullName)
-                              .join(', ') || t.students.withoutTeacher}
-                          </div>
-                        ) : student.teacher ? (
+                        {student.teacher ? (
                           <div className="flex items-center gap-1.5 text-sm">
                             <div className={`h-6 w-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${getAvatarColor(student.teacher.fullName)}`}>
                               {student.teacher.fullName.charAt(0)}
@@ -1642,15 +1335,7 @@ export function StudentsView() {
                       </TableCell>
                       {isAdmin && (
                       <TableCell className="text-right hidden sm:table-cell">
-                        {student.enrollments && student.enrollments.length > 0 ? (
-                          student.enrollments.reduce((sum, e) => sum + (e.monthlyFee || 0), 0) > 0 ? (
-                            <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100 font-medium">
-                              {student.enrollments.reduce((sum, e) => sum + (e.monthlyFee || 0), 0).toLocaleString('ar-MA')} {t.common.dh}
-                            </Badge>
-                          ) : (
-                            <span className="text-muted-foreground text-sm">—</span>
-                          )
-                        ) : student.monthlyFee > 0 ? (
+                        {student.monthlyFee > 0 ? (
                           <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100 font-medium">
                             {student.monthlyFee.toLocaleString('ar-MA')} {t.common.dh}
                           </Badge>
@@ -1767,7 +1452,7 @@ export function StudentsView() {
             <div className="flex items-center justify-between w-full gap-2">
               {/* Left side: back or skip */}
               <div>
-                {wizardStep === 4 && !editingStudent && !selectedTeacher && !noTeacher && (
+                {wizardStep === 4 && !editingStudent && (
                   <Button
                     type="button"
                     variant="ghost"
@@ -1779,18 +1464,12 @@ export function StudentsView() {
                     <ChevronLeft className="h-3 w-3" />
                   </Button>
                 )}
-                {((wizardStep > 1 && wizardStep < 5) || wizardStep === 5) && !editingStudent && !(wizardStep === 4 && (selectedTeacher || noTeacher)) && (
+                {wizardStep > 1 && wizardStep < 5 && !editingStudent && (
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={() => {
-                      if (wizardStep === 5 && enrollmentList.length > 0) {
-                        goToStep(1);
-                      } else {
-                        goToStep((wizardStep - 1) as WizardStep);
-                      }
-                    }}
+                    onClick={() => goToStep((wizardStep - 1) as WizardStep)}
                     className="gap-1"
                   >
                     {t.common.back}
@@ -1846,7 +1525,7 @@ export function StudentsView() {
                   <Button
                     type="button"
                     onClick={handleSubmit}
-                    disabled={submitting || !form.fullName.trim() || (enrollmentList.length === 0 && !selectedLevel)}
+                    disabled={submitting || !form.fullName.trim() || !selectedLevel}
                     className="gap-1"
                   >
                     {submitting && <Loader2 className="h-4 w-4 animate-spin" />}

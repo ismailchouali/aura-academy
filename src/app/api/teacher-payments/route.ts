@@ -35,47 +35,6 @@ function getLastDayOfMonth(month: number, year: number): number {
   return new Date(year, month, 0).getDate();
 }
 
-/**
- * Calculate the monthly contribution of a single payment for a given target month/year.
- * Returns the monthly amount if the target month falls within the payment's coverage period, else 0.
- *
- * Coverage algorithm:
- *   - Paid 1st–15th → effective start = same month
- *   - Paid 16th–end  → effective start = next month
- *   - Pack covers N consecutive months starting from effective start
- */
-function calcPaymentContribution(
-  payment: { paymentDate: Date | string | null; paidAmount: number; packMonths: number },
-  targetMonth: number,
-  targetYear: number,
-): number {
-  const pDate = payment.paymentDate ? new Date(payment.paymentDate) : null;
-  if (!pDate) return 0;
-
-  const packMonths = payment.packMonths || 1;
-  const monthlyAmount = (payment.paidAmount || 0) / packMonths;
-
-  const payMonth = pDate.getMonth() + 1;
-  const payYear = pDate.getFullYear();
-  const payDay = pDate.getDate();
-
-  let effectiveStart: { month: number; year: number };
-  if (payDay >= 1 && payDay <= 15) {
-    effectiveStart = { month: payMonth, year: payYear };
-  } else {
-    effectiveStart = getNextMonth(payMonth, payYear);
-  }
-
-  for (let i = 0; i < packMonths; i++) {
-    const coveredMonth = addMonths(effectiveStart.month, effectiveStart.year, i);
-    if (isSameMonth(coveredMonth, { month: targetMonth, year: targetYear })) {
-      return monthlyAmount;
-    }
-  }
-
-  return 0;
-}
-
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -88,157 +47,184 @@ export async function GET(request: NextRequest) {
     // Calculation mode: return auto-calculation data for teachers
     if (calculate) {
       const specificTeacherId = teacherId;
-      const calcMonth = month ? parseInt(month) : new Date().getMonth() + 1;
-      const calcYear = year ? parseInt(year) : new Date().getFullYear();
 
-      // ─── 1. Fetch teachers ──────────────────────────────────────
-      const teacherWhere: Record<string, unknown> = { status: 'active' };
-      if (specificTeacherId) teacherWhere.id = specificTeacherId;
+      // Fetch ALL active students with their levels and teachers
+      const studentWhere: Record<string, unknown> = { status: 'active' };
+      if (specificTeacherId) {
+        studentWhere.teacherId = specificTeacherId;
+      }
 
-      const teachers = await db.teacher.findMany({
-        where: Object.keys(teacherWhere).length > 0 ? teacherWhere : undefined,
-        include: { subjects: { include: { subject: true } } },
-        orderBy: { createdAt: 'desc' },
-      });
-
-      // ─── 2. Fetch active enrollments (new multi-enrollment system) ──
-      const enrollmentWhere: Record<string, unknown> = { status: 'active' };
-      if (specificTeacherId) enrollmentWhere.teacherId = specificTeacherId;
-
-      const teacherEnrollments = await db.studentEnrollment.findMany({
-        where: Object.keys(enrollmentWhere).length > 0 ? enrollmentWhere : undefined,
+      const students = await db.student.findMany({
+        where: Object.keys(studentWhere).length > 0 ? studentWhere : undefined,
         include: {
-          student: true,
-          service: true,
-          subject: true,
-          level: true,
+          level: {
+            include: {
+              subject: { include: { service: true } },
+            },
+          },
           teacher: true,
         },
       });
 
-      // Keep only enrollments with active students and a teacher assigned
-      const activeEnrollments = teacherEnrollments.filter(
-        (e) => e.student && e.student.status === 'active' && e.teacherId,
-      );
+      // Fetch all active teachers (or specific one)
+      const teacherWhere: Record<string, unknown> = { status: 'active' };
+      if (specificTeacherId) {
+        teacherWhere.id = specificTeacherId;
+      }
 
-      // ─── 3. Fetch legacy students (no enrollments at all) ──────
-      const legacyWhere: Record<string, unknown> = {
-        status: 'active',
-        enrollments: { none: {} },
-      };
-      if (specificTeacherId) legacyWhere.teacherId = specificTeacherId;
-
-      const legacyStudents = await db.student.findMany({
-        where: Object.keys(legacyWhere).length > 0 ? legacyWhere : undefined,
+      const teachers = await db.teacher.findMany({
+        where: Object.keys(teacherWhere).length > 0 ? teacherWhere : undefined,
         include: {
-          level: { include: { subject: { include: { service: true } } } },
+          subjects: {
+            include: {
+              subject: true,
+            },
+          },
         },
+        orderBy: { createdAt: 'desc' },
       });
 
-      // ─── 4. Fetch payments ─────────────────────────────────────
-      // 4a. Enrollment-linked payments (enrollmentId matches a teacher's enrollment)
-      const enrollmentIds = activeEnrollments.map((e) => e.id);
-      const enrollmentPayments = enrollmentIds.length > 0
-        ? await db.payment.findMany({
-            where: {
-              enrollmentId: { in: enrollmentIds },
-              status: { in: ['paid', 'partial'] },
-              paidAmount: { gt: 0 },
-            },
-          })
-        : [];
+      // The month/year being calculated (from form selection)
+      const calcMonth = month ? parseInt(month) : new Date().getMonth() + 1;
+      const calcYear = year ? parseInt(year) : new Date().getFullYear();
 
-      // 4b. Legacy student payments
-      const legacyStudentIds = legacyStudents.map((s) => s.id);
-      const legacyPayments = legacyStudentIds.length > 0
-        ? await db.payment.findMany({
-            where: {
-              studentId: { in: legacyStudentIds },
-              status: { in: ['paid', 'partial'] },
-              paidAmount: { gt: 0 },
-            },
-          })
-        : [];
-
-      // ─── 5. Calculate per-enrollment monthly contribution ──────
-      const contributionByEnrollment = new Map<string, number>();
-
-      for (const p of enrollmentPayments) {
-        if (!p.enrollmentId) continue;
-        const contribution = calcPaymentContribution(p, calcMonth, calcYear);
-        if (contribution > 0) {
-          const existing = contributionByEnrollment.get(p.enrollmentId) || 0;
-          contributionByEnrollment.set(p.enrollmentId, existing + contribution);
-        }
-      }
-
-      // ─── 6. Calculate per-legacy-student monthly contribution ──
-      const legacyContributionByStudent = new Map<string, number>();
-
-      for (const p of legacyPayments) {
-        const contribution = calcPaymentContribution(p, calcMonth, calcYear);
-        if (contribution > 0) {
-          const existing = legacyContributionByStudent.get(p.studentId) || 0;
-          legacyContributionByStudent.set(p.studentId, existing + contribution);
-        }
-      }
-
-      // ─── 7. Build per-teacher calculations ─────────────────────
       // =============================================
-      // ALGORITHM (updated for multi-enrollment):
+      // ALGORITHM:
       //
-      // 1. totalStudents = UNIQUE active students linked to teacher
-      //    via enrollments + legacy students (teacherId, no enrollments)
+      // 1. totalStudents = ALL active students assigned to teacher
+      //    (regardless of whether they have payments or not)
       //
-      // 2. For enrollment students: find payments linked to the
-      //    SPECIFIC enrollment (enrollmentId match)
+      // 2. For each student's payment:
       //    monthlyAmount = paidAmount / packMonths
-      //    effectiveStart based on paymentDate day
-      //    If calcMonth falls within coverage → add to totalCollected
+      //    effectiveStartMonth = based on paymentDate:
+      //      - day 1-15 → SAME month as payment (teacher paid at end of month)
+      //      - day 16-end → NEXT month (late payment, teacher paid next month)
+      //    The pack covers 'packMonths' consecutive months
+      //    starting from effectiveStartMonth
       //
-      // 3. For legacy students: same algorithm but using payments
-      //    without enrollmentId
+      // 3. If calcMonth falls within the pack's coverage period,
+      //    add monthlyAmount to totalCollected
       //
-      // 4. Groups are organized by enrollment's service/subject/level
-      //    (new system) or student's level (legacy)
+      // Example: Hafsa paid 6300 DH for 9-month pack on April 5
+      //   monthlyAmount = 6300/9 = 700 DH/month
+      //   effectiveStartMonth = April (day 5 is in 1-15 range)
+      //   Pack covers: Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec
+      //   So for calcMonth = April: totalCollected += 700
+      //   For calcMonth = May: totalCollected += 700 (etc.)
       // =============================================
 
+      // Fetch ALL payments for these students (no date range limit)
+      // We need all payments because a 9-month pack paid months ago
+      // could still be covering the current calculation month
+      const allStudentIds = students.map((s) => s.id);
+      const studentPayments = allStudentIds.length > 0
+        ? await db.payment.findMany({
+            where: {
+              studentId: { in: allStudentIds },
+              status: { in: ['paid', 'partial'] },
+              paidAmount: { gt: 0 },
+            },
+            include: {
+              student: {
+                select: { id: true, fullName: true, level: true },
+              },
+            },
+          })
+        : [];
+
+      // Build a map: studentId → monthly contribution for calcMonth
+      // Each payment contributes monthlyAmount if calcMonth falls in its coverage
+      const monthlyContributionByStudent = new Map<string, number>();
+
+      for (const p of studentPayments) {
+        const pDate = p.paymentDate ? new Date(p.paymentDate) : null;
+        if (!pDate) continue;
+
+        const packMonths = p.packMonths || 1;
+        const monthlyAmount = (p.paidAmount || 0) / packMonths;
+
+        // Determine effective start month based on payment date
+        const payMonth = pDate.getMonth() + 1;
+        const payYear = pDate.getFullYear();
+        const payDay = pDate.getDate();
+
+        let effectiveStart: { month: number; year: number };
+        if (payDay >= 1 && payDay <= 15) {
+          // Paid 1st-15th → teacher gets paid for this student THIS month
+          effectiveStart = { month: payMonth, year: payYear };
+        } else {
+          // Paid 16th-end → teacher gets paid for this student NEXT month
+          effectiveStart = getNextMonth(payMonth, payYear);
+        }
+
+        // The pack covers packMonths months starting from effectiveStart
+        // Check if calcMonth falls within this range
+        for (let i = 0; i < packMonths; i++) {
+          const coveredMonth = addMonths(effectiveStart.month, effectiveStart.year, i);
+          if (isSameMonth(coveredMonth, { month: calcMonth, year: calcYear })) {
+            // This payment contributes to this teacher's calcMonth
+            const existing = monthlyContributionByStudent.get(p.studentId) || 0;
+            monthlyContributionByStudent.set(p.studentId, existing + monthlyAmount);
+            break; // A student might have multiple payments, sum them all
+          }
+        }
+      }
+
+      // Build a map: studentId → array of payments for details
+      const paymentsByStudent = new Map<string, { paidAmount: number; monthlyAmount: number; effectiveStart: string; packMonths: number; paymentDate: string }[]>();
+
+      for (const p of studentPayments) {
+        const pDate = p.paymentDate ? new Date(p.paymentDate) : null;
+        if (!pDate) continue;
+
+        const packMonths = p.packMonths || 1;
+        const monthlyAmount = (p.paidAmount || 0) / packMonths;
+
+        const payMonth = pDate.getMonth() + 1;
+        const payYear = pDate.getFullYear();
+        const payDay = pDate.getDate();
+
+        let effectiveStart: { month: number; year: number };
+        if (payDay >= 1 && payDay <= 15) {
+          effectiveStart = { month: payMonth, year: payYear };
+        } else {
+          effectiveStart = getNextMonth(payMonth, payYear);
+        }
+
+        const MONTH_NAMES = ['يناير','فبراير','مارس','أبريل','ماي','يونيو','يوليوز','غشت','شتنبر','أكتوبر','نونبر','دجنبر'];
+        const startLabel = `${MONTH_NAMES[effectiveStart.month - 1]} ${effectiveStart.year}`;
+
+        const arr = paymentsByStudent.get(p.studentId) || [];
+        arr.push({
+          paidAmount: p.paidAmount || 0,
+          monthlyAmount: Math.round(monthlyAmount * 100) / 100,
+          effectiveStart: startLabel,
+          packMonths,
+          paymentDate: pDate.toISOString().split('T')[0],
+        });
+        paymentsByStudent.set(p.studentId, arr);
+      }
+
+      // Calculate data for each teacher
       const calculations = teachers.map((teacher) => {
-        // --- Enrollment-based students for this teacher ---
-        const teacherEnrollments = activeEnrollments.filter(
-          (e) => e.teacherId === teacher.id,
+        // ALL students assigned to this teacher (not just those with payments)
+        const teacherStudents = students.filter(
+          (s) => s.teacherId === teacher.id
         );
-        const uniqueEnrollmentStudentIds = new Set(
-          teacherEnrollments.map((e) => e.studentId),
-        );
-        const totalStudentsFromEnrollments = uniqueEnrollmentStudentIds.size;
 
-        // --- Legacy students for this teacher ---
-        const teacherLegacyStudents = legacyStudents.filter(
-          (s) => s.teacherId === teacher.id,
-        );
-        const totalStudentsFromLegacy = teacherLegacyStudents.length;
+        const totalStudents = teacherStudents.length;
 
-        const totalStudents = totalStudentsFromEnrollments + totalStudentsFromLegacy;
+        // Sum monthly contributions from all students whose payments cover calcMonth
+        const totalCollected = teacherStudents.reduce((sum, student) => {
+          return sum + (monthlyContributionByStudent.get(student.id) || 0);
+        }, 0);
 
-        // --- Total collected ---
-        const totalCollectedFromEnrollments = teacherEnrollments.reduce(
-          (sum, e) => sum + (contributionByEnrollment.get(e.id) || 0),
-          0,
-        );
-        const totalCollectedFromLegacy = teacherLegacyStudents.reduce(
-          (sum, student) => sum + (legacyContributionByStudent.get(student.id) || 0),
-          0,
-        );
-        const totalCollected = totalCollectedFromEnrollments + totalCollectedFromLegacy;
-
-        // --- Teacher share ---
+        // Teacher share calculation
         const percentage = teacher.percentage || 0;
         const teacherShare = (totalCollected * percentage) / 100;
 
-        // --- Groups breakdown ---
-        const groupStudentSets = new Map<string, Set<string>>();
-        const groupData = new Map<
+        // Groups breakdown: group students by their level/subject
+        const groupsMap = new Map<
           string,
           {
             groupName: string;
@@ -246,174 +232,65 @@ export async function GET(request: NextRequest) {
             subjectNameAr: string;
             levelName: string;
             levelNameAr: string;
+            studentCount: number;
             collected: number;
           }
         >();
 
-        const addGroupEntry = (
-          key: string,
-          studentId: string,
-          contribution: number,
-          groupName: string,
-          subjectName: string,
-          subjectNameAr: string,
-          levelName: string,
-          levelNameAr: string,
-        ) => {
-          const studentSet = groupStudentSets.get(key) || new Set<string>();
-          studentSet.add(studentId);
-          groupStudentSets.set(key, studentSet);
-
-          const existing = groupData.get(key);
-          if (existing) {
-            existing.collected += contribution;
-          } else {
-            groupData.set(key, {
-              groupName,
-              subjectName,
-              subjectNameAr,
-              levelName,
-              levelNameAr,
-              collected: contribution,
-            });
-          }
-        };
-
-        // Enrollment groups (by enrollment's level/subject/service)
-        for (const e of teacherEnrollments) {
-          const contribution = contributionByEnrollment.get(e.id) || 0;
-
-          if (e.level && e.subject) {
-            addGroupEntry(
-              e.level.id,
-              e.studentId,
-              contribution,
-              `${e.subject.name} - ${e.level.name}`,
-              e.subject.name,
-              e.subject.nameAr || e.subject.name,
-              e.level.name,
-              e.level.nameAr || e.level.name,
-            );
-          } else if (e.subject) {
-            addGroupEntry(
-              `sub_noLevel_${e.subjectId}`,
-              e.studentId,
-              contribution,
-              e.subject.name,
-              e.subject.name,
-              e.subject.nameAr || e.subject.name,
-              '—',
-              '—',
-            );
-          } else if (e.service) {
-            addGroupEntry(
-              `svc_noSub_${e.serviceId}`,
-              e.studentId,
-              contribution,
-              e.service.name,
-              e.service.name,
-              e.service.nameAr || e.service.name,
-              '—',
-              '—',
-            );
-          } else {
-            addGroupEntry(
-              '_no_level',
-              e.studentId,
-              contribution,
-              'بدون مستوى',
-              '—',
-              '—',
-              '—',
-              '—',
-            );
-          }
-        }
-
-        // Legacy groups (by student's level/subject)
-        for (const student of teacherLegacyStudents) {
-          const contribution = legacyContributionByStudent.get(student.id) || 0;
-
+        teacherStudents.forEach((student) => {
+          const studentContribution = monthlyContributionByStudent.get(student.id) || 0;
           if (student.level) {
-            addGroupEntry(
-              student.level.id,
-              student.id,
-              contribution,
-              `${student.level.subject.name} - ${student.level.name}`,
-              student.level.subject.name,
-              student.level.subject.nameAr || student.level.subject.name,
-              student.level.name,
-              student.level.nameAr || student.level.name,
-            );
+            const key = student.level.id;
+            const existing = groupsMap.get(key);
+            if (existing) {
+              existing.studentCount += 1;
+              existing.collected += studentContribution;
+            } else {
+              groupsMap.set(key, {
+                groupName: `${student.level.subject.name} - ${student.level.name}`,
+                subjectName: student.level.subject.name,
+                subjectNameAr: student.level.subject.nameAr || student.level.subject.name,
+                levelName: student.level.name,
+                levelNameAr: student.level.nameAr || student.level.name,
+                studentCount: 1,
+                collected: studentContribution,
+              });
+            }
           } else {
-            addGroupEntry(
-              '_no_level',
-              student.id,
-              contribution,
-              'بدون مستوى',
-              '—',
-              '—',
-              '—',
-              '—',
-            );
+            const key = '_no_level';
+            const existing = groupsMap.get(key);
+            if (existing) {
+              existing.studentCount += 1;
+              existing.collected += studentContribution;
+            } else {
+              groupsMap.set(key, {
+                groupName: 'بدون مستوى',
+                subjectName: '—',
+                subjectNameAr: '—',
+                levelName: '—',
+                levelNameAr: '—',
+                studentCount: 1,
+                collected: studentContribution,
+              });
+            }
           }
-        }
+        });
 
-        const groups = Array.from(groupData.entries()).map(
-          ([key, data]) => ({
-            ...data,
-            studentCount: groupStudentSets.get(key)?.size || 0,
-            collected: Math.round(data.collected * 100) / 100,
-          }),
-        );
+        const groups = Array.from(groupsMap.values());
 
-        // --- Student details ---
-        // For enrollment students: aggregate across all their enrollments with this teacher
-        const enrollmentStudentMap = new Map<
-          string,
-          {
-            studentId: string;
-            studentName: string;
-            levelNameAr: string;
-            subjectNameAr: string;
-            monthlyAmount: number;
-          }
-        >();
-
-        for (const e of teacherEnrollments) {
-          if (!e.student) continue;
-          const contribution = contributionByEnrollment.get(e.id) || 0;
-          const existing = enrollmentStudentMap.get(e.studentId);
-          if (existing) {
-            existing.monthlyAmount += contribution;
-          } else {
-            enrollmentStudentMap.set(e.studentId, {
-              studentId: e.studentId,
-              studentName: e.student.fullName,
-              levelNameAr: e.level?.nameAr || '—',
-              subjectNameAr: e.subject?.nameAr || e.service?.nameAr || '—',
-              monthlyAmount: contribution,
-            });
-          }
-        }
-
-        const studentDetails = [
-          ...Array.from(enrollmentStudentMap.values()),
-          ...teacherLegacyStudents.map((student) => ({
-            studentId: student.id,
-            studentName: student.fullName,
-            levelNameAr: student.level?.nameAr || '—',
-            subjectNameAr: student.level?.subject?.nameAr || '—',
-            monthlyAmount: Math.round(
-              (legacyContributionByStudent.get(student.id) || 0) * 100,
-            ) / 100,
-          })),
-        ]
-          .map((d) => ({
-            ...d,
-            monthlyAmount: Math.round(d.monthlyAmount * 100) / 100,
-            paid: d.monthlyAmount > 0,
-          }))
+        // Build student details list (name + monthly contribution for calcMonth)
+        const studentDetails = teacherStudents
+          .map((student) => {
+            const contribution = monthlyContributionByStudent.get(student.id) || 0;
+            return {
+              studentId: student.id,
+              studentName: student.fullName,
+              levelNameAr: student.level?.nameAr || '—',
+              subjectNameAr: student.level?.subject?.nameAr || '—',
+              monthlyAmount: Math.round(contribution * 100) / 100,
+              paid: contribution > 0,
+            };
+          })
           .sort((a, b) => b.monthlyAmount - a.monthlyAmount);
 
         return {
