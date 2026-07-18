@@ -741,7 +741,7 @@ export function PaymentsView() {
         body: JSON.stringify({
           studentId: student.studentId,
           amount: student.monthlyFee,
-          paidAmount: 0,
+          paidAmount: student.monthlyFee,
           discount: 0,
           packMonths: 1,
           month: invoiceMonth,
@@ -749,7 +749,7 @@ export function PaymentsView() {
           paymentDate: invoicePaymentDate,
           method: 'cash',
           notes: '',
-          status: 'pending',
+          status: 'paid',
         }),
       });
       if (!res.ok) throw new Error('Failed to create');
@@ -762,6 +762,38 @@ export function PaymentsView() {
       toast.error(t.common.saveError);
     } finally {
       setCreatingInvoice(null);
+    }
+  };
+
+  /** Quick mark a payment as fully paid (for pending invoices from overdue quick-add) */
+  const handleQuickPay = async (payment: Payment) => {
+    try {
+      const res = await fetch(`/api/payments/${payment.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...payment,
+          amount: payment.amount,
+          paidAmount: payment.amount - (payment.discount || 0),
+          discount: payment.discount || 0,
+          remainingAmount: 0,
+          packMonths: payment.packMonths || 1,
+          year: payment.year,
+          paymentDate: payment.paymentDate
+            ? (typeof payment.paymentDate === 'string'
+                ? payment.paymentDate.split('T')[0]
+                : payment.paymentDate.toISOString().split('T')[0])
+            : null,
+          method: payment.method || 'cash',
+          notes: payment.notes || '',
+          status: 'paid',
+        }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success('تم تسديد الفاتورة بنجاح ✅');
+      fetchPayments();
+    } catch {
+      toast.error(t.common.saveError);
     }
   };
 
@@ -1246,6 +1278,17 @@ export function PaymentsView() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center gap-1">
+                          {payment.status === 'pending' && payment.remainingAmount > 0 && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
+                              onClick={() => handleQuickPay(payment)}
+                              title="تسديد"
+                            >
+                              <Wallet className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="icon"
