@@ -62,6 +62,7 @@ const ar = {
     viewAll: 'عرض الكل',
     noInternet: 'خطأ في الاتصال بالإنترنت',
     cannotUndo: 'لا يمكن التراجع عن هذا الإجراء',
+    clear: 'مسح الفلاتر',
   },
 
   // ── Navigation ──
@@ -211,6 +212,16 @@ const ar = {
     subjectsAvailable: 'مواد متوفرة',
     levelsAvailable: 'مستويات متوفرة',
     teachersAvailable: 'أساتذة متوفرون',
+    addEnrollment: 'إضافة خدمة',
+    enrollmentsLabel: 'الخدمات المسجلة',
+    enrollmentFee: 'القسط الشهري',
+    anotherService: 'إضافة خدمة أخرى',
+    removeEnrollment: 'إزالة',
+    noEnrollmentsYet: 'لم يتم إضافة أي خدمة بعد',
+    totalFee: 'المجموع',
+    filterByService: 'كل الخدمات',
+    filterBySubject: 'كل المواد',
+    filterByLevel: 'كل المستويات',
   },
 
   // ── Teachers ──
@@ -332,6 +343,12 @@ const ar = {
     packMonthlyEquiv: 'المعادل الشهري',
     invoiceCreatedQuick: 'تم إنشاء القسطة بنجاح - في انتظار الدفع',
     addInvoiceQuick: 'إضافة قسطة',
+    selectEnrollment: 'اختر الخدمة',
+    enrollmentLabel: 'الخدمة',
+    noEnrollment: 'بدون خدمة محددة',
+    bonService: 'الخدمة',
+    bonTeacher: 'الأستاذ',
+    chooseMonth: 'اختر الشهر',
   },
 
   // ── Teacher Payments ──
@@ -643,6 +660,7 @@ const fr: typeof ar = {
     viewAll: 'Voir tout',
     noInternet: 'Erreur de connexion Internet',
     cannotUndo: 'Cette action est irréversible',
+    clear: 'Réinitialiser les filtres',
   },
 
   // ── Navigation ──
@@ -789,6 +807,16 @@ const fr: typeof ar = {
     subjectsAvailable: 'Matières disponibles',
     levelsAvailable: 'Niveaux disponibles',
     teachersAvailable: 'Professeurs disponibles',
+    addEnrollment: 'Ajouter un service',
+    enrollmentsLabel: 'Services inscrits',
+    enrollmentFee: 'Mensualité',
+    anotherService: 'Ajouter un autre service',
+    removeEnrollment: 'Retirer',
+    noEnrollmentsYet: 'Aucun service ajouté',
+    totalFee: 'Total',
+    filterByService: 'Tous les services',
+    filterBySubject: 'Toutes les matières',
+    filterByLevel: 'Tous les niveaux',
   },
 
   // ── Teachers ──
@@ -909,6 +937,12 @@ const fr: typeof ar = {
     packMonthlyEquiv: 'Équivalent mensuel',
     invoiceCreatedQuick: 'Facture créée avec succès - en attente de paiement',
     addInvoiceQuick: 'Ajouter une facture',
+    selectEnrollment: 'Choisissez le service',
+    enrollmentLabel: 'Service',
+    noEnrollment: 'Aucun service spécifié',
+    bonService: 'Service',
+    bonTeacher: 'Professeur',
+    chooseMonth: 'Choisir le mois',
   },
 
   // ── Teacher Payments ──

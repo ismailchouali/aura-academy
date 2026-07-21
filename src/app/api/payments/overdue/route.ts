@@ -42,7 +42,6 @@ function getEffectiveCycleDay(cycleDay: number, year: number, monthIndex: number
 
 /**
  * Build a date for a specific year/month using the enrollment cycle day.
- * E.g. cycleDay=31, month=Feb(1) → Feb 28
  */
 function getCycleDate(year: number, monthIndex: number, cycleDay: number): Date {
   const effectiveDay = getEffectiveCycleDay(cycleDay, year, monthIndex);
@@ -53,9 +52,6 @@ function getCycleDate(year: number, monthIndex: number, cycleDay: number): Date 
  * Build coverage sets using Logic A: FIXED cycle day from enrollment.
  * Fully-paid payments are sorted by date and assigned to enrollment cycle months
  * in queue order. This prevents cycle day drift when payments are made late.
- *
- * Example: enrolled 28/03, payments on [28/03, 25/04, 09/06]
- * → Queue covers: March, April, May (NOT June, even though 3rd payment was on 09/06)
  */
 function buildCoverageSets(
   enrollmentDate: Date,
@@ -70,7 +66,6 @@ function buildCoverageSets(
   const coveredMonths = new Set<number>();
   const anyPaymentMonths = new Set<number>();
 
-  // Queue-based: sort fully-paid payments by date ascending
   const sortedPaid = payments
     .filter(p => p.remainingAmount === 0)
     .map(p => ({
@@ -81,7 +76,6 @@ function buildCoverageSets(
     }))
     .sort((a, b) => a.date.getTime() - b.date.getTime());
 
-  // Assign each paid payment to the next N cycle months from enrollment
   let nextCycleOffset = 0;
   for (const payment of sortedPaid) {
     for (let i = 0; i < payment.packMonths && nextCycleOffset < 60; i++) {
@@ -95,7 +89,6 @@ function buildCoverageSets(
     }
   }
 
-  // For unpaid/partial payments: use their month/year field
   for (const p of payments) {
     if (p.remainingAmount > 0) {
       const baseYM = p.year * 12 + getMonthIndex(p.month);
@@ -113,7 +106,7 @@ function buildCoverageSets(
 }
 
 /* ------------------------------------------------------------------ */
-/*  Per-student overdue calculator                                     */
+/*  Per-enrollment overdue calculator                                   */
 /* ------------------------------------------------------------------ */
 
 interface OverduePaymentInfo {
@@ -140,13 +133,13 @@ interface OverdueStudent {
   levelName: string | null;
   serviceId: string | null;
   enrollmentDate: string | null;
+  enrollmentId: string | null;
+  teacherName: string | null;
   overduePayments: OverduePaymentInfo[];
 }
 
 /**
  * Calculate the next due date using the ENROLLMENT day as fixed cycle day.
- * Finds the first month (from enrollment) not covered by a fully-paid payment.
- * E.g. enrolled 31/1 → Feb 28 → Mar 31 → Apr 30 (always cycle day 31)
  */
 function getNextDueDate(
   enrollmentDate: Date,
@@ -163,17 +156,15 @@ function getNextDueDate(
   const now = getMoroccoNow();
   const currentYM = toYM(now);
 
-  // Build covered months using queue-based Logic A (fixed cycle day from enrollment)
   const { coveredMonths } = buildCoverageSets(enrollmentDate, payments);
 
-  // Find the first month from enrollment that's not covered
   for (let offset = 1; offset <= 60; offset++) {
     const year = enrollmentDate.getFullYear();
     const monthIndex = enrollmentDate.getMonth() + offset;
     const targetYear = year + Math.floor(monthIndex / 12);
     const targetMonth = monthIndex % 12;
     const monthYM = targetYear * 12 + targetMonth;
-    if (monthYM > currentYM) return null; // future
+    if (monthYM > currentYM) return null;
     if (!coveredMonths.has(monthYM)) {
       return getCycleDate(targetYear, targetMonth, cycleDay);
     }
@@ -196,13 +187,16 @@ function calculateNextDueDate(
   return dueDate ? formatDate(dueDate) : null;
 }
 
-function calculateStudentOverdue(
+function calculateEnrollmentOverdue(
   student: {
     id: string;
     fullName: string;
     phone: string | null;
     parentName: string | null;
     parentPhone: string | null;
+  },
+  enrollment: {
+    id: string;
     monthlyFee: number;
     enrollmentDate: Date;
   },
@@ -219,42 +213,32 @@ function calculateStudentOverdue(
   const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const currentYM = toYM(now);
 
-  // ── Day-level check: calculate next due date ──
-  const nextDue = getNextDueDate(
-    student.enrollmentDate instanceof Date
-      ? student.enrollmentDate
-      : new Date(student.enrollmentDate),
-    payments
-  );
+  const enrollmentDate = enrollment.enrollmentDate instanceof Date
+    ? enrollment.enrollmentDate
+    : new Date(enrollment.enrollmentDate);
 
-  // If the next due date hasn't arrived yet (today < due date), NOT overdue
+  // Day-level check
+  const nextDue = getNextDueDate(enrollmentDate, payments);
   if (nextDue && todayDate < nextDue) {
     return null;
   }
 
-  /* ── Case A: No payments at all ─────────────────────────────── */
-
+  /* Case A: No payments at all */
   if (payments.length === 0) {
-    const enrollmentDate = student.enrollmentDate instanceof Date
-      ? student.enrollmentDate
-      : new Date(student.enrollmentDate);
     const enrollmentYM = toYM(enrollmentDate);
     const enrollmentDay = enrollmentDate.getDate();
 
-    // Give 1 month grace after enrollment
     const firstDueYM = enrollmentYM + 1;
     if (firstDueYM > currentYM) return null;
 
-    // For the first due month, check if the payment cycle day has arrived
     if (firstDueYM === currentYM) {
       const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
       const effectiveCycleDay = Math.min(enrollmentDay, lastDayOfMonth);
       if (todayDate.getDate() < effectiveCycleDay) return null;
     }
 
-    // Sequential: only show 1 overdue month at a time
-    const totalOverdue = student.monthlyFee;
-    const nextDueDate = calculateNextDueDate(student.enrollmentDate, []);
+    const totalOverdue = enrollment.monthlyFee;
+    const nextDueDate = calculateNextDueDate(enrollmentDate, []);
 
     return {
       studentId: student.id,
@@ -262,23 +246,21 @@ function calculateStudentOverdue(
       phone: student.phone,
       parentPhone: student.parentPhone,
       parentName: student.parentName,
-      monthlyFee: student.monthlyFee,
+      monthlyFee: enrollment.monthlyFee,
       totalOverdue,
       monthsOverdue: 1,
       nextDueDate,
       subjectName: null,
       levelName: null,
+      serviceId: null,
+      enrollmentDate: enrollmentDate.toISOString(),
+      enrollmentId: enrollment.id,
+      teacherName: null,
       overduePayments: [],
     };
   }
 
-  /* ── Case B: Student has payments ───────────────────────────── */
-
-  const enrollmentDate = student.enrollmentDate instanceof Date
-    ? student.enrollmentDate
-    : new Date(student.enrollmentDate);
-
-  // Sort by paymentDate descending (fallback to month/year), then id as tiebreaker
+  /* Case B: Enrollment has payments */
   const sorted = [...payments].sort((a, b) => {
     const aTime = a.paymentDate
       ? new Date(a.paymentDate).getTime()
@@ -290,18 +272,15 @@ function calculateStudentOverdue(
     return b.id.localeCompare(a.id);
   });
 
-  // Build coverage sets using queue-based Logic A (fixed cycle day from enrollment)
   const { coveredMonths, anyPaymentMonths } = buildCoverageSets(enrollmentDate, payments);
 
-
-  /* Step 1 — Unpaid payments whose coverage period has passed */
+  /* Step 1 - Unpaid payments whose coverage period has passed */
   let unpaidOverdue = 0;
   let maxMonthsOverdue = 0;
   const overduePayments: OverduePaymentInfo[] = [];
 
   for (const p of payments) {
     if (p.remainingAmount > 0) {
-      // Use month/year field (not paymentDate) to determine coverage end
       const endYM = p.year * 12 + getMonthIndex(p.month) + (p.packMonths || 1);
       if (currentYM >= endYM) {
         const monthsLate = Math.max(1, currentYM - endYM);
@@ -321,27 +300,23 @@ function calculateStudentOverdue(
     }
   }
 
-  /* Step 2 — Expired pack (latest fully-paid payment) */
+  /* Step 2 - Expired pack (latest fully-paid payment) */
   let packOverdue = 0;
   let packMonthsExpired = 0;
   const latestPaid = sorted.find((p) => p.remainingAmount === 0);
 
   if (latestPaid) {
     const enrollmentDay = enrollmentDate.getDate();
-
-    // Iterate month-by-month from enrollment, using FIXED cycle day (Logic A)
-    // Sequential logic: stop at the first month not covered by a PAID payment.
     let lastOverdueMonthYM = -1;
+
     for (let offset = 1; offset <= 48; offset++) {
       const monthIndex = enrollmentDate.getMonth() + offset;
       const targetYear = enrollmentDate.getFullYear() + Math.floor(monthIndex / 12);
       const targetMonth = monthIndex % 12;
       const monthYM = targetYear * 12 + targetMonth;
 
-      // Stop if future month
       if (monthYM > currentYM) break;
 
-      // For the current month, only count if the cycle day has arrived
       if (monthYM === currentYM) {
         const effectiveCycleDay = getEffectiveCycleDay(enrollmentDay, now.getFullYear(), now.getMonth());
         if (todayDate.getDate() < effectiveCycleDay) {
@@ -349,14 +324,12 @@ function calculateStudentOverdue(
         }
       }
 
-      // Only count if not covered by a PAID payment AND not already counted by Step 1
       if (!coveredMonths.has(monthYM) && !anyPaymentMonths.has(monthYM)) {
-        packOverdue += student.monthlyFee;
+        packOverdue += enrollment.monthlyFee;
         packMonthsExpired++;
         lastOverdueMonthYM = monthYM;
       }
 
-      // Sequential: stop at the first month that's not fully covered by a PAID payment.
       if (!coveredMonths.has(monthYM)) {
         break;
       }
@@ -382,11 +355,10 @@ function calculateStudentOverdue(
   }
 
   /* Combine & return */
-
   const totalOverdue = unpaidOverdue + packOverdue;
   if (totalOverdue <= 0) return null;
 
-  const nextDueDate = calculateNextDueDate(student.enrollmentDate, payments);
+  const nextDueDate = calculateNextDueDate(enrollmentDate, payments);
 
   return {
     studentId: student.id,
@@ -394,12 +366,16 @@ function calculateStudentOverdue(
     phone: student.phone,
     parentPhone: student.parentPhone,
     parentName: student.parentName,
-    monthlyFee: student.monthlyFee,
+    monthlyFee: enrollment.monthlyFee,
     totalOverdue,
     monthsOverdue: maxMonthsOverdue,
     nextDueDate,
     subjectName: null,
     levelName: null,
+    serviceId: null,
+    enrollmentDate: enrollmentDate.toISOString(),
+    enrollmentId: enrollment.id,
+    teacherName: null,
     overduePayments,
   };
 }
@@ -410,74 +386,149 @@ function calculateStudentOverdue(
 
 export async function GET() {
   try {
-    // 1. Fetch ALL active students with their service/level hierarchy
+    // 1. Fetch ALL active students (basic info only)
     const students = await db.student.findMany({
       where: { status: 'active' },
-      include: {
-        level: {
-          include: {
-            subject: { include: { service: true } },
-          },
-        },
-      },
     });
 
     if (students.length === 0) {
       return NextResponse.json([]);
     }
 
-    // 2. Fetch ALL payments for these students (no remainingAmount filter)
     const studentIds = students.map((s) => s.id);
+
+    // 2. Fetch ALL enrollments for active students with service/subject/level/teacher
+    const enrollments = await db.studentEnrollment.findMany({
+      where: {
+        studentId: { in: studentIds },
+        status: 'active',
+      },
+      include: {
+        service: true,
+        subject: true,
+        level: true,
+        teacher: true,
+      },
+    });
+
+    // 3. Fetch ALL payments for these students
     const allPayments = await db.payment.findMany({
       where: { studentId: { in: studentIds } },
     });
 
-    // 3. Group payments by student
-    const paymentsByStudent = new Map<
-      string,
-      (typeof allPayments)[number][]
-    >();
+    // 4. Build student lookup
+    const studentById = new Map(students.map((s) => [s.id, s]));
+
+    // 5. Build payment maps:
+    //    a) paymentsByStudent: for legacy (no enrollmentId) payments
+    //    b) paymentsByEnrollment: for enrollment-linked payments
+    const paymentsByStudent = new Map<string, typeof allPayments[number][]>();
+    const paymentsByEnrollment = new Map<string, typeof allPayments[number][]>();
+
     for (const p of allPayments) {
-      const list = paymentsByStudent.get(p.studentId);
-      if (list) {
-        list.push(p);
+      if (p.enrollmentId) {
+        const list = paymentsByEnrollment.get(p.enrollmentId);
+        if (list) {
+          list.push(p);
+        } else {
+          paymentsByEnrollment.set(p.enrollmentId, [p]);
+        }
       } else {
-        paymentsByStudent.set(p.studentId, [p]);
+        const list = paymentsByStudent.get(p.studentId);
+        if (list) {
+          list.push(p);
+        } else {
+          paymentsByStudent.set(p.studentId, [p]);
+        }
       }
     }
 
-    // 4. Calculate overdue for each student
-    const overdueStudents: OverdueStudent[] = [];
-    for (const student of students) {
-      const payments = paymentsByStudent.get(student.id) || [];
-      const result = calculateStudentOverdue(student, payments);
+    // 6. For each enrollment, calculate overdue
+    const overdueResults: OverdueStudent[] = [];
+
+    for (const enrollment of enrollments) {
+      const student = studentById.get(enrollment.studentId);
+      if (!student) continue;
+
+      const enrollmentPayments = paymentsByEnrollment.get(enrollment.id) || [];
+
+      const result = calculateEnrollmentOverdue(
+        student,
+        {
+          id: enrollment.id,
+          monthlyFee: enrollment.monthlyFee,
+          enrollmentDate: enrollment.enrollmentDate,
+        },
+        enrollmentPayments
+      );
+
       if (result) {
-        // Attach subject/level info from the student record
-        result.subjectName = student?.level?.subject?.nameAr || null;
-        result.levelName = student?.level?.nameAr || null;
-        result.serviceId = student?.level?.subject?.service?.id || null;
-        result.enrollmentDate = student.enrollmentDate instanceof Date
-          ? student.enrollmentDate.toISOString()
-          : String(student.enrollmentDate);
-        overdueStudents.push(result);
+        result.subjectName = enrollment.subject?.nameAr || null;
+        result.levelName = enrollment.level?.nameAr || null;
+        result.serviceId = enrollment.service?.id || null;
+        result.enrollmentDate = (enrollment.enrollmentDate instanceof Date
+          ? enrollment.enrollmentDate
+          : new Date(enrollment.enrollmentDate)
+        ).toISOString();
+        result.teacherName = enrollment.teacher?.fullName || null;
+        overdueResults.push(result);
       }
     }
 
-    if (overdueStudents.length === 0) {
+    // 7. Handle legacy students (students with no active enrollments but with legacy payments)
+    const studentsWithEnrollments = new Set(enrollments.map(e => e.studentId));
+    const legacyStudentIds = students.filter(s => !studentsWithEnrollments.has(s.id)).map(s => s.id);
+
+    if (legacyStudentIds.length > 0) {
+      const legacyStudentsWithLevel = await db.student.findMany({
+        where: { id: { in: legacyStudentIds } },
+        include: {
+          level: {
+            include: { subject: { include: { service: true } } },
+          },
+        },
+      });
+
+      for (const student of legacyStudentsWithLevel) {
+        const legacyPayments = paymentsByStudent.get(student.id) || [];
+        if (legacyPayments.length === 0) continue;
+
+        const enrollmentDate = student.enrollmentDate instanceof Date
+          ? student.enrollmentDate
+          : new Date(student.enrollmentDate);
+
+        const result = calculateEnrollmentOverdue(
+          student,
+          {
+            id: '__legacy__',
+            monthlyFee: student.monthlyFee,
+            enrollmentDate,
+          },
+          legacyPayments
+        );
+
+        if (result) {
+          result.subjectName = student.level?.subject?.nameAr || null;
+          result.levelName = student.level?.nameAr || null;
+          result.serviceId = student.level?.subject?.service?.id || null;
+          result.enrollmentDate = enrollmentDate.toISOString();
+          result.enrollmentId = null;
+          result.teacherName = null;
+          overdueResults.push(result);
+        }
+      }
+    }
+
+    if (overdueResults.length === 0) {
       return NextResponse.json([]);
     }
 
-    // 5. Build lookup for service/level grouping
-    const studentById = new Map(students.map((s) => [s.id, s]));
-
-    // 6. Group by Service → Level → Student
+    // 8. Group by Service -> Level -> Student
     const serviceMap = new Map<string, Map<string, OverdueStudent[]>>();
 
-    for (const overdue of overdueStudents) {
-      const student = studentById.get(overdue.studentId);
-      const serviceName =
-        student?.level?.subject?.service?.nameAr || 'بدون خدمة';
-      const levelName = student?.level?.nameAr || 'بدون مستوى';
+    for (const overdue of overdueResults) {
+      const serviceName = overdue.subjectName || 'بدون خدمة';
+      const levelName = overdue.levelName || 'بدون مستوى';
 
       let levelMap = serviceMap.get(serviceName);
       if (!levelMap) {
@@ -493,13 +544,12 @@ export async function GET() {
       list.push(overdue);
     }
 
-    // 7. Build response array
+    // 9. Build response array
     const result = Array.from(serviceMap.entries()).map(
       ([service, levelMap]) => {
         const levels = Array.from(levelMap.entries()).map(
-          ([level, students]) => {
-            // Sort students by nextDueDate descending (newest due date on top) within each level
-            students.sort((a, b) => {
+          ([level, overdueStudents]) => {
+            overdueStudents.sort((a, b) => {
               if (!a.nextDueDate && !b.nextDueDate) return b.totalOverdue - a.totalOverdue;
               if (!a.nextDueDate) return 1;
               if (!b.nextDueDate) return -1;
@@ -510,16 +560,16 @@ export async function GET() {
               return parseDate(b.nextDueDate) - parseDate(a.nextDueDate);
             });
 
-            const totalLevelOverdue = students.reduce(
+            const totalLevelOverdue = overdueStudents.reduce(
               (sum, s) => sum + s.totalOverdue,
               0
             );
 
             return {
               level,
-              students,
+              students: overdueStudents,
               totalOverdue: totalLevelOverdue,
-              studentCount: students.length,
+              studentCount: overdueStudents.length,
             };
           }
         );
@@ -542,7 +592,7 @@ export async function GET() {
       }
     );
 
-    // 8. Sort services by total overdue (descending)
+    // 10. Sort services by total overdue (descending)
     result.sort((a, b) => b.totalOverdue - a.totalOverdue);
 
     return NextResponse.json(result);

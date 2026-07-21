@@ -12,6 +12,7 @@ export async function GET(request: NextRequest) {
     const serviceId = searchParams.get('serviceId');
     const subjectId = searchParams.get('subjectId');
     const levelId = searchParams.get('levelId');
+    const enrollmentId = searchParams.get('enrollmentId');
 
     const where: Record<string, unknown> = {};
 
@@ -27,8 +28,11 @@ export async function GET(request: NextRequest) {
     if (status) {
       where.status = status;
     }
+    if (enrollmentId) {
+      where.enrollmentId = enrollmentId;
+    }
 
-    // Filter by service/subject/level through student relation
+    // Filter by service/subject/level through student relation AND enrollment relation
     if (serviceId || subjectId || levelId) {
       const studentFilter: Record<string, unknown> = {};
       if (levelId) {
@@ -41,6 +45,37 @@ export async function GET(request: NextRequest) {
       where.student = studentFilter;
     }
 
+    // If filtering by service/subject/level, also include payments linked via enrollment
+    // We'll use OR to match either student's level OR enrollment's level
+    if (serviceId || subjectId || levelId) {
+      const enrollmentFilter: Record<string, unknown> = {};
+      if (levelId) {
+        enrollmentFilter.levelId = levelId;
+      } else if (subjectId) {
+        enrollmentFilter.subjectId = subjectId;
+      } else if (serviceId) {
+        enrollmentFilter.serviceId = serviceId;
+      }
+
+      // Use OR: either matches via student OR via enrollment
+      const studentFilterForOr: Record<string, unknown> = {};
+      if (levelId) {
+        studentFilterForOr.levelId = levelId;
+      } else if (subjectId) {
+        studentFilterForOr.level = { subjectId };
+      } else if (serviceId) {
+        studentFilterForOr.level = { subject: { serviceId } };
+      }
+
+      // Remove the student filter we set above and use OR instead
+      delete where.student;
+
+      where.OR = [
+        { student: studentFilterForOr },
+        { enrollment: enrollmentFilter },
+      ];
+    }
+
     const payments = await db.payment.findMany({
       where: Object.keys(where).length > 0 ? where : undefined,
       include: {
@@ -51,6 +86,14 @@ export async function GET(request: NextRequest) {
                 subject: { include: { service: true } },
               },
             },
+            teacher: true,
+          },
+        },
+        enrollment: {
+          include: {
+            service: true,
+            subject: true,
+            level: true,
             teacher: true,
           },
         },
@@ -71,6 +114,7 @@ export async function POST(request: NextRequest) {
     const payment = await db.payment.create({
       data: {
         studentId: body.studentId,
+        enrollmentId: body.enrollmentId || null,
         amount: body.amount,
         paidAmount: body.paidAmount || 0,
         remainingAmount: body.remainingAmount ?? body.amount - (body.discount || 0) - (body.paidAmount || 0),
@@ -91,6 +135,14 @@ export async function POST(request: NextRequest) {
                 subject: { include: { service: true } },
               },
             },
+            teacher: true,
+          },
+        },
+        enrollment: {
+          include: {
+            service: true,
+            subject: true,
+            level: true,
             teacher: true,
           },
         },

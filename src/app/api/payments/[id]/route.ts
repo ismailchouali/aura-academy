@@ -20,6 +20,14 @@ export async function GET(
             teacher: true,
           },
         },
+        enrollment: {
+          include: {
+            service: true,
+            subject: true,
+            level: true,
+            teacher: true,
+          },
+        },
       },
     });
 
@@ -56,6 +64,7 @@ export async function PUT(
         method: body.method,
         notes: body.notes,
         status: body.status,
+        ...(body.enrollmentId !== undefined ? { enrollmentId: body.enrollmentId || null } : {}),
       },
       include: {
         student: {
@@ -65,6 +74,14 @@ export async function PUT(
                 subject: { include: { service: true } },
               },
             },
+            teacher: true,
+          },
+        },
+        enrollment: {
+          include: {
+            service: true,
+            subject: true,
+            level: true,
             teacher: true,
           },
         },

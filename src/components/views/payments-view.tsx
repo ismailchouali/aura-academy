@@ -61,15 +61,27 @@ import {
   CalendarClock,
   X,
   ChevronDown,
+  BookOpen,
+  GraduationCap,
 } from 'lucide-react';
 import { useT } from '@/hooks/use-translation';
 import { useAppStore } from '@/store/store';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
+interface EnrollmentInfo {
+  id: string;
+  serviceName: string;
+  subjectName: string | null;
+  levelName: string | null;
+  teacherName: string | null;
+  monthlyFee: number;
+}
+
 interface Payment {
   id: string;
   studentId: string;
+  enrollmentId: string | null;
   student: {
     id: string;
     fullName: string;
@@ -83,6 +95,14 @@ interface Payment {
     } | null;
     teacher: { id: string; fullName: string } | null;
   };
+  enrollment: {
+    id: string;
+    serviceName: string;
+    subjectName: string;
+    levelName: string;
+    teacherName: string | null;
+    monthlyFee: number;
+  } | null;
   amount: number;
   paidAmount: number;
   remainingAmount: number;
@@ -110,6 +130,7 @@ interface StudentSearchResult {
     subject: { nameAr: string; service?: { nameAr: string; id: string } | null } | null;
   } | null;
   teacher: { id: string; fullName: string } | null;
+  enrollments: EnrollmentInfo[];
 }
 
 interface Service {
@@ -135,6 +156,7 @@ interface Service {
 
 interface PaymentFormData {
   studentId: string;
+  enrollmentId: string;
   amount: number | '';
   paidAmount: number | '';
   discount: number | '';
@@ -174,6 +196,8 @@ interface OverdueStudent {
   subjectName: string | null;
   levelName: string | null;
   serviceId: string | null;
+  enrollmentId: string | null;
+  teacherName: string | null;
   enrollmentDate: string | null;
   overduePayments: {
     id: string;
@@ -187,6 +211,7 @@ interface OverdueStudent {
 
 const defaultFormData: PaymentFormData = {
   studentId: '',
+  enrollmentId: '',
   amount: '',
   paidAmount: '',
   discount: '',
@@ -300,6 +325,21 @@ export function PaymentsView() {
     const monthLabel = MONTH_NAMES[payment.month] || payment.month;
     const paymentDate = payment.paymentDate ? formatDate(payment.paymentDate) : '—';
     const netAmount = payment.amount - payment.discount;
+
+    // Build enrollment info lines for the bon
+    let enrollmentInfoHtml = '';
+    if (payment.enrollment) {
+      enrollmentInfoHtml = `
+        <div class="info-item">
+          <span class="label">${t.payments.bonService}: </span>
+          <span class="value">${payment.enrollment.serviceName}${payment.enrollment.subjectName ? ' — ' + payment.enrollment.subjectName : ''}${payment.enrollment.levelName ? ' — ' + payment.enrollment.levelName : ''}</span>
+        </div>
+        ${payment.enrollment.teacherName ? `
+        <div class="info-item">
+          <span class="label">${t.payments.bonTeacher}: </span>
+          <span class="value">${payment.enrollment.teacherName}</span>
+        </div>` : ''}`;
+    }
 
     return `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -443,6 +483,7 @@ export function PaymentsView() {
         <span class="label">${t.common.phone}: </span>
         <span class="value" dir="ltr">${student.phone || '—'}</span>
       </div>
+      ${enrollmentInfoHtml}
     </div>
     <table class="details-table">
       <thead>
@@ -522,12 +563,19 @@ export function PaymentsView() {
   const [studentSearching, setStudentSearching] = useState(false);
   const studentsLoaded = useRef(false);
   const [selectedStudent, setSelectedStudent] = useState<StudentSearchResult | null>(null);
+  const [selectedEnrollment, setSelectedEnrollment] = useState<EnrollmentInfo | null>(null);
   const [yearlyPaid, setYearlyPaid] = useState(0);
 
-  // Check if selected student belongs to Langues service
+  // Check if selected enrollment belongs to Langues service
   const isLanguesService = useMemo(() => {
+    if (selectedEnrollment) {
+      // Check from enrollment data
+      const serviceName = selectedEnrollment.serviceName.toLowerCase();
+      return serviceName.includes('langues') || serviceName.includes('لغات');
+    }
+    // Fallback to student's level subject service
     return selectedStudent?.level?.subject?.service?.id === 'service_langues';
-  }, [selectedStudent]);
+  }, [selectedEnrollment, selectedStudent]);
 
   // Filters
   const [filterMonth, setFilterMonth] = useState('all');
@@ -680,9 +728,13 @@ export function PaymentsView() {
     const currentYear = new Date().getFullYear();
     (async () => {
       try {
-        const res = await fetch(
-          `/api/payments?studentId=${selectedStudent.id}&year=${currentYear}`
-        );
+        const params = new URLSearchParams();
+        params.set('studentId', selectedStudent.id);
+        params.set('year', String(currentYear));
+        if (selectedEnrollment?.id) {
+          params.set('enrollmentId', selectedEnrollment.id);
+        }
+        const res = await fetch(`/api/payments?${params.toString()}`);
         if (!res.ok) return;
         const yearPayments: Payment[] = await res.json();
         const total = yearPayments.reduce((s, p) => s + p.paidAmount, 0);
@@ -691,7 +743,7 @@ export function PaymentsView() {
         setYearlyPaid(0);
       }
     })();
-  }, [selectedStudent]);
+  }, [selectedStudent, selectedEnrollment]);
 
   // ── Overdue fetching ──────────────────────────────────────────────────
 
@@ -735,8 +787,17 @@ export function PaymentsView() {
       }
     }
 
-    // Pre-select the student so the form shows their profile card
-    setSelectedStudent({
+    // Build a mock selectedStudent with enrollment info from overdue data
+    const mockEnrollments: EnrollmentInfo[] = student.enrollmentId ? [{
+      id: student.enrollmentId,
+      serviceName: student.subjectName || '',
+      subjectName: student.subjectName || null,
+      levelName: student.levelName || null,
+      teacherName: student.teacherName || null,
+      monthlyFee: student.monthlyFee,
+    }] : [];
+
+    const mockSelectedStudent: StudentSearchResult = {
       id: student.studentId,
       fullName: student.studentName,
       phone: student.phone,
@@ -751,12 +812,19 @@ export function PaymentsView() {
               : null,
           }
         : null,
-      teacher: null,
-    });
+      teacher: student.teacherName ? { id: '', fullName: student.teacherName } : null,
+      enrollments: mockEnrollments,
+    };
+
+    // Pre-select the student and auto-select enrollment if available
+    setSelectedStudent(mockSelectedStudent);
+    const autoEnrollment = mockEnrollments.length === 1 ? mockEnrollments[0] : null;
+    setSelectedEnrollment(autoEnrollment);
 
     // Pre-fill form: amount from monthlyFee, paid = 0 (user fills manually), status = pending
     setFormData({
       studentId: student.studentId,
+      enrollmentId: student.enrollmentId || '',
       amount: student.monthlyFee,
       paidAmount: '',
       discount: '',
@@ -792,9 +860,12 @@ export function PaymentsView() {
         monthlyFee: payment.student.monthlyFee,
         level: payment.student.level,
         teacher: payment.student.teacher,
+        enrollments: payment.enrollment ? [payment.enrollment] : [],
       });
+      setSelectedEnrollment(payment.enrollment);
       setFormData({
         studentId: payment.studentId,
+        enrollmentId: payment.enrollmentId || '',
         amount: payment.amount,
         paidAmount: payment.paidAmount,
         discount: payment.discount || 0,
@@ -802,9 +873,7 @@ export function PaymentsView() {
         month: payment.month,
         year: payment.year,
         paymentDate: payment.paymentDate
-          ? (typeof payment.paymentDate === 'string'
-              ? payment.paymentDate.split('T')[0]
-              : payment.paymentDate.toISOString().split('T')[0])
+          ? String(payment.paymentDate).split('T')[0]
           : new Date().toISOString().split('T')[0],
         method: payment.method || 'cash',
         notes: payment.notes || '',
@@ -813,6 +882,7 @@ export function PaymentsView() {
     } else {
       setEditingPayment(null);
       setSelectedStudent(null);
+      setSelectedEnrollment(null);
       setStudentSearchQuery('');
       setStudentSearchResults([]);
       setFormData(defaultFormData);
@@ -831,20 +901,64 @@ export function PaymentsView() {
   const handleSelectStudent = (student: StudentSearchResult) => {
     setSelectedStudent(student);
     setStudentSearchQuery('');
+    
+    // Auto-select enrollment logic
+    const enrollments = student.enrollments || [];
+    if (enrollments.length === 1) {
+      // Auto-select the single enrollment silently
+      const autoEnrollment = enrollments[0];
+      setSelectedEnrollment(autoEnrollment);
+      setFormData((prev) => ({
+        ...prev,
+        studentId: student.id,
+        enrollmentId: autoEnrollment.id,
+        amount: autoEnrollment.monthlyFee || student.monthlyFee || '',
+        packMonths: autoEnrollment.serviceName?.toLowerCase().includes('langues') || autoEnrollment.serviceName?.includes('لغات')
+          ? (student.packMonths || prev.packMonths)
+          : 1,
+      }));
+    } else if (enrollments.length > 1) {
+      // Multiple enrollments — user must choose, don't set amount yet
+      setSelectedEnrollment(null);
+      setFormData((prev) => ({
+        ...prev,
+        studentId: student.id,
+        enrollmentId: '',
+        amount: '',
+        packMonths: 1,
+      }));
+    } else {
+      // No enrollments (legacy) — work as before
+      setSelectedEnrollment(null);
+      setFormData((prev) => ({
+        ...prev,
+        studentId: student.id,
+        enrollmentId: '',
+        amount: student.monthlyFee || '',
+        packMonths: student.level?.subject?.service?.id === 'service_langues'
+          ? (student.packMonths || prev.packMonths)
+          : 1,
+      }));
+    }
+  };
+
+  const handleSelectEnrollment = (enrollment: EnrollmentInfo) => {
+    setSelectedEnrollment(enrollment);
     setFormData((prev) => ({
       ...prev,
-      studentId: student.id,
-      amount: student.monthlyFee || '',
-      packMonths: student.level?.subject?.service?.id === 'service_langues'
-        ? (student.packMonths || prev.packMonths)
+      enrollmentId: enrollment.id,
+      amount: enrollment.monthlyFee || prev.amount,
+      packMonths: enrollment.serviceName?.toLowerCase().includes('langues') || enrollment.serviceName?.includes('لغات')
+        ? prev.packMonths
         : 1,
     }));
   };
 
   const handleClearStudent = () => {
     setSelectedStudent(null);
+    setSelectedEnrollment(null);
     setStudentSearchQuery('');
-    setFormData((prev) => ({ ...prev, studentId: '', amount: '', packMonths: 1 }));
+    setFormData((prev) => ({ ...prev, studentId: '', enrollmentId: '', amount: '', packMonths: 1 }));
   };
 
   // Computed amounts
@@ -893,6 +1007,7 @@ export function PaymentsView() {
         remainingAmount:
           netAmount - (Number(formData.paidAmount) || 0),
         status: autoStatus,
+        enrollmentId: formData.enrollmentId || null,
       };
 
       const url = editingPayment
@@ -1200,13 +1315,19 @@ export function PaymentsView() {
                           <p className="font-medium text-sm">
                             {payment.student.fullName}
                           </p>
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            {payment.student.level && payment.student.level.subject && (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                            {payment.enrollment ? (
+                              <span className="inline-flex items-center gap-1 bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded text-[10px] font-medium">
+                                <BookOpen className="h-2.5 w-2.5" />
+                                {payment.enrollment.serviceName}
+                                {payment.enrollment.levelName ? ` — ${payment.enrollment.levelName}` : ''}
+                              </span>
+                            ) : payment.student.level && payment.student.level.subject ? (
                               <span>
                                 {payment.student.level.subject.nameAr} -{' '}
                                 {payment.student.level.nameAr}
                               </span>
-                            )}
+                            ) : null}
                           </div>
                         </div>
                       </TableCell>
@@ -1390,6 +1511,11 @@ export function PaymentsView() {
                                     {s.monthlyFee.toLocaleString()} {t.common.month}
                                   </span>
                                 )}
+                                {(s.enrollments || []).length > 1 && (
+                                  <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">
+                                    {s.enrollments.length} {t.payments.enrollmentLabel}
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </button>
@@ -1478,11 +1604,24 @@ export function PaymentsView() {
                             {t.students.monthlyFeeSection}:{' '}
                           </span>
                           <span className="font-bold text-teal-700">
-                            {selectedStudent.monthlyFee.toLocaleString()}{' '}
+                            {selectedEnrollment
+                              ? selectedEnrollment.monthlyFee.toLocaleString()
+                              : selectedStudent.monthlyFee.toLocaleString()}{' '}
                             {t.common.dh}
                           </span>
                         </div>
-                        {selectedStudent.level && selectedStudent.level.subject && (
+                        {selectedEnrollment ? (
+                          <div>
+                            <span className="text-muted-foreground">
+                              {t.payments.enrollmentLabel}:{' '}
+                            </span>
+                            <span className="font-medium">
+                              {selectedEnrollment.serviceName}
+                              {selectedEnrollment.subjectName ? ` — ${selectedEnrollment.subjectName}` : ''}
+                              {selectedEnrollment.levelName ? ` — ${selectedEnrollment.levelName}` : ''}
+                            </span>
+                          </div>
+                        ) : selectedStudent.level && selectedStudent.level.subject ? (
                           <div>
                             <span className="text-muted-foreground">
                               {t.students.level}:{' '}
@@ -1490,6 +1629,16 @@ export function PaymentsView() {
                             <span className="font-medium">
                               {selectedStudent.level.subject.nameAr} -{' '}
                               {selectedStudent.level.nameAr}
+                            </span>
+                          </div>
+                        ) : null}
+                        {selectedEnrollment?.teacherName && (
+                          <div>
+                            <span className="text-muted-foreground">
+                              {t.students.teacher}:{' '}
+                            </span>
+                            <span className="font-medium">
+                              {selectedEnrollment.teacherName}
                             </span>
                           </div>
                         )}
@@ -1506,6 +1655,83 @@ export function PaymentsView() {
                       </div>
                     </div>
                   </div>
+
+                  {/* ── Enrollment Selection (multiple enrollments only) ── */}
+                  {!editingPayment && selectedStudent && (selectedStudent.enrollments || []).length > 1 && !selectedEnrollment && (
+                    <div className="space-y-3">
+                      <Label className="text-sm font-semibold flex items-center gap-2">
+                        <BookOpen className="h-4 w-4 text-primary" />
+                        {t.payments.selectEnrollment}
+                      </Label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {selectedStudent.enrollments.map((enr) => (
+                          <button
+                            key={enr.id}
+                            type="button"
+                            onClick={() => handleSelectEnrollment(enr)}
+                            className="flex items-start gap-3 p-3 rounded-lg border-2 border-muted bg-card hover:border-teal-400 hover:bg-teal-50/30 transition-colors text-right w-full"
+                          >
+                            <div className="h-9 w-9 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center shrink-0 mt-0.5">
+                              <GraduationCap className="h-4 w-4" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-sm truncate">
+                                {enr.serviceName}
+                              </p>
+                              {enr.subjectName && (
+                                <p className="text-xs text-muted-foreground truncate">
+                                  {enr.subjectName}
+                                  {enr.levelName ? ` — ${enr.levelName}` : ''}
+                                </p>
+                              )}
+                              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                {enr.monthlyFee > 0 && (
+                                  <span className="text-[10px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded">
+                                    {enr.monthlyFee.toLocaleString()} {t.common.month}
+                                  </span>
+                                )}
+                                {enr.teacherName && (
+                                  <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+                                    {enr.teacherName}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Show selected enrollment badge (when auto-selected or manually chosen) */}
+                  {!editingPayment && selectedStudent && selectedEnrollment && (selectedStudent.enrollments || []).length > 1 && (
+                    <div className="flex items-center justify-between p-3 rounded-lg border border-teal-200 bg-teal-50/50">
+                      <div className="flex items-center gap-2 text-sm">
+                        <GraduationCap className="h-4 w-4 text-teal-600" />
+                        <span className="font-semibold text-teal-700">
+                          {selectedEnrollment.serviceName}
+                        </span>
+                        {selectedEnrollment.subjectName && (
+                          <span className="text-xs text-teal-600">
+                            — {selectedEnrollment.subjectName}
+                            {selectedEnrollment.levelName ? ` — ${selectedEnrollment.levelName}` : ''}
+                          </span>
+                        )}
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedEnrollment(null);
+                          setFormData((prev) => ({ ...prev, enrollmentId: '', amount: '', packMonths: 1 }));
+                        }}
+                        className="h-7 text-xs text-muted-foreground hover:text-red-600"
+                      >
+                        <X className="h-3 w-3 ml-1" />
+                        {t.common.edit}
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1772,7 +1998,7 @@ export function PaymentsView() {
                 </Button>
                 <Button
                   onClick={handleSubmit}
-                  disabled={submitting}
+                  disabled={submitting || (!editingPayment && !!selectedStudent && (selectedStudent.enrollments || []).length > 1 && !formData.enrollmentId)}
                   className="gap-2 bg-emerald-600 hover:bg-emerald-700"
                 >
                   {submitting ? (
@@ -1877,11 +2103,18 @@ export function PaymentsView() {
                                         {t.students.guardian}{student.parentName}
                                       </span>
                                     )}
-                                    {student.subjectName && (
-                                      <span className="text-[11px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded inline-block mt-0.5">
-                                        {student.subjectName}
-                                      </span>
-                                    )}
+                                    <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                                      {student.subjectName && (
+                                        <span className="text-[11px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded inline-block">
+                                          {student.subjectName}
+                                        </span>
+                                      )}
+                                      {student.teacherName && (
+                                        <span className="text-[11px] bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded inline-block">
+                                          {student.teacherName}
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
                                   <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                                     {student.phone && (
@@ -1952,7 +2185,7 @@ export function PaymentsView() {
           <AlertDialogHeader>
             <AlertDialogTitle>{t.common.deleteConfirm}</AlertDialogTitle>
             <AlertDialogDescription>
-              {t.common.deleteConfirmMsg} {t.common.cannotUndo}
+              {t.common.deleteConfirm} {t.common.cannotUndo}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
