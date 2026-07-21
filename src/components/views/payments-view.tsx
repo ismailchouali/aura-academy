@@ -632,6 +632,31 @@ export function PaymentsView() {
   const [overdueLoading, setOverdueLoading] = useState(false);
 
 
+  // ── Helpers: transform raw API data to flat frontend types ──
+  const toEnrollmentInfo = (e: any): EnrollmentInfo => ({
+    id: e.id,
+    serviceName: e.service?.nameAr || e.serviceName || '',
+    subjectName: e.subject?.nameAr || e.subjectName || null,
+    levelName: e.level?.nameAr || e.levelName || null,
+    teacherName: e.teacher?.fullName || e.teacherName || null,
+    monthlyFee: e.monthlyFee ?? 0,
+  });
+
+  const toFlatStudent = (s: any): StudentSearchResult => ({
+    id: s.id,
+    fullName: s.fullName,
+    phone: s.phone,
+    parentName: s.parentName,
+    parentPhone: s.parentPhone,
+    monthlyFee: s.monthlyFee,
+    packMonths: s.packMonths,
+    level: s.level,
+    teacher: s.teacher,
+    enrollments: Array.isArray(s.enrollments)
+      ? s.enrollments.map(toEnrollmentInfo)
+      : [],
+  });
+
   // ── Data fetching ──────────────────────────────────────────────────────
 
   const fetchPayments = useCallback(async () => {
@@ -646,8 +671,13 @@ export function PaymentsView() {
       if (filterLevelId !== 'all') params.set('levelId', filterLevelId);
       const res = await fetch(`/api/payments?${params.toString()}`);
       if (!res.ok) throw new Error();
-      const json = await res.json();
-      setPayments(json);
+      const raw = await res.json();
+      // Flatten enrollment data in each payment
+      const flat = raw.map((p: any) => ({
+        ...p,
+        enrollment: p.enrollment ? toEnrollmentInfo(p.enrollment) : null,
+      }));
+      setPayments(flat);
     } catch {
       toast.error(t.payments.fetchError);
     } finally {
@@ -693,8 +723,9 @@ export function PaymentsView() {
       const res = await fetch('/api/students');
       if (!res.ok) throw new Error();
       const json = await res.json();
-      setAllStudents(json);
-      setStudentSearchResults(json);
+      const flat = json.map(toFlatStudent);
+      setAllStudents(flat);
+      setStudentSearchResults(flat);
     } catch {
       console.error('Failed to load students for payment dialog');
       setAllStudents([]);
@@ -1026,12 +1057,16 @@ export function PaymentsView() {
 
       // Offer to print bon for new payments
       if (!editingPayment) {
-        const savedPayment = await res.json();
+        const raw = await res.json();
+        const savedPayment = {
+          ...raw,
+          enrollment: raw.enrollment ? toEnrollmentInfo(raw.enrollment) : null,
+        };
         setDialogOpen(false);
         fetchPayments();
         setTimeout(() => {
           if (confirm(t.common.printQuestion)) {
-            generateBon(savedPayment);
+            generateBon(savedPayment as Payment);
           }
         }, 300);
         return;
