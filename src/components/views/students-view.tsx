@@ -1394,6 +1394,75 @@ export function StudentsView() {
                 ) : (
                   <div className="space-y-2">
                     {editEnrollments.map((enr, idx) => renderEditEnrollmentCard(enr, idx))}
+                    {/* Fee inputs for each enrollment (admin only) */}
+                    {isAdmin && editEnrollments.length > 0 && (
+                      <div className="space-y-3 pt-1">
+                        <h4 className="text-sm font-semibold flex items-center gap-2">
+                          <Wallet className="h-4 w-4 text-amber-600" />
+                          {t.students.enrollmentFee}
+                        </h4>
+                        {editEnrollments.map((enr, idx) => {
+                          const svc = services.find((s) => s.id === enr.serviceId);
+                          const isLangues = svc?.id === 'service_langues';
+                          const label = [enr.service?.nameAr, enr.subject?.nameAr, enr.level?.nameAr].filter(Boolean).join(' — ');
+                          return (
+                            <div key={enr.id || idx} className="p-2 rounded-lg border bg-muted/20 space-y-2">
+                              <p className="text-xs text-muted-foreground truncate">
+                                {label}
+                              </p>
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={enr.monthlyFee || ''}
+                                  onChange={(e) => {
+                                    setEditEnrollments((prev) =>
+                                      prev.map((en, i) =>
+                                        i === idx ? { ...en, monthlyFee: parseFloat(e.target.value) || 0 } : en
+                                      )
+                                    );
+                                  }}
+                                  placeholder="0"
+                                  dir="ltr"
+                                  className="text-left h-8 text-sm"
+                                />
+                                <span className="text-xs text-muted-foreground shrink-0">{t.common.dh}</span>
+                              </div>
+                              {isLangues && (
+                                <div className="flex gap-1.5">
+                                  {[
+                                    { value: 1, label: t.payments.pack1 },
+                                    { value: 3, label: t.payments.pack3 },
+                                    { value: 6, label: t.payments.pack6 },
+                                    { value: 9, label: t.payments.pack9 },
+                                  ].map((opt) => (
+                                    <button
+                                      key={opt.value}
+                                      type="button"
+                                      onClick={() => {
+                                        setEditEnrollments((prev) =>
+                                          prev.map((en, i) =>
+                                            i === idx ? { ...en, packMonths: opt.value } : en
+                                          )
+                                        );
+                                      }}
+                                      className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
+                                        enr.packMonths === opt.value
+                                          ? 'bg-teal-100 text-teal-700 border-teal-300'
+                                          : 'bg-white text-muted-foreground border-border hover:border-teal-300'
+                                      }`}
+                                    >
+                                      {opt.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                     {/* Show total fee */}
                     {isAdmin && editEnrollments.length > 1 && (
                       <div className="flex items-center justify-end gap-2 pt-1">
