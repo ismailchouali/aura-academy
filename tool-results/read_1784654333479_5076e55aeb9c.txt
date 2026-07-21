@@ -1,0 +1,2002 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+     4→     4→import { toast } from 'sonner';
+     5→     5→import { useT } from '@/hooks/use-translation';
+     6→     6→import { useAppStore } from '@/store/store';
+     7→     7→import { Button } from '@/components/ui/button';
+     8→     8→import { Input } from '@/components/ui/input';
+     9→     9→import { Label } from '@/components/ui/label';
+    10→    10→import { Skeleton } from '@/components/ui/skeleton';
+    11→    11→import { Badge } from '@/components/ui/badge';
+    12→    12→import { Switch } from '@/components/ui/switch';
+    13→    13→import { Card, CardContent } from '@/components/ui/card';
+    14→    14→import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    15→    15→import {
+    16→    16→  Table,
+    17→    17→  TableBody,
+    18→    18→  TableCell,
+    19→    19→  TableHead,
+    20→    20→  TableHeader,
+    21→    21→  TableRow,
+    22→    22→} from '@/components/ui/table';
+    23→    23→import {
+    24→    24→  Dialog,
+    25→    25→  DialogContent,
+    26→    26→  DialogDescription,
+    27→    27→  DialogFooter,
+    28→    28→  DialogHeader,
+    29→    29→  DialogTitle,
+    30→    30→} from '@/components/ui/dialog';
+    31→    31→import {
+    32→    32→  AlertDialog,
+    33→    33→  AlertDialogAction,
+    34→    34→  AlertDialogCancel,
+    35→    35→  AlertDialogContent,
+    36→    36→  AlertDialogDescription,
+    37→    37→  AlertDialogFooter,
+    38→    38→  AlertDialogHeader,
+    39→    39→  AlertDialogTitle,
+    40→    40→  AlertDialogTrigger,
+    41→    41→} from '@/components/ui/alert-dialog';
+    42→    42→import {
+    43→    43→  Plus,
+    44→    44→  Search,
+    45→    45→  Pencil,
+    46→    46→  Trash2,
+    47→    47→  Users,
+    48→    48→  Phone,
+    49→    49→  UserCheck,
+    50→    50→  GraduationCap,
+    51→    51→  Wallet,
+    52→    52→  Loader2,
+    53→    53→  ChevronLeft,
+    54→    54→  ChevronRight,
+    55→    55→  BookOpen,
+    56→    56→  Layers,
+    57→    57→  UserMinus,
+    58→    58→  Sparkles,
+    59→    59→  CircleCheck,
+    60→    60→  CircleAlert,
+    61→    61→  X,
+    62→    62→} from 'lucide-react';
+    63→    63→
+    64→    64→// ── Types ──────────────────────────────────────────────────────────────────
+    65→    65→
+    66→    66→interface Enrollment {
+    67→    67→  id?: string;
+    68→    68→  studentId?: string;
+    69→    69→  serviceId: string;
+    70→    70→  service: { id: string; name: string; nameAr: string; nameFr: string } | null;
+    71→    71→  subjectId: string | null;
+    72→    72→  subject: { id: string; name: string; nameAr: string; nameFr: string } | null;
+    73→    73→  levelId: string | null;
+    74→    74→  level: {
+    75→    75→    id: string;
+    76→    76→    name: string;
+    77→    77→    nameAr: string;
+    78→    78→    nameFr: string;
+    79→    79→    subject?: { nameAr: string; name?: string; service?: { id: string; nameAr: string } };
+    80→    80→  } | null;
+    81→    81→  teacherId: string | null;
+    82→    82→  teacher: { id: string; fullName: string } | null;
+    83→    83→  monthlyFee: number;
+    84→    84→  packMonths: number;
+    85→    85→  status: string;
+    86→    86→  enrollmentDate: string;
+    87→    87→  isPackPaid?: boolean;
+    88→    88→  nextDueDate?: string | null;
+    89→    89→  payments?: any[];
+    90→    90→}
+    91→    91→
+    92→    92→interface Student {
+    93→    93→  id: string;
+    94→    94→  fullName: string;
+    95→    95→  phone: string | null;
+    96→    96→  email: string | null;
+    97→    97→  address: string | null;
+    98→    98→  parentName: string | null;
+    99→    99→  parentPhone: string | null;
+   100→   100→  status: string;
+   101→   101→  enrollmentDate: string;
+   102→   102→  enrollments: Enrollment[];
+   103→   103→  // Legacy fields (kept for backward compatibility if API returns them)
+   104→   104→  levelId?: string | null;
+   105→   105→  level?: any;
+   106→   106→  teacherId?: string | null;
+   107→   107→  teacher?: any;
+   108→   108→  monthlyFee?: number;
+   109→   109→  packMonths?: number;
+   110→   110→  isPackPaid?: boolean;
+   111→   111→  nextDueDate?: string | null;
+   112→   112→}
+   113→   113→
+   114→   114→interface Service {
+   115→   115→  id: string;
+   116→   116→  name: string;
+   117→   117→  nameAr: string;
+   118→   118→  nameFr: string;
+   119→   119→  description: string | null;
+   120→   120→  icon: string | null;
+   121→   121→  order: number;
+   122→   122→  subjects: Subject[];
+   123→   123→}
+   124→   124→
+   125→   125→interface Subject {
+   126→   126→  id: string;
+   127→   127→  name: string;
+   128→   128→  nameAr: string;
+   129→   129→  nameFr: string;
+   130→   130→  levels: Level[];
+   131→   131→  order: number;
+   132→   132→}
+   133→   133→
+   134→   134→interface Level {
+   135→   135→  id: string;
+   136→   136→  name: string;
+   137→   137→  nameAr: string;
+   138→   138→  nameFr: string;
+   139→   139→}
+   140→   140→
+   141→   141→interface Teacher {
+   142→   142→  id: string;
+   143→   143→  fullName: string;
+   144→   144→  phone: string | null;
+   145→   145→  email: string | null;
+   146→   146→  status: string;
+   147→   147→  subjects: {
+   148→   148→    id: string;
+   149→   149→    teacherId: string;
+   150→   150→    subjectId: string;
+   151→   151→    subject: { id: string; name: string; nameAr: string };
+   152→   152→  }[];
+   153→   153→}
+   154→   154→
+   155→   155→interface EnrollmentDraft {
+   156→   156→  serviceId: string;
+   157→   157→  serviceNameAr: string;
+   158→   158→  subjectId: string;
+   159→   159→  subjectNameAr: string;
+   160→   160→  levelId: string;
+   161→   161→  levelNameAr: string;
+   162→   162→  teacherId: string | null;
+   163→   163→  teacherName: string;
+   164→   164→  noTeacher: boolean;
+   165→   165→  monthlyFee: string;
+   166→   166→  packMonths: number;
+   167→   167→}
+   168→   168→
+   169→   169→interface FormState {
+   170→   170→  fullName: string;
+   171→   171→  phone: string;
+   172→   172→  parentName: string;
+   173→   173→  parentPhone: string;
+   174→   174→  enrollmentDate: string;
+   175→   175→}
+   176→   176→
+   177→   177→type WizardStep = 1 | 2 | 3 | 4 | 5;
+   178→   178→
+   179→   179→const initialForm: FormState = {
+   180→   180→  fullName: '',
+   181→   181→  phone: '',
+   182→   182→  parentName: '',
+   183→   183→  parentPhone: '',
+   184→   184→  enrollmentDate: new Date().toISOString().split('T')[0],
+   185→   185→};
+   186→   186→
+   187→   187→const emptyDraft = (): EnrollmentDraft => ({
+   188→   188→  serviceId: '',
+   189→   189→  serviceNameAr: '',
+   190→   190→  subjectId: '',
+   191→   191→  subjectNameAr: '',
+   192→   192→  levelId: '',
+   193→   193→  levelNameAr: '',
+   194→   194→  teacherId: null,
+   195→   195→  teacherName: '',
+   196→   196→  noTeacher: false,
+   197→   197→  monthlyFee: '',
+   198→   198→  packMonths: 1,
+   199→   199→});
+   200→   200→
+   201→   201→// ── Service icons map ──────────────────────────────────────────────────────
+   202→   202→
+   203→   203→const serviceIcons: Record<string, React.ElementType> = {
+   204→   204→  'Cours de Soutiens': GraduationCap,
+   205→   205→  'Langues': BookOpen,
+   206→   206→  'Informatique': Sparkles,
+   207→   207→  'Préparation Concours': Layers,
+   208→   208→};
+   209→   209→
+   210→   210→// ── Color helpers ──────────────────────────────────────────────────────────
+   211→   211→
+   212→   212→function getAvatarColor(name: string): string {
+   213→   213→  const colors = [
+   214→   214→    'bg-teal-100 text-teal-700',
+   215→   215→    'bg-amber-100 text-amber-700',
+   216→   216→    'bg-rose-100 text-rose-700',
+   217→   217→    'bg-violet-100 text-violet-700',
+   218→   218→    'bg-emerald-100 text-emerald-700',
+   219→   219→    'bg-cyan-100 text-cyan-700',
+   220→   220→  ];
+   221→   221→  let hash = 0;
+   222→   222→  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+   223→   223→  return colors[Math.abs(hash) % colors.length];
+   224→   224→}
+   225→   225→
+   226→   226→// ── Component ──────────────────────────────────────────────────────────────
+   227→   227→
+   228→   228→export function StudentsView() {
+   229→   229→  const t = useT();
+   230→   230→  const { userRole } = useAppStore();
+   231→   231→  const isAdmin = userRole === 'ADMIN';
+   232→   232→
+   233→   233→  // ── Data state ──────────────────────────────────────────────────────────
+   234→   234→  const [students, setStudents] = useState<Student[]>([]);
+   235→   235→  const [services, setServices] = useState<Service[]>([]);
+   236→   236→  const [teachers, setTeachers] = useState<Teacher[]>([]);
+   237→   237→  const [loading, setLoading] = useState(true);
+   238→   238→  const [search, setSearch] = useState('');
+   239→   239→  const [statusFilter, setStatusFilter] = useState('all');
+   240→   240→
+   241→   241→  // ── Table filter state (service → subject → level) ────────────────
+   242→   242→  const [filterServiceId, setFilterServiceId] = useState('');
+   243→   243→  const [filterSubjectId, setFilterSubjectId] = useState('');
+   244→   244→  const [filterLevelId, setFilterLevelId] = useState('');
+   245→   245→
+   246→   246→  // ── Wizard state ────────────────────────────────────────────────────────
+   247→   247→  const [dialogOpen, setDialogOpen] = useState(false);
+   248→   248→  const [wizardStep, setWizardStep] = useState<WizardStep>(1);
+   249→   249→  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+   250→   250→
+   251→   251→  // Current draft being built in steps 1-4
+   252→   252→  const [currentDraft, setCurrentDraft] = useState<EnrollmentDraft>(emptyDraft());
+   253→   253→
+   254→   254→  // Accumulated enrollments when adding a new student (step 5 collects these)
+   255→   255→  const [enrollmentsBeingAdded, setEnrollmentsBeingAdded] = useState<EnrollmentDraft[]>([]);
+   256→   256→
+   257→   257→  // Existing enrollments when editing
+   258→   258→  const [editEnrollments, setEditEnrollments] = useState<Enrollment[]>([]);
+   259→   259→
+   260→   260→  const [form, setForm] = useState<FormState>(initialForm);
+   261→   261→  const [submitting, setSubmitting] = useState(false);
+   262→   262→
+   263→   263→  // ── Ref for fullName input (auto-focus only once on step 5) ─────────────
+   264→   264→  const fullNameInputRef = useRef<HTMLInputElement>(null);
+   265→   265→  const prevStepRef = useRef<WizardStep>(1);
+   266→   266→
+   267→   267→  useEffect(() => {
+   268→   268→    if (wizardStep === 5 && prevStepRef.current !== 5) {
+   269→   269→      setTimeout(() => fullNameInputRef.current?.focus(), 100);
+   270→   270→    }
+   271→   271→    prevStepRef.current = wizardStep;
+   272→   272→  }, [wizardStep]);
+   273→   273→
+   274→   274→  // ── Delete state ────────────────────────────────────────────────────────
+   275→   275→  const [deletingId, setDeletingId] = useState<string | null>(null);
+   276→   276→
+   277→   277→  // ── Computed: student count per teacher (from enrollments) ─────────────
+   278→   278→  const studentCountsMap = useMemo(() => {
+   279→   279→    const map: Record<string, number> = {};
+   280→   280→    const counted = new Set<string>();
+   281→   281→    for (const s of students) {
+   282→   282→      const enrollments = s.enrollments || [];
+   283→   283→      if (enrollments.length > 0) {
+   284→   284→        for (const e of enrollments) {
+   285→   285→          if (e.teacherId && !counted.has(`${s.id}-${e.teacherId}`)) {
+   286→   286→            map[e.teacherId] = (map[e.teacherId] || 0) + 1;
+   287→   287→            counted.add(`${s.id}-${e.teacherId}`);
+   288→   288→          }
+   289→   289→        }
+   290→   290→      } else if (s.teacherId) {
+   291→   291→        // Legacy fallback
+   292→   292→        map[s.teacherId] = (map[s.teacherId] || 0) + 1;
+   293→   293→      }
+   294→   294→    }
+   295→   295→    return map;
+   296→   296→  }, [students]);
+   297→   297→
+   298→   298→  // ── Computed: filter subjects dropdown based on selected service ───
+   299→   299→  const filterSubjects = useMemo(() => {
+   300→   300→    if (!filterServiceId) return [];
+   301→   301→    const svc = services.find((s) => s.id === filterServiceId);
+   302→   302→    return svc?.subjects || [];
+   303→   303→  }, [filterServiceId, services]);
+   304→   304→
+   305→   305→  // ── Computed: filter levels dropdown based on selected subject ──────
+   306→   306→  const filterLevels = useMemo(() => {
+   307→   307→    if (!filterSubjectId) return [];
+   308→   308→    const svc = services.find((s) => s.id === filterServiceId);
+   309→   309→    const subj = svc?.subjects.find((sub) => sub.id === filterSubjectId);
+   310→   310→    return subj?.levels || [];
+   311→   311→  }, [filterServiceId, filterSubjectId, services]);
+   312→   312→
+   313→   313→  // ── Computed: displayed students after all filters (based on enrollments) ─
+   314→   314→  const displayedStudents = useMemo(() => {
+   315→   315→    return students.filter((s) => {
+   316→   316→      const enrollments = s.enrollments || [];
+   317→   317→      if (enrollments.length > 0) {
+   318→   318→        const matches = enrollments.some((e) => {
+   319→   319→          if (filterServiceId && e.serviceId !== filterServiceId) return false;
+   320→   320→          if (filterSubjectId && e.subjectId !== filterSubjectId) return false;
+   321→   321→          if (filterLevelId && e.levelId !== filterLevelId) return false;
+   322→   322→          return true;
+   323→   323→        });
+   324→   324→        if (!matches) return false;
+   325→   325→      } else {
+   326→   326→        // Legacy fallback
+   327→   327→        if (filterServiceId && s.level?.subject?.service?.id !== filterServiceId) return false;
+   328→   328→        if (filterSubjectId && s.level?.subject?.id !== filterSubjectId) return false;
+   329→   329→        if (filterLevelId && s.levelId !== filterLevelId) return false;
+   330→   330→      }
+   331→   331→      return true;
+   332→   332→    });
+   333→   333→  }, [students, filterServiceId, filterSubjectId, filterLevelId]);
+   334→   334→
+   335→   335→  // Reset child filters when parent changes
+   336→   336→  const handleFilterServiceChange = (v: string) => {
+   337→   337→    setFilterServiceId(v);
+   338→   338→    setFilterSubjectId('');
+   339→   339→    setFilterLevelId('');
+   340→   340→  };
+   341→   341→  const handleFilterSubjectChange = (v: string) => {
+   342→   342→    setFilterSubjectId(v);
+   343→   343→    setFilterLevelId('');
+   344→   344→  };
+   345→   345→
+   346→   346→  // ── Computed: filtered subjects for step 2 (based on currentDraft.serviceId) ─
+   347→   347→  const filteredSubjects = useMemo(() => {
+   348→   348→    const svc = services.find((s) => s.id === currentDraft.serviceId);
+   349→   349→    return svc?.subjects || [];
+   350→   350→  }, [currentDraft.serviceId, services]);
+   351→   351→
+   352→   352→  // ── Computed: filtered levels for step 3 (deduplicated by name) ───────
+   353→   353→  const filteredLevels = useMemo(() => {
+   354→   354→    const svc = services.find((s) => s.id === currentDraft.serviceId);
+   355→   355→    const subj = svc?.subjects.find((sub) => sub.id === currentDraft.subjectId);
+   356→   356→    if (!subj) return [];
+   357→   357→    const levels = subj.levels || [];
+   358→   358→    const seen = new Map<string, Level>();
+   359→   359→    for (const lvl of levels) {
+   360→   360→      if (!seen.has(lvl.name)) {
+   361→   361→        seen.set(lvl.name, lvl);
+   362→   362→      }
+   363→   363→    }
+   364→   364→    return Array.from(seen.values());
+   365→   365→  }, [currentDraft.serviceId, currentDraft.subjectId, services]);
+   366→   366→
+   367→   367→  // ── Computed: filtered teachers for step 4 ─────────────────────────────
+   368→   368→  const filteredTeachers = useMemo(() => {
+   369→   369→    if (!currentDraft.subjectId) return [];
+   370→   370→    return teachers.filter(
+   371→   371→      (teacher) =>
+   372→   372→        teacher.status === 'active' &&
+   373→   373→        teacher.subjects.some((ts) => ts.subjectId === currentDraft.subjectId)
+   374→   374→    );
+   375→   375→  }, [teachers, currentDraft.subjectId]);
+   376→   376→
+   377→   377→  // ── Data fetching ──────────────────────────────────────────────────────
+   378→   378→
+   379→   379→  const fetchStudents = useCallback(async () => {
+   380→   380→    try {
+   381→   381→      const params = new URLSearchParams();
+   382→   382→      if (search) params.set('search', search);
+   383→   383→      if (statusFilter !== 'all') params.set('status', statusFilter);
+   384→   384→      const res = await fetch(`/api/students?${params.toString()}`);
+   385→   385→      if (!res.ok) throw new Error();
+   386→   386→      const json = await res.json();
+   387→   387→      setStudents(json);
+   388→   388→    } catch {
+   389→   389→      toast.error(t.common.fetchError);
+   390→   390→    } finally {
+   391→   391→      setLoading(false);
+   392→   392→    }
+   393→   393→  }, [search, statusFilter, t.common.fetchError]);
+   394→   394→
+   395→   395→  const fetchServices = useCallback(async () => {
+   396→   396→    try {
+   397→   397→      const res = await fetch('/api/services');
+   398→   398→      if (!res.ok) throw new Error();
+   399→   399→      const json = await res.json();
+   400→   400→      setServices(json);
+   401→   401→    } catch {
+   402→   402→      toast.error(t.common.fetchError);
+   403→   403→    }
+   404→   404→  }, [t.common.fetchError]);
+   405→   405→
+   406→   406→  const fetchTeachers = useCallback(async () => {
+   407→   407→    try {
+   408→   408→      const res = await fetch('/api/teachers');
+   409→   409→      if (!res.ok) throw new Error();
+   410→   410→      const json = await res.json();
+   411→   411→      setTeachers(json);
+   412→   412→    } catch {
+   413→   413→      toast.error(t.common.fetchError);
+   414→   414→    }
+   415→   415→  }, [t.common.fetchError]);
+   416→   416→
+   417→   417→  useEffect(() => {
+   418→   418→    setLoading(true);
+   419→   419→    fetchStudents();
+   420→   420→  }, [fetchStudents]);
+   421→   421→
+   422→   422→  useEffect(() => {
+   423→   423→    fetchServices();
+   424→   424→    fetchTeachers();
+   425→   425→  }, [fetchServices, fetchTeachers]);
+   426→   426→
+   427→   427→  // Debounced search
+   428→   428→  useEffect(() => {
+   429→   429→    const timer = setTimeout(() => {
+   430→   430→      setLoading(true);
+   431→   431→      fetchStudents();
+   432→   432→    }, 300);
+   433→   433→    return () => clearTimeout(timer);
+   434→   434→  }, [search]);
+   435→   435→
+   436→   436→  // ── Wizard navigation ──────────────────────────────────────────────────
+   437→   437→
+   438→   438→  const resetWizard = useCallback(() => {
+   439→   439→    setWizardStep(1);
+   440→   440→    setCurrentDraft(emptyDraft());
+   441→   441→    setEnrollmentsBeingAdded([]);
+   442→   442→    setEditEnrollments([]);
+   443→   443→    setForm({ ...initialForm });
+   444→   444→    setEditingStudent(null);
+   445→   445→  }, []);
+   446→   446→
+   447→   447→  const handleOpenDialog = (student?: Student) => {
+   448→   448→    if (student) {
+   449→   449→      // Edit mode: show personal info + existing enrollments
+   450→   450→      setEditingStudent(student);
+   451→   451→      setForm({
+   452→   452→        fullName: student.fullName,
+   453→   453→        phone: student.phone || '',
+   454→   454→        parentName: student.parentName || '',
+   455→   455→        parentPhone: student.parentPhone || '',
+   456→   456→        enrollmentDate: student.enrollmentDate
+   457→   457→          ? new Date(student.enrollmentDate).toISOString().split('T')[0]
+   458→   458→          : new Date().toISOString().split('T')[0],
+   459→   459→      });
+   460→   460→      setEditEnrollments(student.enrollments || []);
+   461→   461→      setCurrentDraft(emptyDraft());
+   462→   462→      setEnrollmentsBeingAdded([]);
+   463→   463→      setWizardStep(5);
+   464→   464→    } else {
+   465→   465→      // Add mode: start from step 1
+   466→   466→      resetWizard();
+   467→   467→    }
+   468→   468→    setDialogOpen(true);
+   469→   469→  };
+   470→   470→
+   471→   471→  // ── Step 1-4 handlers (modify currentDraft) ──────────────────────────
+   472→   472→
+   473→   473→  const handleSelectService = (service: Service) => {
+   474→   474→    setCurrentDraft((d) => ({
+   475→   475→      ...d,
+   476→   476→      serviceId: service.id,
+   477→   477→      serviceNameAr: service.nameAr,
+   478→   478→      subjectId: '',
+   479→   479→      subjectNameAr: '',
+   480→   480→      levelId: '',
+   481→   481→      levelNameAr: '',
+   482→   482→      teacherId: null,
+   483→   483→      teacherName: '',
+   484→   484→      noTeacher: false,
+   485→   485→      monthlyFee: '',
+   486→   486→      packMonths: 1,
+   487→   487→    }));
+   488→   488→    setWizardStep(2);
+   489→   489→  };
+   490→   490→
+   491→   491→  const handleSelectSubject = (subject: Subject) => {
+   492→   492→    setCurrentDraft((d) => ({
+   493→   493→      ...d,
+   494→   494→      subjectId: subject.id,
+   495→   495→      subjectNameAr: subject.nameAr,
+   496→   496→      levelId: '',
+   497→   497→      levelNameAr: '',
+   498→   498→      teacherId: null,
+   499→   499→      teacherName: '',
+   500→   500→      noTeacher: false,
+   501→   501→    }));
+   502→   502→    setWizardStep(3);
+   503→   503→  };
+   504→   504→
+   505→   505→  const handleSelectLevel = (level: Level) => {
+   506→   506→    setCurrentDraft((d) => ({
+   507→   507→      ...d,
+   508→   508→      levelId: level.id,
+   509→   509→      levelNameAr: level.nameAr,
+   510→   510→      teacherId: null,
+   511→   511→      teacherName: '',
+   512→   512→      noTeacher: false,
+   513→   513→    }));
+   514→   514→    setWizardStep(4);
+   515→   515→  };
+   516→   516→
+   517→   517→  const handleSelectTeacher = (teacher: Teacher | null) => {
+   518→   518→    if (teacher === null) {
+   519→   519→      setCurrentDraft((d) => ({ ...d, teacherId: null, teacherName: '', noTeacher: true }));
+   520→   520→    } else {
+   521→   521→      setCurrentDraft((d) => ({ ...d, teacherId: teacher.id, teacherName: teacher.fullName, noTeacher: false }));
+   522→   522→    }
+   523→   523→    // Save the draft and go to step 5
+   524→   524→    const teacherId = teacher ? teacher.id : null;
+   525→   525→    const teacherName = teacher ? teacher.fullName : '';
+   526→   526→    const noTeacherFlag = !teacher;
+   527→   527→    setEnrollmentsBeingAdded((prev) => [...prev, { ...currentDraft, teacherId, teacherName, noTeacher: noTeacherFlag }]);
+   528→   528→    setCurrentDraft(emptyDraft());
+   529→   529→    setWizardStep(5);
+   530→   530→  };
+   531→   531→
+   532→   532→  const handleSkipTeacher = () => {
+   533→   533→    setEnrollmentsBeingAdded((prev) => [...prev, { ...currentDraft, teacherId: null, teacherName: '', noTeacher: true }]);
+   534→   534→    setCurrentDraft(emptyDraft());
+   535→   535→    setWizardStep(5);
+   536→   536→  };
+   537→   537→
+   538→   538→  const goToStep = (step: WizardStep) => {
+   539→   539→    if (step < wizardStep) {
+   540→   540→      setWizardStep(step);
+   541→   541→    }
+   542→   542→  };
+   543→   543→
+   544→   544→  // ── Add another service from step 5 (go back to step 1, keep form) ──
+   545→   545→  const handleAddAnotherService = () => {
+   546→   546→    setCurrentDraft(emptyDraft());
+   547→   547→    setWizardStep(1);
+   548→   548→  };
+   549→   549→
+   550→   550→  // ── Remove an enrollment from the list on step 5 ─────────────────────
+   551→   551→  const removeEnrollmentBeingAdded = (index: number) => {
+   552→   552→    setEnrollmentsBeingAdded((prev) => prev.filter((_, i) => i !== index));
+   553→   553→  };
+   554→   554→
+   555→   555→  // ── Edit mode: remove existing enrollment ───────────────────────────
+   556→   556→  const removeEditEnrollment = (index: number) => {
+   557→   557→    setEditEnrollments((prev) => prev.filter((_, i) => i !== index));
+   558→   558→  };
+   559→   559→
+   560→   560→  // ── Edit mode: finish adding sub-wizard enrollment ──────────────────
+   561→   561→  const handleEditAddEnrollment = () => {
+   562→   562→    // Save current draft to editEnrollments
+   563→   563→    const draft = currentDraft;
+   564→   564→    if (!draft.serviceId || !draft.levelId) {
+   565→   565→      toast.error(t.students.selectLevel);
+   566→   566→      return;
+   567→   567→    }
+   568→   568→    const newEnrollment: Enrollment = {
+   569→   569→      serviceId: draft.serviceId,
+   570→   570→      service: services.find((s) => s.id === draft.serviceId) ? { id: draft.serviceId, name: '', nameAr: draft.serviceNameAr, nameFr: '' } : null,
+   571→   571→      subjectId: draft.subjectId || null,
+   572→   572→      subject: draft.subjectId ? { id: draft.subjectId, name: '', nameAr: draft.subjectNameAr, nameFr: '' } : null,
+   573→   573→      levelId: draft.levelId,
+   574→   574→      level: { id: draft.levelId, name: '', nameAr: draft.levelNameAr, nameFr: '' },
+   575→   575→      teacherId: draft.noTeacher ? null : (draft.teacherId || null),
+   576→   576→      teacher: draft.noTeacher ? null : (draft.teacherId ? { id: draft.teacherId, fullName: draft.teacherName } : null),
+   577→   577→      monthlyFee: parseFloat(draft.monthlyFee) || 0,
+   578→   578→      packMonths: draft.packMonths || 1,
+   579→   579→      status: 'active',
+   580→   580→      enrollmentDate: form.enrollmentDate || new Date().toISOString(),
+   581→   581→      isPackPaid: false,
+   582→   582→    };
+   583→   583→    setEditEnrollments((prev) => [...prev, newEnrollment]);
+   584→   584→    setCurrentDraft(emptyDraft());
+   585→   585→    setWizardStep(5);
+   586→   586→  };
+   587→   587→
+   588→   588→  // ── Submit ─────────────────────────────────────────────────────────────
+   589→   589→
+   590→   590→  const handleSubmit = async () => {
+   591→   591→    if (!form.fullName.trim()) {
+   592→   592→      toast.error(t.students.nameRequired);
+   593→   593→      return;
+   594→   594→    }
+   595→   595→
+   596→   596→    if (editingStudent) {
+   597→   597→      // Edit mode: send personal info + all enrollments
+   598→   598→      const allEnrollments = editEnrollments.map((e) => ({
+   599→   599→        id: e.id,
+   600→   600→        serviceId: e.serviceId,
+   601→   601→        subjectId: e.subjectId,
+   602→   602→        levelId: e.levelId,
+   603→   603→        teacherId: e.teacherId,
+   604→   604→        monthlyFee: e.monthlyFee,
+   605→   605→        packMonths: e.packMonths,
+   606→   606→        enrollmentDate: e.enrollmentDate || form.enrollmentDate,
+   607→   607→      }));
+   608→   608→
+   609→   609→      if (allEnrollments.length === 0) {
+   610→   610→        toast.error(t.students.selectLevel);
+   611→   611→        return;
+   612→   612→      }
+   613→   613→
+   614→   614→      setSubmitting(true);
+   615→   615→      try {
+   616→   616→        const payload = {
+   617→   617→          fullName: form.fullName.trim(),
+   618→   618→          phone: form.phone || null,
+   619→   619→          parentName: form.parentName || null,
+   620→   620→          parentPhone: form.parentPhone || null,
+   621→   621→          status: editingStudent.status,
+   622→   622→          enrollmentDate: form.enrollmentDate || new Date().toISOString(),
+   623→   623→          enrollments: allEnrollments,
+   624→   624→        };
+   625→   625→
+   626→   626→        const res = await fetch(`/api/students/${editingStudent.id}`, {
+   627→   627→          method: 'PUT',
+   628→   628→          headers: { 'Content-Type': 'application/json' },
+   629→   629→          body: JSON.stringify(payload),
+   630→   630→        });
+   631→   631→        if (!res.ok) throw new Error();
+   632→   632→
+   633→   633→        toast.success(t.common.updateSuccess);
+   634→   634→        setDialogOpen(false);
+   635→   635→        resetWizard();
+   636→   636→        fetchStudents();
+   637→   637→      } catch {
+   638→   638→        toast.error(t.common.saveError);
+   639→   639→      } finally {
+   640→   640→        setSubmitting(false);
+   641→   641→      }
+   642→   642→    } else {
+   643→   643→      // Add mode
+   644→   644→      if (enrollmentsBeingAdded.length === 0) {
+   645→   645→        toast.error(t.students.selectLevel);
+   646→   646→        return;
+   647→   647→      }
+   648→   648→
+   649→   649→      setSubmitting(true);
+   650→   650→      try {
+   651→   651→        const enrollmentPayloads = enrollmentsBeingAdded.map((d) => ({
+   652→   652→          serviceId: d.serviceId,
+   653→   653→          subjectId: d.subjectId || null,
+   654→   654→          levelId: d.levelId,
+   655→   655→          teacherId: d.noTeacher ? null : (d.teacherId || null),
+   656→   656→          monthlyFee: isAdmin ? (parseFloat(d.monthlyFee) || 0) : 0,
+   657→   657→          packMonths: d.packMonths || 1,
+   658→   658→          enrollmentDate: form.enrollmentDate || new Date().toISOString(),
+   659→   659→        }));
+   660→   660→
+   661→   661→        const payload = {
+   662→   662→          fullName: form.fullName.trim(),
+   663→   663→          phone: form.phone || null,
+   664→   664→          parentName: form.parentName || null,
+   665→   665→          parentPhone: form.parentPhone || null,
+   666→   666→          status: 'active',
+   667→   667→          enrollmentDate: form.enrollmentDate || new Date().toISOString(),
+   668→   668→          enrollments: enrollmentPayloads,
+   669→   669→        };
+   670→   670→
+   671→   671→        const res = await fetch('/api/students', {
+   672→   672→          method: 'POST',
+   673→   673→          headers: { 'Content-Type': 'application/json' },
+   674→   674→          body: JSON.stringify(payload),
+   675→   675→        });
+   676→   676→        if (!res.ok) throw new Error();
+   677→   677→
+   678→   678→        toast.success(t.common.addSuccess);
+   679→   679→        setDialogOpen(false);
+   680→   680→        resetWizard();
+   681→   681→        fetchStudents();
+   682→   682→      } catch {
+   683→   683→        toast.error(t.common.saveError);
+   684→   684→      } finally {
+   685→   685→        setSubmitting(false);
+   686→   686→      }
+   687→   687→    }
+   688→   688→  };
+   689→   689→
+   690→   690→  // ── Delete ─────────────────────────────────────────────────────────────
+   691→   691→
+   692→   692→  const handleDelete = async (id: string) => {
+   693→   693→    try {
+   694→   694→      const res = await fetch(`/api/students/${id}`, { method: 'DELETE' });
+   695→   695→      if (!res.ok) throw new Error();
+   696→   696→      toast.success(t.common.deleteSuccess);
+   697→   697→      fetchStudents();
+   698→   698→    } catch {
+   699→   699→      toast.error(t.common.deleteError);
+   700→   700→    } finally {
+   701→   701→      setDeletingId(null);
+   702→   702→    }
+   703→   703→  };
+   704→   704→
+   705→   705→  // ── Toggle status ─────────────────────────────────────────────────────
+   706→   706→
+   707→   707→  const handleToggleStatus = async (student: Student) => {
+   708→   708→    const newStatus = student.status === 'active' ? 'inactive' : 'active';
+   709→   709→    try {
+   710→   710→      // Build enrollments array from student data
+   711→   711→      const enrollmentsPayload = (student.enrollments || []).map((e) => ({
+   712→   712→        id: e.id,
+   713→   713→        serviceId: e.serviceId,
+   714→   714→        subjectId: e.subjectId,
+   715→   715→        levelId: e.levelId,
+   716→   716→        teacherId: e.teacherId,
+   717→   717→        monthlyFee: e.monthlyFee,
+   718→   718→        packMonths: e.packMonths,
+   719→   719→        enrollmentDate: e.enrollmentDate,
+   720→   720→      }));
+   721→   721→
+   722→   722→      const payload: any = {
+   723→   723→        fullName: student.fullName,
+   724→   724→        phone: student.phone,
+   725→   725→        email: student.email,
+   726→   726→        address: student.address,
+   727→   727→        parentName: student.parentName,
+   728→   728→        parentPhone: student.parentPhone,
+   729→   729→        status: newStatus,
+   730→   730→        enrollmentDate: student.enrollmentDate,
+   731→   731→      };
+   732→   732→      if (enrollmentsPayload.length > 0) {
+   733→   733→        payload.enrollments = enrollmentsPayload;
+   734→   734→      } else {
+   735→   735→        payload.levelId = student.levelId;
+   736→   736→        payload.teacherId = student.teacherId;
+   737→   737→        payload.monthlyFee = student.monthlyFee;
+   738→   738→      }
+   739→   739→
+   740→   740→      const res = await fetch(`/api/students/${student.id}`, {
+   741→   741→        method: 'PUT',
+   742→   742→        headers: { 'Content-Type': 'application/json' },
+   743→   743→        body: JSON.stringify(payload),
+   744→   744→      });
+   745→   745→      if (!res.ok) throw new Error();
+   746→   746→      toast.success(newStatus === 'active' ? t.students.toggleActive : t.students.toggleInactive);
+   747→   747→      fetchStudents();
+   748→   748→    } catch {
+   749→   749→      toast.error(t.students.toggleError);
+   750→   750→    }
+   751→   751→  };
+   752→   752→
+   753→   753→  // ── Helper: get student's aggregate data from enrollments ────────────
+   754→   754→  function getStudentEnrollmentData(student: Student) {
+   755→   755→    const enrollments = student.enrollments || [];
+   756→   756→    const hasEnrollments = enrollments.length > 0;
+   757→   757→    return {
+   758→   758→      hasEnrollments,
+   759→   759→      totalFee: hasEnrollments
+   760→   760→        ? enrollments.reduce((sum, e) => sum + (e.monthlyFee || 0), 0)
+   761→   761→        : (student.monthlyFee || 0),
+   762→   762→      allPackPaid: hasEnrollments
+   763→   763→        ? enrollments.every((e) => e.isPackPaid)
+   764→   764→        : !!student.isPackPaid,
+   765→   765→      earliestDueDate: hasEnrollments
+   766→   766→        ? enrollments
+   767→   767→            .filter((e) => e.nextDueDate)
+   768→   768→            .sort((a, b) => new Date(a.nextDueDate!).getTime() - new Date(b.nextDueDate!).getTime())[0]?.nextDueDate || null
+   769→   769→        : (student.nextDueDate || null),
+   770→   770→    };
+   771→   771→  }
+   772→   772→
+   773→   773→  // ── Step indicator config ─────────────────────────────────────────────
+   774→   774→
+   775→   775→  const steps = [
+   776→   776→    { num: 1 as WizardStep, icon: Layers, label: t.students.step1Title },
+   777→   777→    { num: 2 as WizardStep, icon: BookOpen, label: t.students.step2Title },
+   778→   778→    { num: 3 as WizardStep, icon: GraduationCap, label: t.students.step3Title },
+   779→   779→    { num: 4 as WizardStep, icon: UserCheck, label: t.students.step4Title },
+   780→   780→    { num: 5 as WizardStep, icon: Users, label: t.students.step5Title },
+   781→   781→  ];
+   782→   782→
+   783→   783→  // ── Render helpers ────────────────────────────────────────────────────
+   784→   784→
+   785→   785→  function getStatusBadge(status: string) {
+   786→   786→    if (status === 'active') {
+   787→   787→      return (
+   788→   788→        <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100">
+   789→   789→          {t.common.active}
+   790→   790→        </Badge>
+   791→   791→      );
+   792→   792→    }
+   793→   793→    return (
+   794→   794→      <Badge className="bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-100">
+   795→   795→        {t.common.inactive}
+   796→   796→      </Badge>
+   797→   797→    );
+   798→   798→  }
+   799→   799→
+   800→   800→  function StepIndicator() {
+   801→   801→    return (
+   802→   802→      <div className="px-8 pt-4 pb-2">
+   803→   803→        <div className="flex items-center justify-between">
+   804→   804→          {steps.map((step, idx) => {
+   805→   805→            const isCompleted = step.num < wizardStep;
+   806→   806→            const isCurrent = step.num === wizardStep;
+   807→   807→            const Icon = step.icon;
+   808→   808→            return (
+   809→   809→              <div key={step.num} className="flex items-center flex-1">
+   810→   810→                <button
+   811→   811→                  type="button"
+   812→   812→                  onClick={() => isCompleted && goToStep(step.num)}
+   813→   813→                  disabled={!isCompleted}
+   814→   814→                  className={`flex flex-col items-center gap-1 transition-all ${
+   815→   815→                    isCompleted
+   816→   816→                      ? 'cursor-pointer hover:opacity-80'
+   817→   817→                      : 'cursor-default'
+   818→   818→                  }`}
+   819→   819→                >
+   820→   820→                  <div
+   821→   821→                    className={`h-9 w-9 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+   822→   822→                      isCurrent
+   823→   823→                        ? 'bg-teal-600 text-white shadow-md shadow-teal-200'
+   824→   824→                        : isCompleted
+   825→   825→                          ? 'bg-teal-100 text-teal-700'
+   826→   826→                          : 'bg-gray-100 text-gray-400'
+   827→   827→                    }`}
+   828→   828→                  >
+   829→   829→                    <Icon className="h-4 w-4" />
+   830→   830→                  </div>
+   831→   831→                  <span
+   832→   832→                    className={`text-[10px] hidden sm:block ${
+   833→   833→                      isCurrent
+   834→   834→                        ? 'text-teal-700 font-semibold'
+   835→   835→                        : isCompleted
+   836→   836→                          ? 'text-teal-600'
+   837→   837→                          : 'text-gray-400'
+   838→   838→                    }`}
+   839→   839→                  >
+   840→   840→                    {step.label}
+   841→   841→                  </span>
+   842→   842→                </button>
+   843→   843→                {idx < steps.length - 1 && (
+   844→   844→                  <div
+   845→   845→                    className={`flex-1 h-0.5 mx-2 transition-colors ${
+   846→   846→                      step.num < wizardStep ? 'bg-teal-300' : 'bg-gray-200'
+   847→   847→                    }`}
+   848→   848→                  />
+   849→   849→                )}
+   850→   850→              </div>
+   851→   851→            );
+   852→   852→          })}
+   853→   853→        </div>
+   854→   854→      </div>
+   855→   855→    );
+   856→   856→  }
+   857→   857→
+   858→   858→  // ── Render: enrollment badge for a draft ─────────────────────────────
+   859→   859→  function renderDraftBadge(draft: EnrollmentDraft, index: number, removable: boolean) {
+   860→   860→    return (
+   861→   861→      <div
+   862→   862→        key={index}
+   863→   863→        className="flex items-center gap-2 p-2 rounded-lg border bg-muted/30"
+   864→   864→      >
+   865→   865→        <div className="flex-1 min-w-0 flex flex-wrap gap-1">
+   866→   866→          <Badge variant="outline" className="gap-1 text-xs">
+   867→   867→            <Layers className="h-3 w-3" />
+   868→   868→            {draft.serviceNameAr}
+   869→   869→          </Badge>
+   870→   870→          {draft.subjectNameAr && (
+   871→   871→            <Badge variant="outline" className="gap-1 text-xs">
+   872→   872→              <BookOpen className="h-3 w-3" />
+   873→   873→              {draft.subjectNameAr}
+   874→   874→            </Badge>
+   875→   875→          )}
+   876→   876→          <Badge variant="outline" className="gap-1 text-xs border-teal-300 text-teal-700">
+   877→   877→            <GraduationCap className="h-3 w-3" />
+   878→   878→            {draft.levelNameAr}
+   879→   879→          </Badge>
+   880→   880→          {draft.noTeacher ? (
+   881→   881→            <Badge variant="outline" className="gap-1 text-xs border-violet-300 text-violet-700">
+   882→   882→              <UserMinus className="h-3 w-3" />
+   883→   883→              {t.students.withoutTeacher}
+   884→   884→            </Badge>
+   885→   885→          ) : draft.teacherName ? (
+   886→   886→            <Badge variant="outline" className="gap-1 text-xs border-teal-300 text-teal-700">
+   887→   887→              <UserCheck className="h-3 w-3" />
+   888→   888→              {draft.teacherName}
+   889→   889→            </Badge>
+   890→   890→          ) : null}
+   891→   891→          {isAdmin && draft.monthlyFee && parseFloat(draft.monthlyFee) > 0 && (
+   892→   892→            <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100 text-xs">
+   893→   893→              <Wallet className="h-3 w-3" />
+   894→   894→              {parseFloat(draft.monthlyFee).toLocaleString('ar-MA')} {t.common.dh}
+   895→   895→            </Badge>
+   896→   896→          )}
+   897→   897→        </div>
+   898→   898→        {removable && (
+   899→   899→          <Button
+   900→   900→            type="button"
+   901→   901→            variant="ghost"
+   902→   902→            size="icon"
+   903→   903→            className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
+   904→   904→            onClick={() => removeEnrollmentBeingAdded(index)}
+   905→   905→          >
+   906→   906→            <X className="h-3.5 w-3.5" />
+   907→   907→          </Button>
+   908→   908→        )}
+   909→   909→      </div>
+   910→   910→    );
+   911→   911→  }
+   912→   912→
+   913→   913→  // ── Render: enrollment card for edit mode ─────────────────────────────
+   914→   914→  function renderEditEnrollmentCard(enrollment: Enrollment, index: number) {
+   915→   915→    return (
+   916→   916→      <div
+   917→   917→        key={enrollment.id || index}
+   918→   918→        className="flex items-center gap-2 p-3 rounded-lg border bg-muted/30"
+   919→   919→      >
+   920→   920→        <div className="flex-1 min-w-0 flex flex-wrap gap-1.5">
+   921→   921→          {enrollment.service && (
+   922→   922→            <Badge variant="outline" className="gap-1 text-xs">
+   923→   923→              <Layers className="h-3 w-3" />
+   924→   924→              {enrollment.service.nameAr}
+   925→   925→            </Badge>
+   926→   926→          )}
+   927→   927→          {enrollment.subject && (
+   928→   928→            <Badge variant="outline" className="gap-1 text-xs">
+   929→   929→              <BookOpen className="h-3 w-3" />
+   930→   930→              {enrollment.subject.nameAr}
+   931→   931→            </Badge>
+   932→   932→          )}
+   933→   933→          {enrollment.level && (
+   934→   934→            <Badge variant="outline" className="gap-1 text-xs border-teal-300 text-teal-700">
+   935→   935→              <GraduationCap className="h-3 w-3" />
+   936→   936→              {enrollment.level.nameAr}
+   937→   937→            </Badge>
+   938→   938→          )}
+   939→   939→          {enrollment.teacher ? (
+   940→   940→            <Badge variant="outline" className="gap-1 text-xs border-teal-300 text-teal-700">
+   941→   941→              <UserCheck className="h-3 w-3" />
+   942→   942→              {enrollment.teacher.fullName}
+   943→   943→            </Badge>
+   944→   944→          ) : (
+   945→   945→            <Badge variant="outline" className="gap-1 text-xs border-violet-300 text-violet-700">
+   946→   946→              <UserMinus className="h-3 w-3" />
+   947→   947→              {t.students.withoutTeacher}
+   948→   948→            </Badge>
+   949→   949→          )}
+   950→   950→          {isAdmin && enrollment.monthlyFee > 0 && (
+   951→   951→            <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100 text-xs">
+   952→   952→              <Wallet className="h-3 w-3" />
+   953→   953→              {enrollment.monthlyFee.toLocaleString('ar-MA')} {t.common.dh}
+   954→   954→            </Badge>
+   955→   955→          )}
+   956→   956→        </div>
+   957→   957→        <Button
+   958→   958→          type="button"
+   959→   959→          variant="ghost"
+   960→   960→          size="icon"
+   961→   961→          className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+   962→   962→          onClick={() => removeEditEnrollment(index)}
+   963→   963→        >
+   964→   964→          <Trash2 className="h-3.5 w-3.5" />
+   965→   965→        </Button>
+   966→   966→      </div>
+   967→   967→    );
+   968→   968→  }
+   969→   969→
+   970→   970→  function StepContent() {
+   971→   971→    switch (wizardStep) {
+   972→   972→      case 1:
+   973→   973→        return (
+   974→   974→          <div className="space-y-3">
+   975→   975→            <h4 className="text-sm font-semibold text-muted-foreground">
+   976→   976→              {t.students.servicesAvailable}
+   977→   977→            </h4>
+   978→   978→            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+   979→   979→              {services.map((svc) => {
+   980→   980→                const Icon = serviceIcons[svc.name] || Layers;
+   981→   981→                const isSelected = currentDraft.serviceId === svc.id;
+   982→   982→                const subjectCount = svc.subjects?.length || 0;
+   983→   983→                return (
+   984→   984→                  <Card
+   985→   985→                    key={svc.id}
+   986→   986→                    className={`cursor-pointer transition-all hover:shadow-md hover:border-teal-300 ${
+   987→   987→                      isSelected
+   988→   988→                        ? 'border-teal-500 bg-teal-50 shadow-md ring-1 ring-teal-200'
+   989→   989→                        : 'border-border hover:bg-muted/50'
+   990→   990→                    }`}
+   991→   991→                    onClick={() => handleSelectService(svc)}
+   992→   992→                  >
+   993→   993→                    <CardContent className="p-4 flex items-center gap-4">
+   994→   994→                      <div
+   995→   995→                        className={`h-12 w-12 rounded-xl flex items-center justify-center shrink-0 ${
+   996→   996→                          isSelected
+   997→   997→                            ? 'bg-teal-100 text-teal-700'
+   998→   998→                            : 'bg-muted text-muted-foreground'
+   999→   999→                        }`}
+  1000→  1000→                      >
+  1001→  1001→                        <Icon className="h-6 w-6" />
+  1002→  1002→                      </div>
+  1003→  1003→                      <div className="flex-1 min-w-0">
+  1004→  1004→                        <p className="font-semibold text-sm truncate">{svc.nameAr}</p>
+  1005→  1005→                        <p className="text-xs text-muted-foreground mt-0.5">
+  1006→  1006→                          {subjectCount} {t.students.subjectCount}
+  1007→  1007→                        </p>
+  1008→  1008→                      </div>
+  1009→  1009→                      <ChevronLeft
+  1010→  1010→                        className={`h-5 w-5 shrink-0 transition-colors ${
+  1011→  1011→                          isSelected ? 'text-teal-600' : 'text-muted-foreground'
+  1012→  1012→                        }`}
+  1013→  1013→                      />
+  1014→  1014→                    </CardContent>
+  1015→  1015→                  </Card>
+  1016→  1016→                );
+  1017→  1017→              })}
+  1018→  1018→            </div>
+  1019→  1019→            {services.length === 0 && (
+  1020→  1020→              <div className="text-center py-8 text-muted-foreground">
+  1021→  1021→                <Layers className="h-10 w-10 mx-auto mb-2 opacity-30" />
+  1022→  1022→                <p className="text-sm">{t.common.noData}</p>
+  1023→  1023→              </div>
+  1024→  1024→            )}
+  1025→  1025→          </div>
+  1026→  1026→        );
+  1027→  1027→
+  1028→  1028→      case 2:
+  1029→  1029→        return (
+  1030→  1030→          <div className="space-y-3">
+  1031→  1031→            <div className="flex items-center gap-2">
+  1032→  1032→              <Button
+  1033→  1033→                type="button"
+  1034→  1034→                variant="ghost"
+  1035→  1035→                size="icon"
+  1036→  1036→                className="h-7 w-7"
+  1037→  1037→                onClick={() => goToStep(1)}
+  1038→  1038→              >
+  1039→  1039→                <ChevronRight className="h-4 w-4" />
+  1040→  1040→              </Button>
+  1041→  1041→              <h4 className="text-sm font-semibold text-muted-foreground">
+  1042→  1042→                {t.students.subjectsAvailable}
+  1043→  1043→              </h4>
+  1044→  1044→            </div>
+  1045→  1045→            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+  1046→  1046→              {filteredSubjects.map((subj) => {
+  1047→  1047→                const isSelected = currentDraft.subjectId === subj.id;
+  1048→  1048→                return (
+  1049→  1049→                  <Card
+  1050→  1050→                    key={subj.id}
+  1051→  1051→                    className={`cursor-pointer transition-all hover:shadow-md ${
+  1052→  1052→                      isSelected
+  1053→  1053→                        ? 'border-amber-500 bg-amber-50 shadow-md ring-1 ring-amber-200'
+  1054→  1054→                        : 'border-border hover:border-amber-300 hover:bg-amber-50/50'
+  1055→  1055→                    }`}
+  1056→  1056→                    onClick={() => handleSelectSubject(subj)}
+  1057→  1057→                  >
+  1058→  1058→                    <CardContent className="p-3 text-center">
+  1059→  1059→                      <div
+  1060→  1060→                        className={`h-10 w-10 rounded-lg mx-auto mb-2 flex items-center justify-center ${
+  1061→  1061→                          isSelected
+  1062→  1062→                            ? 'bg-amber-100 text-amber-700'
+  1063→  1063→                            : 'bg-muted text-muted-foreground'
+  1064→  1064→                        }`}
+  1065→  1065→                      >
+  1066→  1066→                        <BookOpen className="h-5 w-5" />
+  1067→  1067→                      </div>
+  1068→  1068→                      <p
+  1069→  1069→                        className={`text-xs font-medium leading-tight ${
+  1070→  1070→                          isSelected ? 'text-amber-800' : ''
+  1071→  1071→                        }`}
+  1072→  1072→                      >
+  1073→  1073→                        {subj.nameAr}
+  1074→  1074→                      </p>
+  1075→  1075→                      <p className="text-[10px] text-muted-foreground mt-0.5">
+  1076→  1076→                        {subj.levels?.length || 0} {t.services.levelsLabel}
+  1077→  1077→                      </p>
+  1078→  1078→                    </CardContent>
+  1079→  1079→                  </Card>
+  1080→  1080→                );
+  1081→  1081→              })}
+  1082→  1082→            </div>
+  1083→  1083→            {filteredSubjects.length === 0 && (
+  1084→  1084→              <div className="text-center py-8 text-muted-foreground">
+  1085→  1085→                <BookOpen className="h-10 w-10 mx-auto mb-2 opacity-30" />
+  1086→  1086→                <p className="text-sm">{t.services.noSubjects}</p>
+  1087→  1087→              </div>
+  1088→  1088→            )}
+  1089→  1089→          </div>
+  1090→  1090→        );
+  1091→  1091→
+  1092→  1092→      case 3:
+  1093→  1093→        return (
+  1094→  1094→          <div className="space-y-3">
+  1095→  1095→            <div className="flex items-center gap-2">
+  1096→  1096→              <Button
+  1097→  1097→                type="button"
+  1098→  1098→                variant="ghost"
+  1099→  1099→                size="icon"
+  1100→  1100→                className="h-7 w-7"
+  1101→  1101→                onClick={() => goToStep(2)}
+  1102→  1102→              >
+  1103→  1103→                <ChevronRight className="h-4 w-4" />
+  1104→  1104→              </Button>
+  1105→  1105→              <h4 className="text-sm font-semibold text-muted-foreground">
+  1106→  1106→                {t.students.levelsAvailable}
+  1107→  1107→              </h4>
+  1108→  1108→            </div>
+  1109→  1109→            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+  1110→  1110→              {filteredLevels.map((lvl) => {
+  1111→  1111→                const isSelected = currentDraft.levelId === lvl.id;
+  1112→  1112→                return (
+  1113→  1113→                  <Card
+  1114→  1114→                    key={lvl.id}
+  1115→  1115→                    className={`cursor-pointer transition-all hover:shadow-md ${
+  1116→  1116→                      isSelected
+  1117→  1117→                        ? 'border-teal-500 bg-teal-50 shadow-md ring-1 ring-teal-200'
+  1118→  1118→                        : 'border-border hover:border-teal-300 hover:bg-teal-50/50'
+  1119→  1119→                    }`}
+  1120→  1120→                    onClick={() => handleSelectLevel(lvl)}
+  1121→  1121→                  >
+  1122→  1122→                    <CardContent className="p-3 text-center">
+  1123→  1123→                      <div
+  1124→  1124→                        className={`h-10 w-10 rounded-lg mx-auto mb-2 flex items-center justify-center ${
+  1125→  1125→                          isSelected
+  1126→  1126→                            ? 'bg-teal-100 text-teal-700'
+  1127→  1127→                            : 'bg-muted text-muted-foreground'
+  1128→  1128→                        }`}
+  1129→  1129→                      >
+  1130→  1130→                        <GraduationCap className="h-5 w-5" />
+  1131→  1131→                      </div>
+  1132→  1132→                      <p
+  1133→  1133→                        className={`text-xs font-medium leading-tight ${
+  1134→  1134→                          isSelected ? 'text-teal-800' : ''
+  1135→  1135→                        }`}
+  1136→  1136→                      >
+  1137→  1137→                        {lvl.nameAr}
+  1138→  1138→                      </p>
+  1139→  1139→                    </CardContent>
+  1140→  1140→                  </Card>
+  1141→  1141→                );
+  1142→  1142→              })}
+  1143→  1143→            </div>
+  1144→  1144→            {filteredLevels.length === 0 && (
+  1145→  1145→              <div className="text-center py-8 text-muted-foreground">
+  1146→  1146→                <GraduationCap className="h-10 w-10 mx-auto mb-2 opacity-30" />
+  1147→  1147→                <p className="text-sm">{t.services.noLevels}</p>
+  1148→  1148→              </div>
+  1149→  1149→            )}
+  1150→  1150→          </div>
+  1151→  1151→        );
+  1152→  1152→
+  1153→  1153→      case 4:
+  1154→  1154→        return (
+  1155→  1155→          <div className="space-y-3">
+  1156→  1156→            <div className="flex items-center gap-2">
+  1157→  1157→              <Button
+  1158→  1158→                type="button"
+  1159→  1159→                variant="ghost"
+  1160→  1160→                size="icon"
+  1161→  1161→                className="h-7 w-7"
+  1162→  1162→                onClick={() => goToStep(3)}
+  1163→  1163→              >
+  1164→  1164→                <ChevronRight className="h-4 w-4" />
+  1165→  1165→              </Button>
+  1166→  1166→              <h4 className="text-sm font-semibold text-muted-foreground">
+  1167→  1167→                {t.students.teachersAvailable}
+  1168→  1168→              </h4>
+  1169→  1169→            </div>
+  1170→  1170→
+  1171→  1171→            {/* Without teacher option */}
+  1172→  1172→            <Card
+  1173→  1173→              className={`cursor-pointer transition-all hover:shadow-md ${
+  1174→  1174→                currentDraft.noTeacher
+  1175→  1175→                  ? 'border-violet-500 bg-violet-50 shadow-md ring-1 ring-violet-200'
+  1176→  1176→                  : 'border-border hover:border-violet-300'
+  1177→  1177→              }`}
+  1178→  1178→              onClick={() => handleSelectTeacher(null)}
+  1179→  1179→            >
+  1180→  1180→              <CardContent className="p-3 flex items-center gap-3">
+  1181→  1181→                <div
+  1182→  1182→                  className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${
+  1183→  1183→                    currentDraft.noTeacher
+  1184→  1184→                      ? 'bg-violet-100 text-violet-700'
+  1185→  1185→                      : 'bg-muted text-muted-foreground'
+  1186→  1186→                  }`}
+  1187→  1187→                >
+  1188→  1188→                  <UserMinus className="h-5 w-5" />
+  1189→  1189→                </div>
+  1190→  1190→                <div className="flex-1">
+  1191→  1191→                  <p
+  1192→  1192→                    className={`text-sm font-medium ${
+  1193→  1193→                      currentDraft.noTeacher ? 'text-violet-800' : ''
+  1194→  1194→                    }`}
+  1195→  1195→                  >
+  1196→  1196→                    {t.students.withoutTeacher}
+  1197→  1197→                  </p>
+  1198→  1198→                </div>
+  1199→  1199→                {currentDraft.noTeacher && (
+  1200→  1200→                  <div className="h-5 w-5 rounded-full bg-violet-500 flex items-center justify-center">
+  1201→  1201→                    <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+  1202→  1202→                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+  1203→  1203→                    </svg>
+  1204→  1204→                  </div>
+  1205→  1205→                )}
+  1206→  1206→              </CardContent>
+  1207→  1207→            </Card>
+  1208→  1208→
+  1209→  1209→            {/* Teacher list */}
+  1210→  1210→            <div className="space-y-2">
+  1211→  1211→              {filteredTeachers.map((teacher) => {
+  1212→  1212→                const isSelected = currentDraft.teacherId === teacher.id && !currentDraft.noTeacher;
+  1213→  1213→                const count = studentCountsMap[teacher.id] || 0;
+  1214→  1214→                return (
+  1215→  1215→                  <Card
+  1216→  1216→                    key={teacher.id}
+  1217→  1217→                    className={`cursor-pointer transition-all hover:shadow-md ${
+  1218→  1218→                      isSelected
+  1219→  1219→                        ? 'border-teal-500 bg-teal-50 shadow-md ring-1 ring-teal-200'
+  1220→  1220→                        : 'border-border hover:border-teal-300'
+  1221→  1221→                    }`}
+  1222→  1222→                    onClick={() => handleSelectTeacher(teacher)}
+  1223→  1223→                  >
+  1224→  1224→                    <CardContent className="p-3 flex items-center gap-3">
+  1225→  1225→                      <div
+  1226→  1226→                        className={`h-10 w-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
+  1227→  1227→                          isSelected
+  1228→  1228→                            ? 'bg-teal-100 text-teal-700'
+  1229→  1229→                            : getAvatarColor(teacher.fullName)
+  1230→  1230→                        }`}
+  1231→  1231→                      >
+  1232→  1232→                        {teacher.fullName.charAt(0)}
+  1233→  1233→                      </div>
+  1234→  1234→                      <div className="flex-1 min-w-0">
+  1235→  1235→                        <p
+  1236→  1236→                          className={`text-sm font-medium truncate ${
+  1237→  1237→                            isSelected ? 'text-teal-800' : ''
+  1238→  1238→                          }`}
+  1239→  1239→                        >
+  1240→  1240→                          {teacher.fullName}
+  1241→  1241→                        </p>
+  1242→  1242→                        {teacher.phone && (
+  1243→  1243→                          <p className="text-xs text-muted-foreground truncate" dir="ltr">
+  1244→  1244→                            {teacher.phone}
+  1245→  1245→                          </p>
+  1246→  1246→                        )}
+  1247→  1247→                      </div>
+  1248→  1248→                      <Badge
+  1249→  1249→                        variant="secondary"
+  1250→  1250→                        className={`shrink-0 text-xs ${
+  1251→  1251→                          count > 0
+  1252→  1252→                            ? 'bg-teal-100 text-teal-700'
+  1253→  1253→                            : 'bg-gray-100 text-gray-500'
+  1254→  1254→                        }`}
+  1255→  1255→                      >
+  1256→  1256→                        {count} {t.students.studentCountLabel}
+  1257→  1257→                      </Badge>
+  1258→  1258→                    </CardContent>
+  1259→  1259→                  </Card>
+  1260→  1260→                );
+  1261→  1261→              })}
+  1262→  1262→            </div>
+  1263→  1263→
+  1264→  1264→            {filteredTeachers.length === 0 && !currentDraft.noTeacher && (
+  1265→  1265→              <div className="text-center py-8 text-muted-foreground">
+  1266→  1266→                <UserCheck className="h-10 w-10 mx-auto mb-2 opacity-30" />
+  1267→  1267→                <p className="text-sm">{t.common.noData}</p>
+  1268→  1268→              </div>
+  1269→  1269→            )}
+  1270→  1270→          </div>
+  1271→  1271→        );
+  1272→  1272→
+  1273→  1273→      case 5:
+  1274→  1274→        if (editingStudent) {
+  1275→  1275→          // ═══ EDIT MODE ═══
+  1276→  1276→          return (
+  1277→  1277→            <div className="space-y-4">
+  1278→  1278→              {/* Personal Info */}
+  1279→  1279→              <div className="space-y-3">
+  1280→  1280→                <h4 className="text-sm font-semibold flex items-center gap-2">
+  1281→  1281→                  <UserCheck className="h-4 w-4 text-teal-600" />
+  1282→  1282→                  {t.students.personalInfo}
+  1283→  1283→                </h4>
+  1284→  1284→                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+  1285→  1285→                  <div className="space-y-1.5 sm:col-span-2">
+  1286→  1286→                    <Label htmlFor="editFullName">
+  1287→  1287→                      {t.students.fullName} <span className="text-destructive">*</span>
+  1288→  1288→                    </Label>
+  1289→  1289→                    <Input
+  1290→  1290→                      id="editFullName"
+  1291→  1291→                      value={form.fullName}
+  1292→  1292→                      onChange={(e) => setForm((prev) => ({ ...prev, fullName: e.target.value }))}
+  1293→  1293→                      placeholder={t.students.fullNamePlaceholder}
+  1294→  1294→                    />
+  1295→  1295→                  </div>
+  1296→  1296→                  <div className="space-y-1.5 sm:col-span-2">
+  1297→  1297→                    <Label htmlFor="editPhone">{t.common.phone}</Label>
+  1298→  1298→                    <Input
+  1299→  1299→                      id="editPhone"
+  1300→  1300→                      value={form.phone}
+  1301→  1301→                      onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
+  1302→  1302→                      placeholder={t.students.phonePlaceholder}
+  1303→  1303→                      dir="ltr"
+  1304→  1304→                    />
+  1305→  1305→                  </div>
+  1306→  1306→                </div>
+  1307→  1307→              </div>
+  1308→  1308→
+  1309→  1309→              {/* Parent Info */}
+  1310→  1310→              <div className="space-y-3">
+  1311→  1311→                <h4 className="text-sm font-semibold flex items-center gap-2">
+  1312→  1312→                  <Users className="h-4 w-4 text-teal-600" />
+  1313→  1313→                  {t.students.parentInfo}
+  1314→  1314→                </h4>
+  1315→  1315→                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+  1316→  1316→                  <div className="space-y-1.5">
+  1317→  1317→                    <Label htmlFor="editParentName">{t.students.parentName}</Label>
+  1318→  1318→                    <Input
+  1319→  1319→                      id="editParentName"
+  1320→  1320→                      value={form.parentName}
+  1321→  1321→                      onChange={(e) => setForm((prev) => ({ ...prev, parentName: e.target.value }))}
+  1322→  1322→                      placeholder={t.students.parentNamePlaceholder}
+  1323→  1323→                    />
+  1324→  1324→                  </div>
+  1325→  1325→                  <div className="space-y-1.5">
+  1326→  1326→                    <Label htmlFor="editParentPhone">{t.students.parentPhone}</Label>
+  1327→  1327→                    <Input
+  1328→  1328→                      id="editParentPhone"
+  1329→  1329→                      value={form.parentPhone}
+  1330→  1330→                      onChange={(e) => setForm((prev) => ({ ...prev, parentPhone: e.target.value }))}
+  1331→  1331→                      placeholder={t.students.parentPhonePlaceholder}
+  1332→  1332→                      dir="ltr"
+  1333→  1333→                    />
+  1334→  1334→                  </div>
+  1335→  1335→                </div>
+  1336→  1336→              </div>
+  1337→  1337→
+  1338→  1338→              {/* Enrollment Date */}
+  1339→  1339→              <div className="space-y-3">
+  1340→  1340→                <h4 className="text-sm font-semibold flex items-center gap-2">
+  1341→  1341→                  <UserCheck className="h-4 w-4 text-teal-600" />
+  1342→  1342→                  {t.students.enrollmentDateLabel}
+  1343→  1343→                </h4>
+  1344→  1344→                <div className="space-y-1.5">
+  1345→  1345→                  <Label htmlFor="editEnrollmentDate">{t.students.enrollmentDateLabel}</Label>
+  1346→  1346→                  <Input
+  1347→  1347→                    id="editEnrollmentDate"
+  1348→  1348→                    type="date"
+  1349→  1349→                    value={form.enrollmentDate}
+  1350→  1350→                    onChange={(e) => setForm((prev) => ({ ...prev, enrollmentDate: e.target.value }))}
+  1351→  1351→                    max={new Date().toISOString().split('T')[0]}
+  1352→  1352→                    dir="ltr"
+  1353→  1353→                    className="text-left"
+  1354→  1354→                  />
+  1355→  1355→                </div>
+  1356→  1356→              </div>
+  1357→  1357→
+  1358→  1358→              {/* Existing Enrollments */}
+  1359→  1359→              <div className="space-y-3">
+  1360→  1360→                <div className="flex items-center justify-between">
+  1361→  1361→                  <h4 className="text-sm font-semibold flex items-center gap-2">
+  1362→  1362→                    <Layers className="h-4 w-4 text-teal-600" />
+  1363→  1363→                    {t.students.enrollmentsLabel}
+  1364→  1364→                  </h4>
+  1365→  1365→                  <Button
+  1366→  1366→                    type="button"
+  1367→  1367→                    variant="outline"
+  1368→  1368→                    size="sm"
+  1369→  1369→                    className="h-7 text-xs gap-1"
+  1370→  1370→                    onClick={() => {
+  1371→  1371→                      setCurrentDraft(emptyDraft());
+  1372→  1372→                      setWizardStep(1);
+  1373→  1373→                    }}
+  1374→  1374→                  >
+  1375→  1375→                    <Plus className="h-3 w-3" />
+  1376→  1376→                    {t.students.addEnrollment}
+  1377→  1377→                  </Button>
+  1378→  1378→                </div>
+  1379→  1379→                {editEnrollments.length === 0 ? (
+  1380→  1380→                  <div className="text-center py-6 text-muted-foreground border border-dashed rounded-lg">
+  1381→  1381→                    <Layers className="h-8 w-8 mx-auto mb-2 opacity-30" />
+  1382→  1382→                    <p className="text-sm">{t.students.noEnrollmentsYet}</p>
+  1383→  1383→                  </div>
+  1384→  1384→                ) : (
+  1385→  1385→                  <div className="space-y-2">
+  1386→  1386→                    {editEnrollments.map((enr, idx) => renderEditEnrollmentCard(enr, idx))}
+  1387→  1387→                    {/* Show total fee */}
+  1388→  1388→                    {isAdmin && editEnrollments.length > 1 && (
+  1389→  1389→                      <div className="flex items-center justify-end gap-2 pt-1">
+  1390→  1390→                        <span className="text-sm text-muted-foreground">{t.students.totalFee}:</span>
+  1391→  1391→                        <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100 font-medium">
+  1392→  1392→                          {editEnrollments.reduce((sum, e) => sum + (e.monthlyFee || 0), 0).toLocaleString('ar-MA')} {t.common.dh}
+  1393→  1393→                        </Badge>
+  1394→  1394→                      </div>
+  1395→  1395→                    )}
+  1396→  1396→                  </div>
+  1397→  1397→                )}
+  1398→  1398→              </div>
+  1399→  1399→            </div>
+  1400→  1400→          );
+  1401→  1401→        }
+  1402→  1402→
+  1403→  1403→        // ═══ ADD MODE (step 5) ═══
+  1404→  1404→        return (
+  1405→  1405→          <div className="space-y-4">
+  1406→  1406→            {/* Already-added enrollments as badges */}
+  1407→  1407→            {enrollmentsBeingAdded.length > 0 && (
+  1408→  1408→              <div className="space-y-2">
+  1409→  1409→                <h4 className="text-sm font-semibold flex items-center gap-2">
+  1410→  1410→                  <Layers className="h-4 w-4 text-teal-600" />
+  1411→  1411→                  {t.students.enrollmentsLabel} ({enrollmentsBeingAdded.length})
+  1412→  1412→                </h4>
+  1413→  1413→                <div className="space-y-2">
+  1414→  1414→                  {enrollmentsBeingAdded.map((draft, idx) =>
+  1415→  1415→                    renderDraftBadge(draft, idx, true)
+  1416→  1416→                  )}
+  1417→  1417→                  {/* Total fee */}
+  1418→  1418→                  {isAdmin && enrollmentsBeingAdded.length > 1 && (
+  1419→  1419→                    <div className="flex items-center justify-end gap-2 pt-1">
+  1420→  1420→                      <span className="text-sm text-muted-foreground">{t.students.totalFee}:</span>
+  1421→  1421→                      <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100 font-medium">
+  1422→  1422→                        {enrollmentsBeingAdded
+  1423→  1423→                          .reduce((sum, d) => sum + (parseFloat(d.monthlyFee) || 0), 0)
+  1424→  1424→                          .toLocaleString('ar-MA')} {t.common.dh}
+  1425→  1425→                      </Badge>
+  1426→  1426→                    </div>
+  1427→  1427→                  )}
+  1428→  1428→                </div>
+  1429→  1429→              </div>
+  1430→  1430→            )}
+  1431→  1431→
+  1432→  1432→            {/* Monthly Fee for the LAST added enrollment (admin only) */}
+  1433→  1433→            {isAdmin && enrollmentsBeingAdded.length > 0 && (
+  1434→  1434→              <div className="space-y-3">
+  1435→  1435→                <h4 className="text-sm font-semibold flex items-center gap-2">
+  1436→  1436→                  <Wallet className="h-4 w-4 text-amber-600" />
+  1437→  1437→                  {t.students.enrollmentFee}
+  1438→  1438→                </h4>
+  1439→  1439→                <div className="space-y-1.5">
+  1440→  1440→                  {enrollmentsBeingAdded.map((draft, idx) => {
+  1441→  1441→                    const svc = services.find((s) => s.id === draft.serviceId);
+  1442→  1442→                    const isLangues = svc?.id === 'service_langues';
+  1443→  1443→                    return (
+  1444→  1444→                      <div key={idx} className="p-2 rounded-lg border bg-muted/20 space-y-2">
+  1445→  1445→                        <p className="text-xs text-muted-foreground truncate">
+  1446→  1446→                          {draft.serviceNameAr} {draft.subjectNameAr ? `— ${draft.subjectNameAr}` : ''} {draft.levelNameAr ? `— ${draft.levelNameAr}` : ''}
+  1447→  1447→                        </p>
+  1448→  1448→                        <div className="flex items-center gap-2">
+  1449→  1449→                          <Input
+  1450→  1450→                            type="number"
+  1451→  1451→                            min="0"
+  1452→  1452→                            step="0.01"
+  1453→  1453→                            value={draft.monthlyFee}
+  1454→  1454→                            onChange={(e) => {
+  1455→  1455→                              setEnrollmentsBeingAdded((prev) =>
+  1456→  1456→                                prev.map((d, i) =>
+  1457→  1457→                                  i === idx ? { ...d, monthlyFee: e.target.value } : d
+  1458→  1458→                                )
+  1459→  1459→                              );
+  1460→  1460→                            }}
+  1461→  1461→                            placeholder="0"
+  1462→  1462→                            dir="ltr"
+  1463→  1463→                            className="text-left h-8 text-sm"
+  1464→  1464→                          />
+  1465→  1465→                          <span className="text-xs text-muted-foreground shrink-0">{t.common.dh}</span>
+  1466→  1466→                        </div>
+  1467→  1467→                        {isLangues && (
+  1468→  1468→                          <div className="flex gap-1.5">
+  1469→  1469→                            {[
+  1470→  1470→                              { value: 1, label: t.payments.pack1 },
+  1471→  1471→                              { value: 3, label: t.payments.pack3 },
+  1472→  1472→                              { value: 6, label: t.payments.pack6 },
+  1473→  1473→                              { value: 9, label: t.payments.pack9 },
+  1474→  1474→                            ].map((opt) => (
+  1475→  1475→                              <button
+  1476→  1476→                                key={opt.value}
+  1477→  1477→                                type="button"
+  1478→  1478→                                onClick={() => {
+  1479→  1479→                                  setEnrollmentsBeingAdded((prev) =>
+  1480→  1480→                                    prev.map((d, i) =>
+  1481→  1481→                                      i === idx ? { ...d, packMonths: opt.value } : d
+  1482→  1482→                                    )
+  1483→  1483→                                  );
+  1484→  1484→                                }}
+  1485→  1485→                                className={`px-2 py-1 rounded-md border-2 text-[11px] font-medium transition-colors ${
+  1486→  1486→                                  draft.packMonths === opt.value
+  1487→  1487→                                    ? 'border-teal-500 bg-teal-50 text-teal-700'
+  1488→  1488→                                    : 'border-muted bg-card hover:border-teal-200 text-foreground'
+  1489→  1489→                                }`}
+  1490→  1490→                              >
+  1491→  1491→                                {opt.label}
+  1492→  1492→                              </button>
+  1493→  1493→                            ))}
+  1494→  1494→                          </div>
+  1495→  1495→                        )}
+  1496→  1496→                      </div>
+  1497→  1497→                    );
+  1498→  1498→                  })}
+  1499→  1499→                </div>
+  1500→  1500→              </div>
+  1501→  1501→            )}
+  1502→  1502→
+  1503→  1503→            {/* Add another service button */}
+  1504→  1504→            <Button
+  1505→  1505→              type="button"
+  1506→  1506→              variant="outline"
+  1507→  1507→              className="w-full h-9 border-dashed gap-2 text-sm"
+  1508→  1508→              onClick={handleAddAnotherService}
+  1509→  1509→            >
+  1510→  1510→              <Plus className="h-4 w-4" />
+  1511→  1511→              {t.students.anotherService}
+  1512→  1512→            </Button>
+  1513→  1513→
+  1514→  1514→            {/* Personal Info */}
+  1515→  1515→            <div className="space-y-3">
+  1516→  1516→              <h4 className="text-sm font-semibold flex items-center gap-2">
+  1517→  1517→                <UserCheck className="h-4 w-4 text-teal-600" />
+  1518→  1518→                {t.students.personalInfo}
+  1519→  1519→              </h4>
+  1520→  1520→              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+  1521→  1521→                <div className="space-y-1.5 sm:col-span-2">
+  1522→  1522→                  <Label htmlFor="fullName">
+  1523→  1523→                    {t.students.fullName} <span className="text-destructive">*</span>
+  1524→  1524→                  </Label>
+  1525→  1525→                  <Input
+  1526→  1526→                    id="fullName"
+  1527→  1527→                    value={form.fullName}
+  1528→  1528→                    onChange={(e) => setForm((prev) => ({ ...prev, fullName: e.target.value }))}
+  1529→  1529→                    placeholder={t.students.fullNamePlaceholder}
+  1530→  1530→                    ref={fullNameInputRef}
+  1531→  1531→                  />
+  1532→  1532→                </div>
+  1533→  1533→                <div className="space-y-1.5 sm:col-span-2">
+  1534→  1534→                  <Label htmlFor="phone">{t.common.phone}</Label>
+  1535→  1535→                  <Input
+  1536→  1536→                    id="phone"
+  1537→  1537→                    value={form.phone}
+  1538→  1538→                    onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
+  1539→  1539→                    placeholder={t.students.phonePlaceholder}
+  1540→  1540→                    dir="ltr"
+  1541→  1541→                  />
+  1542→  1542→                </div>
+  1543→  1543→              </div>
+  1544→  1544→            </div>
+  1545→  1545→
+  1546→  1546→            {/* Parent Info */}
+  1547→  1547→            <div className="space-y-3">
+  1548→  1548→              <h4 className="text-sm font-semibold flex items-center gap-2">
+  1549→  1549→                <Users className="h-4 w-4 text-teal-600" />
+  1550→  1550→                {t.students.parentInfo}
+  1551→  1551→              </h4>
+  1552→  1552→              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+  1553→  1553→                <div className="space-y-1.5">
+  1554→  1554→                  <Label htmlFor="parentName">{t.students.parentName}</Label>
+  1555→  1555→                  <Input
+  1556→  1556→                    id="parentName"
+  1557→  1557→                    value={form.parentName}
+  1558→  1558→                    onChange={(e) => setForm((prev) => ({ ...prev, parentName: e.target.value }))}
+  1559→  1559→                    placeholder={t.students.parentNamePlaceholder}
+  1560→  1560→                  />
+  1561→  1561→                </div>
+  1562→  1562→                <div className="space-y-1.5">
+  1563→  1563→                  <Label htmlFor="parentPhone">{t.students.parentPhone}</Label>
+  1564→  1564→                  <Input
+  1565→  1565→                    id="parentPhone"
+  1566→  1566→                    value={form.parentPhone}
+  1567→  1567→                    onChange={(e) => setForm((prev) => ({ ...prev, parentPhone: e.target.value }))}
+  1568→  1568→                    placeholder={t.students.parentPhonePlaceholder}
+  1569→  1569→                    dir="ltr"
+  1570→  1570→                  />
+  1571→  1571→                </div>
+  1572→  1572→              </div>
+  1573→  1573→            </div>
+  1574→  1574→
+  1575→  1575→            {/* Enrollment Date */}
+  1576→  1576→            <div className="space-y-3">
+  1577→  1577→              <h4 className="text-sm font-semibold flex items-center gap-2">
+  1578→  1578→                <UserCheck className="h-4 w-4 text-teal-600" />
+  1579→  1579→                {t.students.enrollmentDateLabel}
+  1580→  1580→              </h4>
+  1581→  1581→              <div className="space-y-1.5">
+  1582→  1582→                <Label htmlFor="enrollmentDate">{t.students.enrollmentDateLabel}</Label>
+  1583→  1583→                <Input
+  1584→  1584→                  id="enrollmentDate"
+  1585→  1585→                  type="date"
+  1586→  1586→                  value={form.enrollmentDate}
+  1587→  1587→                  onChange={(e) => setForm((prev) => ({ ...prev, enrollmentDate: e.target.value }))}
+  1588→  1588→                  max={new Date().toISOString().split('T')[0]}
+  1589→  1589→                  dir="ltr"
+  1590→  1590→                  className="text-left"
+  1591→  1591→                />
+  1592→  1592→              </div>
+  1593→  1593→            </div>
+  1594→  1594→          </div>
+  1595→  1595→        );
+  1596→  1596→
+  1597→  1597→      default:
+  1598→  1598→        return null;
+  1599→  1599→    }
+  1600→  1600→  }
+  1601→  1601→
+  1602→  1602→  // ── Main render ───────────────────────────────────────────────────────
+  1603→  1603→
+  1604→  1604→  return (
+  1605→  1605→    <div className="space-y-4">
+  1606→  1606→      {/* Header & Actions */}
+  1607→  1607→      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+  1608→  1608→        <div className="flex items-center gap-2 text-muted-foreground">
+  1609→  1609→          <Users className="h-5 w-5" />
+  1610→  1610→          <span className="text-sm">
+  1611→  1611→            {displayedStudents.length} {t.students.studentCount}
+  1612→  1612→          </span>
+  1613→  1613→          {(filterServiceId || filterSubjectId || filterLevelId) && (
+  1614→  1614→            <button
+  1615→  1615→              onClick={() => { setFilterServiceId(''); setFilterSubjectId(''); setFilterLevelId(''); }}
+  1616→  1616→              className="text-xs text-teal-600 hover:text-teal-800 underline"
+  1617→  1617→            >
+  1618→  1618→              إعادة تعيين الفلاتر
+  1619→  1619→            </button>
+  1620→  1620→          )}
+  1621→  1621→        </div>
+  1622→  1622→        <Button onClick={() => handleOpenDialog()} className="gap-2">
+  1623→  1623→          <Plus className="h-4 w-4" />
+  1624→  1624→          {t.students.addStudent}
+  1625→  1625→        </Button>
+  1626→  1626→      </div>
+  1627→  1627→
+  1628→  1628→      {/* Search & Filters */}
+  1629→  1629→      <Card>
+  1630→  1630→        <CardContent className="p-4">
+  1631→  1631→          <Tabs value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setLoading(true); }}>
+  1632→  1632→            <div className="flex flex-col gap-3">
+  1633→  1633→              <div className="flex flex-col sm:flex-row gap-3">
+  1634→  1634→                <div className="relative flex-1">
+  1635→  1635→                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+  1636→  1636→                  <Input
+  1637→  1637→                    placeholder={t.students.searchPlaceholder}
+  1638→  1638→                    value={search}
+  1639→  1639→                    onChange={(e) => setSearch(e.target.value)}
+  1640→  1640→                    className="pr-9"
+  1641→  1641→                  />
+  1642→  1642→                </div>
+  1643→  1643→                <TabsList>
+  1644→  1644→                  <TabsTrigger value="all">{t.common.all}</TabsTrigger>
+  1645→  1645→                  <TabsTrigger value="active">{t.common.active}</TabsTrigger>
+  1646→  1646→                  <TabsTrigger value="inactive">{t.common.inactive}</TabsTrigger>
+  1647→  1647→                </TabsList>
+  1648→  1648→              </div>
+  1649→  1649→              {/* Service / Subject / Level filters */}
+  1650→  1650→              <div className="flex flex-wrap gap-2">
+  1651→  1651→                <select
+  1652→  1652→                  value={filterServiceId}
+  1653→  1653→                  onChange={(e) => handleFilterServiceChange(e.target.value)}
+  1654→  1654→                  className="h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+  1655→  1655→                >
+  1656→  1656→                  <option value="">كل الخدمات</option>
+  1657→  1657→                  {services.map((svc) => (
+  1658→  1658→                    <option key={svc.id} value={svc.id}>{svc.nameAr}</option>
+  1659→  1659→                  ))}
+  1660→  1660→                </select>
+  1661→  1661→                {filterSubjects.length > 0 && (
+  1662→  1662→                  <select
+  1663→  1663→                    value={filterSubjectId}
+  1664→  1664→                    onChange={(e) => handleFilterSubjectChange(e.target.value)}
+  1665→  1665→                    className="h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+  1666→  1666→                  >
+  1667→  1667→                    <option value="">كل المواد</option>
+  1668→  1668→                    {filterSubjects.map((subj) => (
+  1669→  1669→                      <option key={subj.id} value={subj.id}>{subj.nameAr}</option>
+  1670→  1670→                    ))}
+  1671→  1671→                  </select>
+  1672→  1672→                )}
+  1673→  1673→                {filterLevels.length > 0 && (
+  1674→  1674→                  <select
+  1675→  1675→                    value={filterLevelId}
+  1676→  1676→                    onChange={(e) => setFilterLevelId(e.target.value)}
+  1677→  1677→                    className="h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+  1678→  1678→                  >
+  1679→  1679→                    <option value="">كل المستويات</option>
+  1680→  1680→                    {filterLevels.map((lvl) => (
+  1681→  1681→                      <option key={lvl.id} value={lvl.id}>{lvl.nameAr}</option>
+  1682→  1682→                    ))}
+  1683→  1683→                  </select>
+  1684→  1684→                )}
+  1685→  1685→                {(filterServiceId || filterSubjectId || filterLevelId) && (
+  1686→  1686→                  <Badge className="bg-teal-100 text-teal-700 border-teal-200 h-9 px-3 font-medium">
+  1687→  1687→                    {displayedStudents.length} طالب
+  1688→  1688→                  </Badge>
+  1689→  1689→                )}
+  1690→  1690→              </div>
+  1691→  1691→            </div>
+  1692→  1692→          </Tabs>
+  1693→  1693→        </CardContent>
+  1694→  1694→      </Card>
+  1695→  1695→
+  1696→  1696→      {/* Table */}
+  1697→  1697→      <Card>
+  1698→  1698→        <CardContent className="p-0">
+  1699→  1699→          {loading ? (
+  1700→  1700→            <div className="p-4 space-y-3">
+  1701→  1701→              {Array.from({ length: 5 }).map((_, i) => (
+  1702→  1702→                <Skeleton key={i} className="h-10 w-full" />
+  1703→  1703→              ))}
+  1704→  1704→            </div>
+  1705→  1705→          ) : displayedStudents.length === 0 ? (
+  1706→  1706→            <div className="text-center py-12 text-muted-foreground">
+  1707→  1707→              <Users className="h-12 w-12 mx-auto mb-3 opacity-30" />
+  1708→  1708→              <p className="font-medium">{t.students.noStudents}</p>
+  1709→  1709→              <p className="text-sm mt-1">{t.students.addFirst}</p>
+  1710→  1710→            </div>
+  1711→  1711→          ) : (
+  1712→  1712→            <div className="max-h-[500px] overflow-y-auto">
+  1713→  1713→              <Table>
+  1714→  1714→                <TableHeader>
+  1715→  1715→                  <TableRow>
+  1716→  1716→                    <TableHead className="text-right">{t.students.fullName}</TableHead>
+  1717→  1717→                    <TableHead className="text-right hidden md:table-cell">{t.students.level}</TableHead>
+  1718→  1718→                    <TableHead className="text-right hidden lg:table-cell">{t.students.teacher}</TableHead>
+  1719→  1719→                    <TableHead className="text-right hidden md:table-cell">{t.common.phone}</TableHead>
+  1720→  1720→                    {isAdmin && (
+  1721→  1721→                      <TableHead className="text-right hidden sm:table-cell">{t.students.fee}</TableHead>
+  1722→  1722→                    )}
+  1723→  1723→                    {isAdmin && (
+  1724→  1724→                      <TableHead className="text-center">الدفعة</TableHead>
+  1725→  1725→                    )}
+  1726→  1726→                    <TableHead className="text-right">{t.common.status}</TableHead>
+  1727→  1727→                    <TableHead className="text-right hidden lg:table-cell">{t.students.enrollment}</TableHead>
+  1728→  1728→                    <TableHead className="text-right">{t.common.actions}</TableHead>
+  1729→  1729→                  </TableRow>
+  1730→  1730→                </TableHeader>
+  1731→  1731→                <TableBody>
+  1732→  1732→                  {displayedStudents.map((student) => {
+  1733→  1733→                    const enrollments = student.enrollments || [];
+  1734→  1734→                    const hasEnrollments = enrollments.length > 0;
+  1735→  1735→                    const data = getStudentEnrollmentData(student);
+  1736→  1736→
+  1737→  1737→                    return (
+  1738→  1738→                      <TableRow key={student.id}>
+  1739→  1739→                        <TableCell className="font-medium text-right">
+  1740→  1740→                          <div className="flex items-center gap-2">
+  1741→  1741→                            <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${getAvatarColor(student.fullName)}`}>
+  1742→  1742→                              {student.fullName.charAt(0)}
+  1743→  1743→                            </div>
+  1744→  1744→                            <div className="min-w-0">
+  1745→  1745→                              <p className="font-medium text-sm truncate">{student.fullName}</p>
+  1746→  1746→                              {student.parentName && (
+  1747→  1747→                                <p className="text-xs text-muted-foreground truncate">
+  1748→  1748→                                  {t.students.guardian}{student.parentName}
+  1749→  1749→                                </p>
+  1750→  1750→                              )}
+  1751→  1751→                            </div>
+  1752→  1752→                          </div>
+  1753→  1753→                        </TableCell>
+  1754→  1754→                        <TableCell className="text-right hidden md:table-cell">
+  1755→  1755→                          {hasEnrollments ? (
+  1756→  1756→                            <div className="flex flex-wrap gap-1">
+  1757→  1757→                              {enrollments.map((e, idx) => (
+  1758→  1758→                                <Badge key={e.id || idx} variant="outline" className="text-[11px] gap-0.5">
+  1759→  1759→                                  {e.level?.subject?.nameAr && (
+  1760→  1760→                                    <span className="text-muted-foreground">{e.level.subject.nameAr}</span>
+  1761→  1761→                                  )}
+  1762→  1762→                                  {e.level?.subject?.nameAr && e.level?.nameAr && (
+  1763→  1763→                                    <span className="mx-0.5">—</span>
+  1764→  1764→                                  )}
+  1765→  1765→                                  {e.level?.nameAr && (
+  1766→  1766→                                    <span className="font-medium">{e.level.nameAr}</span>
+  1767→  1767→                                  )}
+  1768→  1768→                                </Badge>
+  1769→  1769→                              ))}
+  1770→  1770→                            </div>
+  1771→  1771→                          ) : student.level ? (
+  1772→  1772→                            <div className="text-sm">
+  1773→  1773→                              <span className="text-muted-foreground">{student.level.subject?.nameAr}</span>
+  1774→  1774→                              <span className="mx-1">—</span>
+  1775→  1775→                              <span className="font-medium">{student.level.nameAr}</span>
+  1776→  1776→                            </div>
+  1777→  1777→                          ) : (
+  1778→  1778→                            <span className="text-muted-foreground">—</span>
+  1779→  1779→                          )}
+  1780→  1780→                        </TableCell>
+  1781→  1781→                        <TableCell className="text-right hidden lg:table-cell">
+  1782→  1782→                          {hasEnrollments ? (
+  1783→  1783→                            <div className="flex flex-wrap gap-1">
+  1784→  1784→                              {enrollments
+  1785→  1785→                                .filter((e) => e.teacher)
+  1786→  1786→                                .map((e, idx) => (
+  1787→  1787→                                  <span key={e.id || idx} className="text-sm">
+  1788→  1788→                                    {e.teacher!.fullName}
+  1789→  1789→                                    {idx < enrollments.filter((ee) => ee.teacher).length - 1 && (
+  1790→  1790→                                      <span className="text-muted-foreground">، </span>
+  1791→  1791→                                    )}
+  1792→  1792→                                  </span>
+  1793→  1793→                                ))}
+  1794→  1794→                              {!enrollments.some((e) => e.teacher) && (
+  1795→  1795→                                <span className="text-muted-foreground text-sm">{t.students.withoutTeacher}</span>
+  1796→  1796→                              )}
+  1797→  1797→                            </div>
+  1798→  1798→                          ) : student.teacher ? (
+  1799→  1799→                            <div className="flex items-center gap-1.5 text-sm">
+  1800→  1800→                              <div className={`h-6 w-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${getAvatarColor(student.teacher.fullName)}`}>
+  1801→  1801→                                {student.teacher.fullName.charAt(0)}
+  1802→  1802→                              </div>
+  1803→  1803→                              <span>{student.teacher.fullName}</span>
+  1804→  1804→                            </div>
+  1805→  1805→                          ) : (
+  1806→  1806→                            <span className="text-muted-foreground text-sm">{t.students.withoutTeacher}</span>
+  1807→  1807→                          )}
+  1808→  1808→                        </TableCell>
+  1809→  1809→                        <TableCell className="text-right hidden md:table-cell">
+  1810→  1810→                          <div className="flex items-center gap-1 text-sm">
+  1811→  1811→                            <Phone className="h-3 w-3 text-muted-foreground" />
+  1812→  1812→                            {student.phone || '—'}
+  1813→  1813→                          </div>
+  1814→  1814→                        </TableCell>
+  1815→  1815→                        {isAdmin && (
+  1816→  1816→                          <TableCell className="text-right hidden sm:table-cell">
+  1817→  1817→                            {data.totalFee > 0 ? (
+  1818→  1818→                              <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100 font-medium">
+  1819→  1819→                                {data.totalFee.toLocaleString('ar-MA')} {t.common.dh}
+  1820→  1820→                              </Badge>
+  1821→  1821→                            ) : (
+  1822→  1822→                              <span className="text-muted-foreground text-sm">—</span>
+  1823→  1823→                            )}
+  1824→  1824→                          </TableCell>
+  1825→  1825→                        )}
+  1826→  1826→                        {isAdmin && (
+  1827→  1827→                          <TableCell className="text-center">
+  1828→  1828→                            {data.allPackPaid ? (
+  1829→  1829→                              <div className="flex items-center justify-center gap-1" title="الpack مخلص">
+  1830→  1830→                                <CircleCheck className="h-5 w-5 text-emerald-500" />
+  1831→  1831→                              </div>
+  1832→  1832→                            ) : (
+  1833→  1833→                              <div className="flex items-center justify-center gap-1" title={data.earliestDueDate ? `تاريخ الاستحقاق: ${data.earliestDueDate}` : 'لم يدفع بعد'}>
+  1834→  1834→                                <CircleAlert className="h-5 w-5 text-red-400" />
+  1835→  1835→                              </div>
+  1836→  1836→                            )}
+  1837→  1837→                          </TableCell>
+  1838→  1838→                        )}
+  1839→  1839→                        <TableCell className="text-right">
+  1840→  1840→                          <div className="flex items-center gap-2">
+  1841→  1841→                            <Switch
+  1842→  1842→                              checked={student.status === 'active'}
+  1843→  1843→                              onCheckedChange={() => handleToggleStatus(student)}
+  1844→  1844→                            />
+  1845→  1845→                            {getStatusBadge(student.status)}
+  1846→  1846→                          </div>
+  1847→  1847→                        </TableCell>
+  1848→  1848→                        <TableCell className="text-right hidden lg:table-cell text-sm">
+  1849→  1849→                          {student.enrollmentDate
+  1850→  1850→                            ? new Date(student.enrollmentDate).toLocaleDateString('ar-MA')
+  1851→  1851→                            : '—'}
+  1852→  1852→                        </TableCell>
+  1853→  1853→                        <TableCell className="text-right">
+  1854→  1854→                          <div className="flex items-center gap-1">
+  1855→  1855→                            <Button
+  1856→  1856→                              variant="ghost"
+  1857→  1857→                              size="icon"
+  1858→  1858→                              className="h-8 w-8"
+  1859→  1859→                              onClick={() => handleOpenDialog(student)}
+  1860→  1860→                            >
+  1861→  1861→                              <Pencil className="h-3.5 w-3.5" />
+  1862→  1862→                            </Button>
+  1863→  1863→                            <AlertDialog open={deletingId === student.id} onOpenChange={(open) => setDeletingId(open ? student.id : null)}>
+  1864→  1864→                              <AlertDialogTrigger asChild>
+  1865→  1865→                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive">
+  1866→  1866→                                  <Trash2 className="h-3.5 w-3.5" />
+  1867→  1867→                                </Button>
+  1868→  1868→                              </AlertDialogTrigger>
+  1869→  1869→                              <AlertDialogContent>
+  1870→  1870→                                <AlertDialogHeader>
+  1871→  1871→                                  <AlertDialogTitle>{t.common.deleteConfirm}</AlertDialogTitle>
+  1872→  1872→                                  <AlertDialogDescription>
+  1873→  1873→                                    {t.students.deleteConfirmMsg} &quot;{student.fullName}&quot;? {t.common.cannotUndo}
+  1874→  1874→                                  </AlertDialogDescription>
+  1875→  1875→                                </AlertDialogHeader>
+  1876→  1876→                                <AlertDialogFooter>
+  1877→  1877→                                  <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
+  1878→  1878→                                  <AlertDialogAction
+  1879→  1879→                                    onClick={() => handleDelete(student.id)}
+  1880→  1880→                                    className="bg-destructive text-white hover:bg-destructive/90"
+  1881→  1881→                                  >
+  1882→  1882→                                    {t.common.delete}
+  1883→  1883→                                  </AlertDialogAction>
+  1884→  1884→                                </AlertDialogFooter>
+  1885→  1885→                              </AlertDialogContent>
+  1886→  1886→                            </AlertDialog>
+  1887→  1887→                          </div>
+  1888→  1888→                        </TableCell>
+  1889→  1889→                      </TableRow>
+  1890→  1890→                    );
+  1891→  1891→                  })}
+  1892→  1892→                </TableBody>
+  1893→  1893→              </Table>
+  1894→  1894→            </div>
+  1895→  1895→          )}
+  1896→  1896→        </CardContent>
+  1897→  1897→      </Card>
+  1898→  1898→
+  1899→  1899→      {/* ═══════════════════════════════════════════════════════════════════
+  1900→  1900→          REGISTRATION WIZARD DIALOG
+  1901→  1901→          ═══════════════════════════════════════════════════════════════════ */}
+  1902→  1902→      <Dialog
+  1903→  1903→        open={dialogOpen}
+  1904→  1904→        onOpenChange={(open) => {
+  1905→  1905→          if (!open) {
+  1906→  1906→            setDialogOpen(false);
+  1907→  1907→            resetWizard();
+  1908→  1908→          }
+  1909→  1909→        }}
+  1910→  1910→      >
+  1911→  1911→        <DialogContent className="sm:max-w-lg flex flex-col p-0 gap-0 max-h-[90vh]">
+  1912→  1912→          {/* Header */}
+  1913→  1913→          <DialogHeader className="px-8 pt-6 pb-2 shrink-0">
+  1914→  1914→            <DialogTitle>
+  1915→  1915→              {editingStudent ? t.students.editStudent : t.students.addStudent}
+  1916→  1916→            </DialogTitle>
+  1917→  1917→            <DialogDescription>
+  1918→  1918→              {editingStudent ? t.students.editDesc : t.students.addDesc}
+  1919→  1919→            </DialogDescription>
+  1920→  1920→          </DialogHeader>
+  1921→  1921→
+  1922→  1922→          {/* Step indicator (hide in edit mode or when on step 5 in edit mode) */}
+  1923→  1923→          {!editingStudent && StepIndicator()}
+  1924→  1924→
+  1925→  1925→          {/* Body - scrollable */}
+  1926→  1926→          <div className="flex-1 overflow-y-auto px-8 pb-4 min-h-0">
+  1927→  1927→            {StepContent()}
+  1928→  1928→          </div>
+  1929→  1929→
+  1930→  1930→          {/* Footer - sticky */}
+  1931→  1931→          <DialogFooter className="px-8 py-4 border-t shrink-0">
+  1932→  1932→            <div className="flex items-center justify-between w-full gap-2">
+  1933→  1933→              {/* Left side: back or skip */}
+  1934→  1934→              <div>
+  1935→  1935→                {wizardStep === 4 && !editingStudent && (
+  1936→  1936→                  <Button
+  1937→  1937→                    type="button"
+  1938→  1938→                    variant="ghost"
+  1939→  1939→                    size="sm"
+  1940→  1940→                    onClick={handleSkipTeacher}
+  1941→  1941→                    className="gap-1 text-muted-foreground"
+  1942→  1942→                  >
+  1943→  1943→                    {t.common.skip}
+  1944→  1944→                    <ChevronLeft className="h-3 w-3" />
+  1945→  1945→                  </Button>
+  1946→  1946→                )}
+  1947→  1947→                {wizardStep > 1 && wizardStep < 5 && !editingStudent && (
+  1948→  1948→                  <Button
+  1949→  1949→                    type="button"
+  1950→  1950→                    variant="ghost"
+  1951→  1951→                    size="sm"
+  1952→  1952→                    onClick={() => goToStep((wizardStep - 1) as WizardStep)}
+  1953→  1953→                    className="gap-1"
+  1954→  1954→                  >
+  1955→  1955→                    {t.common.back}
+  1956→  1956→                    <ChevronRight className="h-3 w-3" />
+  1957→  1957→                  </Button>
+  1958→  1958→                )}
+  1959→  1959→                {/* In edit mode step 1-4: save enrollment (back to step 5) */}
+  1960→  1960→                {editingStudent && wizardStep < 5 && (
+  1961→  1961→                  <Button
+  1962→  1962→                    type="button"
+  1963→  1963→                    variant="ghost"
+  1964→  1964→                    size="sm"
+  1965→  1965→                    onClick={() => {
+  1966→  1966→                      if (wizardStep < 5 && currentDraft.levelId) {
+  1967→  1967→                        handleEditAddEnrollment();
+  1968→  1968→                      } else {
+  1969→  1969→                        // Cancel sub-wizard, go back to step 5
+  1970→  1970→                        setCurrentDraft(emptyDraft());
+  1971→  1971→                        setWizardStep(5);
+  1972→  1972→                      }
+  1973→  1973→                    }}
+  1974→  1974→                    className="gap-1"
+  1975→  1975→                  >
+  1976→  1976→                    {t.common.back}
+  1977→  1977→                    <ChevronRight className="h-3 w-3" />
+  1978→  1978→                  </Button>
+  1979→  1979→                )}
+  1980→  1980→              </div>
+  1981→  1981→
+  1982→  1982→              {/* Right side: cancel + save */}
+  1983→  1983→              <div className="flex items-center gap-2">
+  1984→  1984→                {editingStudent && (
+  1985→  1985→                  <AlertDialog>
+  1986→  1986→                    <AlertDialogTrigger asChild>
+  1987→  1987→                      <Button type="button" variant="outline" className="text-destructive hover:text-destructive gap-1">
+  1988→  1988→                        <Trash2 className="h-4 w-4" />
+  1989→  1989→                        {t.common.delete}
+  1990→  1990→                      </Button>
+  1991→  1991→                    </AlertDialogTrigger>
+  1992→  1992→                    <AlertDialogContent>
+  1993→  1993→                      <AlertDialogHeader>
+  1994→  1994→                        <AlertDialogTitle>{t.common.deleteConfirm}</AlertDialogTitle>
+  1995→  1995→                        <AlertDialogDescription>
+  1996→  1996→                          {t.students.deleteConfirmMsg} &quot;{editingStudent.fullName}&quot;? {t.common.cannotUndo}
+  1997→  1997→                        </AlertDialogDescription>
+  1998→  1998→                      </AlertDialogHeader>
+  1999→  1999→                      <AlertDialogFooter>
+  2000→  2000→                        <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
+
+[showing lines 1-2000 of 2002; use offset=2001 with limit to continue reading]
