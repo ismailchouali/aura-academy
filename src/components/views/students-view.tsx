@@ -514,23 +514,48 @@ export function StudentsView() {
     setWizardStep(4);
   };
 
+  const buildEnrollmentFromDraft = (draft: EnrollmentDraft, teacherId: string | null, teacherName: string, noTeacher: boolean): Enrollment => ({
+    serviceId: draft.serviceId,
+    service: services.find((s) => s.id === draft.serviceId) ? { id: draft.serviceId, name: '', nameAr: draft.serviceNameAr, nameFr: '' } : null,
+    subjectId: draft.subjectId || null,
+    subject: draft.subjectId ? { id: draft.subjectId, name: '', nameAr: draft.subjectNameAr, nameFr: '' } : null,
+    levelId: draft.levelId,
+    level: { id: draft.levelId, name: '', nameAr: draft.levelNameAr, nameFr: '' },
+    teacherId: noTeacher ? null : (teacherId || null),
+    teacher: noTeacher ? null : (teacherId ? { id: teacherId, fullName: teacherName } : null),
+    monthlyFee: parseFloat(draft.monthlyFee) || 0,
+    packMonths: draft.packMonths || 1,
+    status: 'active',
+    enrollmentDate: form.enrollmentDate || new Date().toISOString(),
+    isPackPaid: false,
+  });
+
   const handleSelectTeacher = (teacher: Teacher | null) => {
-    if (teacher === null) {
-      setCurrentDraft((d) => ({ ...d, teacherId: null, teacherName: '', noTeacher: true }));
-    } else {
-      setCurrentDraft((d) => ({ ...d, teacherId: teacher.id, teacherName: teacher.fullName, noTeacher: false }));
-    }
-    // Save the draft and go to step 5
     const teacherId = teacher ? teacher.id : null;
     const teacherName = teacher ? teacher.fullName : '';
     const noTeacherFlag = !teacher;
-    setEnrollmentsBeingAdded((prev) => [...prev, { ...currentDraft, teacherId, teacherName, noTeacher: noTeacherFlag }]);
+
+    if (editingStudent) {
+      // Edit mode: add to editEnrollments
+      const newEnrollment = buildEnrollmentFromDraft(currentDraft, teacherId, teacherName, noTeacherFlag);
+      setEditEnrollments((prev) => [...prev, newEnrollment]);
+    } else {
+      // Add mode: add to enrollmentsBeingAdded
+      setEnrollmentsBeingAdded((prev) => [...prev, { ...currentDraft, teacherId, teacherName, noTeacher: noTeacherFlag }]);
+    }
     setCurrentDraft(emptyDraft());
     setWizardStep(5);
   };
 
   const handleSkipTeacher = () => {
-    setEnrollmentsBeingAdded((prev) => [...prev, { ...currentDraft, teacherId: null, teacherName: '', noTeacher: true }]);
+    if (editingStudent) {
+      // Edit mode: add to editEnrollments
+      const newEnrollment = buildEnrollmentFromDraft(currentDraft, null, '', true);
+      setEditEnrollments((prev) => [...prev, newEnrollment]);
+    } else {
+      // Add mode: add to enrollmentsBeingAdded
+      setEnrollmentsBeingAdded((prev) => [...prev, { ...currentDraft, teacherId: null, teacherName: '', noTeacher: true }]);
+    }
     setCurrentDraft(emptyDraft());
     setWizardStep(5);
   };
@@ -557,29 +582,14 @@ export function StudentsView() {
     setEditEnrollments((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // ── Edit mode: finish adding sub-wizard enrollment ──────────────────
+  // ── Edit mode: finish adding sub-wizard enrollment (via footer button) ──
   const handleEditAddEnrollment = () => {
-    // Save current draft to editEnrollments
     const draft = currentDraft;
     if (!draft.serviceId || !draft.levelId) {
       toast.error(t.students.selectLevel);
       return;
     }
-    const newEnrollment: Enrollment = {
-      serviceId: draft.serviceId,
-      service: services.find((s) => s.id === draft.serviceId) ? { id: draft.serviceId, name: '', nameAr: draft.serviceNameAr, nameFr: '' } : null,
-      subjectId: draft.subjectId || null,
-      subject: draft.subjectId ? { id: draft.subjectId, name: '', nameAr: draft.subjectNameAr, nameFr: '' } : null,
-      levelId: draft.levelId,
-      level: { id: draft.levelId, name: '', nameAr: draft.levelNameAr, nameFr: '' },
-      teacherId: draft.noTeacher ? null : (draft.teacherId || null),
-      teacher: draft.noTeacher ? null : (draft.teacherId ? { id: draft.teacherId, fullName: draft.teacherName } : null),
-      monthlyFee: parseFloat(draft.monthlyFee) || 0,
-      packMonths: draft.packMonths || 1,
-      status: 'active',
-      enrollmentDate: form.enrollmentDate || new Date().toISOString(),
-      isPackPaid: false,
-    };
+    const newEnrollment = buildEnrollmentFromDraft(draft, draft.noTeacher ? null : draft.teacherId, draft.teacherName, draft.noTeacher);
     setEditEnrollments((prev) => [...prev, newEnrollment]);
     setCurrentDraft(emptyDraft());
     setWizardStep(5);
@@ -1932,7 +1942,7 @@ export function StudentsView() {
             <div className="flex items-center justify-between w-full gap-2">
               {/* Left side: back or skip */}
               <div>
-                {wizardStep === 4 && !editingStudent && (
+                {wizardStep === 4 && (
                   <Button
                     type="button"
                     variant="ghost"
