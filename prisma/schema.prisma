@@ -109,6 +109,7 @@ model Student {
   packMonths     Int      @default(1)
   status        String   @default("active")
   enrollmentDate DateTime @default(now())
+  cycleStartDate DateTime? // cycle restart anchor (legacy students): new payment cycle begins here
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   payments      Payment[]
@@ -131,6 +132,7 @@ model StudentEnrollment {
   packMonths     Int      @default(1)
   status         String   @default("active")
   enrollmentDate DateTime @default(now())
+  cycleStartDate DateTime? // cycle restart anchor: student re-joined, new cycle (day + months) starts from this date; all months before are wiped
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   payments       Payment[]

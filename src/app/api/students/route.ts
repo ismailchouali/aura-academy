@@ -25,6 +25,43 @@ function getEffectiveCycleDay(cycleDay: number, year: number, monthIndex: number
   return Math.min(cycleDay, lastDayOfMonth);
 }
 
+/* ------------------------------------------------------------------ */
+/*  Cycle restart resolution                                           */
+/* ------------------------------------------------------------------ */
+/**
+ * Resolve the effective cycle anchor and the payments that participate in the
+ * current cycle. When a student/enrollment has been restarted (returning
+ * student), cycleStartDate becomes the FULL anchor: its day-of-month is the
+ * new fixed due day and its month is the start of the coverage queue. All
+ * months before the restart are wiped, and only payments made on/after the
+ * restart date participate in the new cycle.
+ */
+function resolveCycle<T extends { paymentDate: Date | string | null; month: string; year: number }>(
+  enrollmentDate: Date,
+  cycleStartDate: Date | string | null | undefined,
+  payments: T[],
+): { anchor: Date; cyclePayments: T[] } {
+  const restartDate = cycleStartDate
+    ? (cycleStartDate instanceof Date ? cycleStartDate : new Date(cycleStartDate))
+    : null;
+
+  if (!restartDate) {
+    return { anchor: enrollmentDate, cyclePayments: payments };
+  }
+
+  const restartTime = new Date(restartDate.getFullYear(), restartDate.getMonth(), restartDate.getDate()).getTime();
+
+  const cyclePayments = payments.filter((p) => {
+    const pd = p.paymentDate
+      ? (p.paymentDate instanceof Date ? p.paymentDate : new Date(p.paymentDate))
+      : null;
+    if (pd) return pd.getTime() >= restartTime;
+    return new Date(p.year, getMonthIndex(p.month), 1).getTime() >= restartTime;
+  });
+
+  return { anchor: restartDate, cyclePayments };
+}
+
 /**
  * Queue-based Logic A coverage calculation.
  * Given an enrollment date and a list of fully-paid payments, compute
@@ -168,7 +205,9 @@ export async function GET(request: NextRequest) {
             enrollment.enrollmentDate instanceof Date
               ? enrollment.enrollmentDate
               : new Date(enrollment.enrollmentDate);
-          const coverage = calculateCoverage(eDate, enrollment.payments, currentYM);
+          // Cycle restart (returning student): anchor + eligible payments for the new cycle
+          const { anchor, cyclePayments } = resolveCycle(eDate, enrollment.cycleStartDate, enrollment.payments);
+          const coverage = calculateCoverage(anchor, cyclePayments, currentYM);
           return { ...enrollment, ...coverage };
         });
 
@@ -220,7 +259,9 @@ export async function GET(request: NextRequest) {
               ? student.enrollmentDate
               : new Date(student.enrollmentDate))
             : new Date();
-          const coverage = calculateCoverage(eDate, payments, currentYM);
+          // Cycle restart (returning student): anchor + eligible payments for the new cycle
+          const { anchor, cyclePayments } = resolveCycle(eDate, student.cycleStartDate, payments);
+          const coverage = calculateCoverage(anchor, cyclePayments, currentYM);
           isPackPaid = coverage.isPackPaid;
           nextDueDate = coverage.nextDueDate;
         }

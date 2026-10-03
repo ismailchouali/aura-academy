@@ -58,6 +58,7 @@ import {
   Sparkles,
   CircleCheck,
   CircleAlert,
+  RotateCcw,
   X,
 } from 'lucide-react';
 
@@ -84,6 +85,7 @@ interface Enrollment {
   packMonths: number;
   status: string;
   enrollmentDate: string;
+  cycleStartDate?: string | null;
   isPackPaid?: boolean;
   nextDueDate?: string | null;
   payments?: any[];
@@ -273,6 +275,11 @@ export function StudentsView() {
 
   // ── Delete state ────────────────────────────────────────────────────────
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // ── Cycle restart (returning student) state ─────────────────────────
+  const [restartTarget, setRestartTarget] = useState<{ id: string; label: string; current: string | null } | null>(null);
+  const [restartDate, setRestartDate] = useState('');
+  const [restartSaving, setRestartSaving] = useState(false);
 
   // ── Computed: student count per teacher (from enrollments) ─────────────
   const studentCountsMap = useMemo(() => {
@@ -582,6 +589,50 @@ export function StudentsView() {
     setEditEnrollments((prev) => prev.filter((_, i) => i !== index));
   };
 
+  // ── Cycle restart (returning student) ───────────────────────────────
+  const openRestartDialog = (enrollment: Enrollment) => {
+    if (!enrollment.id) return;
+    const label = enrollment.subject?.nameAr || enrollment.service?.nameAr || '';
+    setRestartTarget({
+      id: enrollment.id,
+      label,
+      current: enrollment.cycleStartDate || null,
+    });
+    setRestartDate(
+      enrollment.cycleStartDate
+        ? new Date(enrollment.cycleStartDate).toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0]
+    );
+  };
+
+  const handleSaveRestart = async (clear = false) => {
+    if (!restartTarget) return;
+    setRestartSaving(true);
+    try {
+      const res = await fetch(`/api/enrollments/${restartTarget.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cycleStartDate: clear ? null : (restartDate || null) }),
+      });
+      if (!res.ok) throw new Error();
+      const updated = await res.json();
+      setEditEnrollments((prev) =>
+        prev.map((e) =>
+          e.id === restartTarget.id
+            ? { ...e, cycleStartDate: updated.cycleStartDate }
+            : e
+        )
+      );
+      toast.success(clear ? t.students.restartCleared : t.students.restartSaved);
+      setRestartTarget(null);
+      fetchStudents();
+    } catch {
+      toast.error(t.common.saveError);
+    } finally {
+      setRestartSaving(false);
+    }
+  };
+
   // ── Edit mode: finish adding sub-wizard enrollment (via footer button) ──
   const handleEditAddEnrollment = () => {
     const draft = currentDraft;
@@ -614,6 +665,8 @@ export function StudentsView() {
         monthlyFee: e.monthlyFee,
         packMonths: e.packMonths,
         enrollmentDate: e.enrollmentDate || form.enrollmentDate,
+        // Preserve cycle restart through the full-form save (only when known)
+        ...(e.cycleStartDate !== undefined ? { cycleStartDate: e.cycleStartDate } : {}),
       }));
 
       if (allEnrollments.length === 0) {
@@ -963,7 +1016,25 @@ export function StudentsView() {
               {enrollment.monthlyFee.toLocaleString('ar-MA')} {t.common.dh}
             </Badge>
           )}
+          {isAdmin && enrollment.cycleStartDate && (
+            <Badge className="bg-teal-100 text-teal-700 border-teal-200 hover:bg-teal-100 text-xs gap-1">
+              <RotateCcw className="h-3 w-3" />
+              {t.students.cycleRestartedBadge} {new Date(enrollment.cycleStartDate).toLocaleDateString('fr-FR')}
+            </Badge>
+          )}
         </div>
+        {isAdmin && enrollment.id && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 shrink-0 text-teal-600 hover:text-teal-700 hover:bg-teal-50"
+            title={t.students.restartCycleTitle}
+            onClick={() => openRestartDialog(enrollment)}
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+          </Button>
+        )}
         <Button
           type="button"
           variant="ghost"
@@ -2120,6 +2191,65 @@ export function StudentsView() {
                 )}
               </div>
             </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Cycle restart dialog (returning students) ── */}
+      <Dialog open={!!restartTarget} onOpenChange={(open) => !open && setRestartTarget(null)}>
+        <DialogContent className="sm:max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RotateCcw className="h-5 w-5 text-teal-600" />
+              {t.students.restartCycleTitle}
+            </DialogTitle>
+            <DialogDescription>
+              {restartTarget?.label ? `${restartTarget.label} — ` : ''}
+              {t.students.restartCycleDesc}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="restartDate">{t.students.restartDateLabel}</Label>
+              <Input
+                id="restartDate"
+                type="date"
+                value={restartDate}
+                onChange={(e) => setRestartDate(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {t.students.restartDayHint}
+              </p>
+            </div>
+            {restartTarget?.current && (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-2">
+                {t.students.cycleRestartedBadge} {new Date(restartTarget.current).toLocaleDateString('fr-FR')}
+              </p>
+            )}
+          </div>
+          <DialogFooter className="gap-2">
+            {restartTarget?.current && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => handleSaveRestart(true)}
+                disabled={restartSaving}
+              >
+                {restartSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+                {t.students.clearRestart}
+              </Button>
+            )}
+            <Button type="button" variant="outline" onClick={() => setRestartTarget(null)}>
+              {t.common.cancel}
+            </Button>
+            <Button
+              type="button"
+              onClick={() => handleSaveRestart(false)}
+              disabled={restartSaving || !restartDate}
+            >
+              {restartSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+              {t.common.save}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

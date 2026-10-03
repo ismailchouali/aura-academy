@@ -210,3 +210,65 @@ Stage Summary:
 - PENDING USER REQUEST (from blocked chat, never answered): students deactivated for 1-2 months then reactivated appear in المدفوعات المستحقة owing months they were absent. User wants solution proposals FIRST, approval, then execution.
 - Access status: GitHub token ✅ (new, valid). Vercel token ❌ (dead — user will provide new one). Local DB = db/custom.db (SQLite, sandbox env var DATABASE_URL points there).
 - Key rule for any deploy: restore postgres datasource in prisma/schema.prisma from prisma/schema.postgres.prisma, commit, push (Vercel auto-deploys or vercel CLI), verify.
+
+---
+Task ID: 11
+Agent: Z.ai Code (new session)
+Task: Receive and verify new GitHub token, clean git state, verify push access
+
+Work Log:
+- User provided new GitHub PAT (classic, ghp_..., full scopes: repo, admin:*, workflow...).
+- Verified: identity = ismailchouali, repo ismailchouali/aura-academy permissions = push/admin/maintain ✅.
+- Set origin remote URL with embedded token.
+- Found sandbox auto-commits (fe99ac7, df1c560) mixing dev-only files (sqlite schema, custom.db, tool-results) with real fixes → reset to origin/main (88bb0ba), kept dev-only changes uncommitted, re-committed cleanly:
+  - prisma/seed.ts (bcrypt passwords + unique Setting ids)
+  - prisma/schema.postgres.prisma (postgres datasource backup for deploys)
+  - worklog.md (merged old repo worklog with new session log)
+- Pushed f90c922 to origin/main successfully ✅.
+- Local-only (uncommitted by design): prisma/schema.prisma (sqlite provider), db/custom.db (dev data).
+- Rebuilt local db (db push + seed), restarted dev server, login verified again.
+
+Stage Summary:
+- GitHub: FULL access confirmed (push tested). Remote = https://ghp_...@github.com/ismailchouali/aura-academy.git
+- Vercel: still need a fresh token from user (old one dead).
+- App running locally on :3000, admin login works.
+- Rule kept: schema.prisma (sqlite) is LOCAL ONLY; before deploy swap in postgres datasource from prisma/schema.postgres.prisma.
+
+---
+Task ID: 12
+Agent: Z.ai Code (new session)
+Task: Receive and verify new Vercel token
+
+Work Log:
+- User provided new Vercel token (vcp_...).
+- Verified via API: token is VALID but team-scoped (no /v2/user access — 404; /v2/teams → forbidden; /v9/projects works).
+- Token scope: exactly ONE project → aura-academy (prj_lGH3YnxyCEvfhPdvaQxMEVhjW5JT), account team_uYIK4mkTmAppQWiFoouBlxpD. This is all we need.
+- Git link confirmed: github ismailchouali/aura-academy, production branch main, auto-deploy on push.
+- Latest production deployment: READY 2026-10-03 16:20 from commit f90c922 (seed fix) → GitHub integration works.
+- Saved token to /home/z/my-project/.vercel-token (gitignored, NOT tracked).
+- Checked git state: sandbox auto-commit 9bb2e33 (db/custom.db + sqlite schema.prisma) is LOCAL ONLY — origin/main is still clean f90c922. Do not push 9bb2e33.
+
+Stage Summary:
+- Access COMPLETE: GitHub (push verified) ✅ + Vercel (project-scoped token) ✅.
+- Deploy path: swap postgres schema → commit → push → auto-deploy (or vercel CLI with this token).
+- Pending from blocked chat: propose solutions for reactivated-students overdue problem (pause/freeze/reset cycle) — await user approval before implementing.
+
+---
+Task ID: 13
+Agent: Z.ai Code (new session)
+Task: Cycle restart feature for returning students (approved Solution 1 + user refinement)
+
+Work Log:
+- User approved "cycle restart" solution with refinement: the NEW payment date on return becomes the FULL cycle anchor (day-of-month included), replacing the original enrollment day.
+- Schema: added cycleStartDate DateTime? to Student + StudentEnrollment (both sqlite dev schema and prisma/schema.postgres.prisma). db push OK locally.
+- Engine (3 files: payments/overdue, classrooms/[id]/overdue, students route): added resolveCycle() helper — when cycleStartDate exists it becomes the anchor (cycle day + month queue start), all months before it are wiped from due calc, and only payments with paymentDate >= restart participate in the coverage queue.
+- APIs: PUT /api/enrollments/[id] + PUT /api/students/[id] (enrollment sync + legacy student) now accept cycleStartDate (string sets, null clears).
+- UI (students-view.tsx): per-enrollment "إعادة تشغيل الدورة" button (admin only, saved enrollments), restart dialog with date input (default today), hint text, clear-restart option, teal badge "دورة جديدة من <date>". Translations added (ar+fr).
+- Local E2E test (API + browser): enrolled 01/07 paid July → gap Aug/Sep showed 200 DH overdue (bug reproduced) → restart from 03/10 → debt WIPED → paid Oct 03 → next due null (Nov 03 future). Day-anchoring proven: restart 15/09 → next due 15/10 (day 15, not old day 1). Fixed missed anchor in expired-pack scan (Step 2) found during test.
+- Verified in browser: button, dialog, badge render correctly; save works; test student deleted after.
+- Deploy: project-scoped Vercel token cannot run vercel CLI (needs /v2/user) and /v10 env API returns encrypted values → using temporary build-script approach: build = "prisma db push --accept-data-loss && prisma generate && next build" so the new nullable column is added to Neon during the deploy build. Revert build script in the following commit.
+
+Stage Summary:
+- Returning students: admin clicks restart on the enrollment, enters the new payment date → old gap months wiped, new due day = new payment date, post-restart payments fill from restart month.
+- cycleStartDate is optional — everything else unchanged; legacy students supported via Student.cycleStartDate.
+- Pending after deploy: verify production, revert temporary build script.

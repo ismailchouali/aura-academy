@@ -55,6 +55,10 @@ export async function PUT(
     if (body.monthlyFee !== undefined) data.monthlyFee = body.monthlyFee;
     if (body.packMonths !== undefined) data.packMonths = body.packMonths;
     if (body.status !== undefined) data.status = body.status;
+    // Cycle restart: date string sets the new anchor, null clears the restart
+    if (body.cycleStartDate !== undefined) {
+      data.cycleStartDate = body.cycleStartDate ? new Date(body.cycleStartDate) : null;
+    }
 
     const enrollment = await db.studentEnrollment.update({
       where: { id },

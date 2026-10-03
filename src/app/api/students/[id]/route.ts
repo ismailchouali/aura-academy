@@ -79,6 +79,10 @@ export async function PUT(
         monthlyFee: body.monthlyFee ?? 0,
         packMonths: body.packMonths ?? 1,
         status: body.status,
+        // Cycle restart anchor for legacy (no-enrollment) students; null clears it
+        ...(body.cycleStartDate !== undefined && {
+          cycleStartDate: body.cycleStartDate ? new Date(body.cycleStartDate) : null,
+        }),
         enrollmentDate: body.enrollmentDate
           ? new Date(body.enrollmentDate)
           : undefined,
@@ -137,6 +141,7 @@ export async function PUT(
         packMonths?: number;
         status?: string;
         enrollmentDate?: string;
+        cycleStartDate?: string | null;
       }>) {
         if (e.id) {
           const updateData: Record<string, unknown> = {};
@@ -147,6 +152,10 @@ export async function PUT(
           if (e.monthlyFee !== undefined) updateData.monthlyFee = e.monthlyFee;
           if (e.packMonths !== undefined) updateData.packMonths = e.packMonths;
           if (e.status !== undefined) updateData.status = e.status;
+          // Cycle restart: date string sets the new anchor, null clears the restart
+          if (e.cycleStartDate !== undefined) {
+            updateData.cycleStartDate = e.cycleStartDate ? new Date(e.cycleStartDate) : null;
+          }
 
           await db.studentEnrollment.update({
             where: { id: e.id },

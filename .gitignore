@@ -64,3 +64,4 @@ server.log
 # Backups
 /backups/
 .env*.local
+.vercel-token

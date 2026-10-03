@@ -101,6 +101,44 @@ function buildCoverageSets(
   return { coveredMonths, anyPaymentMonths };
 }
 
+/**
+ * Resolve the effective cycle anchor and the payments that participate in the
+ * current cycle. When an enrollment has been restarted (returning student),
+ * cycleStartDate becomes the FULL anchor (day + month queue) and all months
+ * before it are wiped. Only payments made on/after the restart participate.
+ */
+function resolveCycle(
+  enrollmentDate: Date,
+  cycleStartDate: Date | string | null | undefined,
+  payments: Array<{
+    remainingAmount: number;
+    paymentDate: Date | string | null;
+    month: string;
+    year: number;
+    packMonths: number;
+  }>
+): { anchor: Date; cyclePayments: typeof payments } {
+  const restartDate = cycleStartDate
+    ? (cycleStartDate instanceof Date ? cycleStartDate : new Date(cycleStartDate))
+    : null;
+
+  if (!restartDate) {
+    return { anchor: enrollmentDate, cyclePayments: payments };
+  }
+
+  const restartTime = new Date(restartDate.getFullYear(), restartDate.getMonth(), restartDate.getDate()).getTime();
+
+  const cyclePayments = payments.filter((p) => {
+    const pd = p.paymentDate
+      ? (p.paymentDate instanceof Date ? p.paymentDate : new Date(p.paymentDate))
+      : null;
+    if (pd) return pd.getTime() >= restartTime;
+    return new Date(p.year, getMonthIndex(p.month), 1).getTime() >= restartTime;
+  });
+
+  return { anchor: restartDate, cyclePayments };
+}
+
 interface OverdueStudentInfo {
   studentId: string;
   studentName: string;
@@ -241,16 +279,19 @@ export async function GET(
       const enrollmentDate = enrollment.enrollmentDate instanceof Date
         ? enrollment.enrollmentDate
         : new Date(enrollment.enrollmentDate);
-      const cycleDay = enrollmentDate.getDate();
+
+      // Cycle restart (returning student): anchor + eligible payments for the new cycle
+      const { anchor, cyclePayments } = resolveCycle(enrollmentDate, enrollment.cycleStartDate, payments);
+      const cycleDay = anchor.getDate();
 
       // Build covered months using queue-based Logic A
-      const { coveredMonths: coveredMonthsForDue } = buildCoverageSets(enrollmentDate, payments);
+      const { coveredMonths: coveredMonthsForDue } = buildCoverageSets(anchor, cyclePayments);
 
       // Find first uncovered month using fixed cycle day
       let nextDueDateObj: Date | null = null;
       for (let offset = 1; offset <= 60; offset++) {
-        const monthIndex = enrollmentDate.getMonth() + offset;
-        const targetYear = enrollmentDate.getFullYear() + Math.floor(monthIndex / 12);
+        const monthIndex = anchor.getMonth() + offset;
+        const targetYear = anchor.getFullYear() + Math.floor(monthIndex / 12);
         const targetMonth = monthIndex % 12;
         const monthYM = targetYear * 12 + targetMonth;
         if (monthYM > currentYM) break;
@@ -273,7 +314,7 @@ export async function GET(
       const overduePayments: OverdueStudentInfo['overduePayments'] = [];
 
       // Check if has a pending payment for current month
-      const currentMonthPending = payments.find(
+      const currentMonthPending = cyclePayments.find(
         (p) =>
           p.month === currentMonth &&
           p.year === currentYear &&
@@ -284,9 +325,9 @@ export async function GET(
         pendingPaymentId = currentMonthPending.id;
       }
 
-      if (payments.length === 0) {
-        const enrollmentYM = toYM(enrollmentDate);
-        const enrollmentDay = enrollmentDate.getDate();
+      if (cyclePayments.length === 0) {
+        const enrollmentYM = toYM(anchor);
+        const enrollmentDay = anchor.getDate();
         const firstDueYM = enrollmentYM + 1;
         if (firstDueYM > currentYM) continue;
 
@@ -299,10 +340,10 @@ export async function GET(
         totalOverdue = enrollment.monthlyFee;
         maxMonthsOverdue = 1;
       } else {
-        const { coveredMonths, anyPaymentMonths } = buildCoverageSets(enrollmentDate, payments);
+        const { coveredMonths, anyPaymentMonths } = buildCoverageSets(anchor, cyclePayments);
 
         // Find unpaid payments whose coverage has passed
-        for (const p of payments) {
+        for (const p of cyclePayments) {
           if (p.remainingAmount > 0) {
             const endYM = p.year * 12 + getMonthIndex(p.month) + (p.packMonths || 1);
             if (currentYM >= endYM) {
@@ -322,7 +363,7 @@ export async function GET(
         }
 
         // Check for expired pack
-        const sorted = [...payments].sort((a, b) => {
+        const sorted = [...cyclePayments].sort((a, b) => {
           const aTime = a.paymentDate
             ? new Date(a.paymentDate).getTime()
             : new Date(a.year, getMonthIndex(a.month), 1).getTime();
@@ -339,8 +380,8 @@ export async function GET(
           let lastOverdueMonthYM = -1;
 
           for (let offset = 1; offset <= 48; offset++) {
-            const monthIndex = enrollmentDate.getMonth() + offset;
-            const targetYear = enrollmentDate.getFullYear() + Math.floor(monthIndex / 12);
+            const monthIndex = anchor.getMonth() + offset;
+            const targetYear = anchor.getFullYear() + Math.floor(monthIndex / 12);
             const targetMonth = monthIndex % 12;
             const monthYM = targetYear * 12 + targetMonth;
 
@@ -408,14 +449,17 @@ export async function GET(
         const enrollmentDate = student.enrollmentDate instanceof Date
           ? student.enrollmentDate
           : new Date(student.enrollmentDate);
-        const cycleDay = enrollmentDate.getDate();
 
-        const { coveredMonths: coveredMonthsForDue } = buildCoverageSets(enrollmentDate, payments);
+        // Cycle restart (returning student): anchor + eligible payments for the new cycle
+        const { anchor, cyclePayments } = resolveCycle(enrollmentDate, student.cycleStartDate, payments);
+        const cycleDay = anchor.getDate();
+
+        const { coveredMonths: coveredMonthsForDue } = buildCoverageSets(anchor, cyclePayments);
 
         let nextDueDateObj: Date | null = null;
         for (let offset = 1; offset <= 60; offset++) {
-          const monthIndex = enrollmentDate.getMonth() + offset;
-          const targetYear = enrollmentDate.getFullYear() + Math.floor(monthIndex / 12);
+          const monthIndex = anchor.getMonth() + offset;
+          const targetYear = anchor.getFullYear() + Math.floor(monthIndex / 12);
           const targetMonth = monthIndex % 12;
           const monthYM = targetYear * 12 + targetMonth;
           if (monthYM > currentYM) break;
@@ -436,7 +480,7 @@ export async function GET(
         let nextDueDate: string | null = nextDueDateObj ? formatDate(nextDueDateObj) : null;
         const overduePayments: OverdueStudentInfo['overduePayments'] = [];
 
-        const currentMonthPending = payments.find(
+        const currentMonthPending = cyclePayments.find(
           (p) =>
             p.month === currentMonth &&
             p.year === currentYear &&
@@ -447,9 +491,9 @@ export async function GET(
           pendingPaymentId = currentMonthPending.id;
         }
 
-        if (payments.length === 0) {
-          const enrollmentYM = toYM(enrollmentDate);
-          const enrollmentDay = enrollmentDate.getDate();
+        if (cyclePayments.length === 0) {
+          const enrollmentYM = toYM(anchor);
+          const enrollmentDay = anchor.getDate();
           const firstDueYM = enrollmentYM + 1;
           if (firstDueYM > currentYM) continue;
 
@@ -462,9 +506,9 @@ export async function GET(
           totalOverdue = student.monthlyFee;
           maxMonthsOverdue = 1;
         } else {
-          const { coveredMonths, anyPaymentMonths } = buildCoverageSets(enrollmentDate, payments);
+          const { coveredMonths, anyPaymentMonths } = buildCoverageSets(anchor, cyclePayments);
 
-          for (const p of payments) {
+          for (const p of cyclePayments) {
             if (p.remainingAmount > 0) {
               const endYM = p.year * 12 + getMonthIndex(p.month) + (p.packMonths || 1);
               if (currentYM >= endYM) {
@@ -483,7 +527,7 @@ export async function GET(
             }
           }
 
-          const sorted = [...payments].sort((a, b) => {
+          const sorted = [...cyclePayments].sort((a, b) => {
             const aTime = a.paymentDate
               ? new Date(a.paymentDate).getTime()
               : new Date(a.year, getMonthIndex(a.month), 1).getTime();
@@ -500,8 +544,8 @@ export async function GET(
             let lastOverdueMonthYM = -1;
 
             for (let offset = 1; offset <= 48; offset++) {
-              const monthIndex = enrollmentDate.getMonth() + offset;
-              const targetYear = enrollmentDate.getFullYear() + Math.floor(monthIndex / 12);
+              const monthIndex = anchor.getMonth() + offset;
+              const targetYear = anchor.getFullYear() + Math.floor(monthIndex / 12);
               const targetMonth = monthIndex % 12;
               const monthYM = targetYear * 12 + targetMonth;
 

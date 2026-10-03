@@ -222,6 +222,15 @@ const ar = {
     filterByService: 'كل الخدمات',
     filterBySubject: 'كل المواد',
     filterByLevel: 'كل المستويات',
+    // Cycle restart (returning students)
+    restartCycleTitle: 'إعادة تشغيل الدورة',
+    restartCycleDesc: 'منين كيرجع التلميذ وكيخلص من جديد، دخل تاريخ الخلاص الجديد. جميع الأشهر قبل هاد التاريخ كيتصفحو من المدفوعات المستحقة، والدورة الجديدة كتبدا من هاد التاريخ.',
+    restartDateLabel: 'تاريخ الخلاص الجديد (بداية الدورة)',
+    restartDayHint: 'نهار هاد التاريخ كيولي هو نهار الاستحقاق الجديد كل شهر (مثلا: خلص نهار 15 → كل شهر الاستحقاق نهار 15).',
+    cycleRestartedBadge: 'دورة جديدة من',
+    restartSaved: 'تم إعادة تشغيل الدورة بنجاح',
+    restartCleared: 'تم إلغاء إعادة التشغيل، رجعت الدورة الأصلية',
+    clearRestart: 'إلغاء إعادة التشغيل',
   },
 
   // ── Teachers ──
@@ -817,6 +826,15 @@ const fr: typeof ar = {
     filterByService: 'Tous les services',
     filterBySubject: 'Toutes les matières',
     filterByLevel: 'Tous les niveaux',
+    // Cycle restart (returning students)
+    restartCycleTitle: 'Redémarrer le cycle de paiement',
+    restartCycleDesc: "Quand l'élève revient et paie à nouveau, saisissez la date du nouveau paiement. Tous les mois avant cette date sont effacés des paiements dus, et le nouveau cycle commence à partir de cette date.",
+    restartDateLabel: 'Date du nouveau paiement (début du cycle)',
+    restartDayHint: "Le jour de cette date devient le nouveau jour d'échéance chaque mois (ex : paie le 15 → échéance le 15 de chaque mois).",
+    cycleRestartedBadge: 'Nouveau cycle depuis',
+    restartSaved: 'Cycle redémarré avec succès',
+    restartCleared: "Redémarrage annulé, cycle d'origine restauré",
+    clearRestart: 'Annuler le redémarrage',
   },
 
   // ── Teachers ──
