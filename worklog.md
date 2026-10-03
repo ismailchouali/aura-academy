@@ -272,3 +272,20 @@ Stage Summary:
 - Returning students: admin clicks restart on the enrollment, enters the new payment date → old gap months wiped, new due day = new payment date, post-restart payments fill from restart month.
 - cycleStartDate is optional — everything else unchanged; legacy students supported via Student.cycleStartDate.
 - Pending after deploy: verify production, revert temporary build script.
+
+---
+Task ID: 13-b
+Agent: Z.ai Code (new session)
+Task: Production deploy verification + cleanup
+
+Work Log:
+- Commit 68cc5ac pushed → Vercel auto-deploy → build log confirmed "prisma db push" ran on Neon (PostgreSQL neondb @ ep-polished-smoke-alyhsj66): "Your database is now in sync" — cycleStartDate column live.
+- Production verified: students API returns 57 students with cycleStartDate field present. (Local admin password does not apply to production — expected.)
+- Commit d4c5327: reverted build script to "prisma generate && next build" → deployment READY.
+- Local restored: schema.prisma back to sqlite (uncommitted by design), dev server restarted, HTTP 200, no errors in dev.log.
+- Repo rule intact: prisma/schema.prisma in git = postgres datasource (matches production), local dev keeps its own sqlite copy uncommitted.
+
+Stage Summary:
+- FEATURE LIVE IN PRODUCTION: cycle restart for returning students.
+- Deploy commits: 68cc5ac (feature + migration), d4c5327 (build script revert).
+- Migration method used because project-scoped Vercel token cannot run vercel CLI nor decrypt envs: temporary build-script db push. Keep this trick for future schema changes.
