@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { hashPassword } from '../src/lib/auth';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
@@ -7,7 +7,7 @@ async function main() {
   console.log('🌱 Seeding database...');
 
   // Create admin user
-  const adminPassword = await hashPassword('admin123');
+  const adminPassword = await bcrypt.hash('admin123', 12);
   await prisma.user.upsert({
     where: { email: 'auraadmin@gmail.com' },
     update: {},
@@ -21,7 +21,7 @@ async function main() {
   console.log('✅ Admin user created');
 
   // Create secretary user
-  const secPassword = await hashPassword('secretary123');
+  const secPassword = await bcrypt.hash('secretary123', 12);
   await prisma.user.upsert({
     where: { email: 'secr@gmail.com' },
     update: {},
@@ -237,7 +237,7 @@ async function main() {
     await prisma.setting.upsert({
       where: { key: setting.key },
       update: {},
-      create: setting,
+      create: { ...setting, id: `setting_${setting.key}` },
     });
   }
   console.log('✅ Settings created');

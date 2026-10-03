@@ -188,3 +188,25 @@ Stage Summary:
 - Added: debug endpoint /api/debug/student?name=<name> for investigating student overdue data
 - Pending: Need to check debug endpoint on production to diagnose Majda Bourmich issue
 - Commits: 963cf2d (fix payment date), c05bfa1 (debug endpoint)
+
+---
+Task ID: 10
+Agent: Z.ai Code (new session)
+Task: Recover context from blocked chat "Suivi aura 4", fully understand Aura Academy, set up local dev, secure access (GitHub/Vercel tokens)
+
+Work Log:
+- Read the entire blocked shared chat (149 messages) via chat.z.ai share API; reconstructed full app history (see summary below and previous tasks 1-8).
+- Cloned public repo ismailchouali/aura-academy (latest commit 88bb0ba "feat: add per-enrollment fee input in student edit mode") into /home/z/my-project.
+- Local dev setup: schema switched to SQLite for sandbox (postgres original preserved in prisma/schema.postgres.prisma — MUST restore postgres provider before any deploy/push of schema).
+- Fixed prisma/seed.ts: bcrypt passwords (login route uses bcrypt; old pbkdf2 seed broke login) + unique Setting ids (id was defaulting to "1" for all rows causing upsert conflict).
+- Verified app locally: login auraadmin@gmail.com/admin123 works, dashboard renders (RTL Arabic), port 3000 OK.
+- Scanned all chat messages for credentials: GitHub tokens all [REDACTED] by share system; only one Vercel token found (vcp_43WI...T4) and it is DEAD (403 invalidToken). Neon DB creds never in chat (they live in Vercel env).
+- Deployed URLs alive: https://aura-academy-psi.vercel.app (200, live one user checks), https://aura-academy.vercel.app (200, older).
+- Received NEW GitHub token from user (full scopes, push+admin on ismailchouali/aura-academy) — configured as origin remote credential.
+- Merged old repo worklog with this new session's log.
+
+Stage Summary:
+- App fully understood (multi-service StudentEnrollment, coverage/due-payment cycle engine with enrollment-day clamping, teacher calc 1-15/16+ attribution rule, financial reports month filters, trial sessions auto-delete).
+- PENDING USER REQUEST (from blocked chat, never answered): students deactivated for 1-2 months then reactivated appear in المدفوعات المستحقة owing months they were absent. User wants solution proposals FIRST, approval, then execution.
+- Access status: GitHub token ✅ (new, valid). Vercel token ❌ (dead — user will provide new one). Local DB = db/custom.db (SQLite, sandbox env var DATABASE_URL points there).
+- Key rule for any deploy: restore postgres datasource in prisma/schema.prisma from prisma/schema.postgres.prisma, commit, push (Vercel auto-deploys or vercel CLI), verify.
