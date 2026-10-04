@@ -76,8 +76,8 @@ export async function PUT(
         teacherId: body.teacherId,
         parentName: body.parentName,
         parentPhone: body.parentPhone,
-        monthlyFee: body.monthlyFee ?? 0,
-        packMonths: body.packMonths ?? 1,
+        monthlyFee: body.monthlyFee !== undefined ? body.monthlyFee : undefined,
+        packMonths: body.packMonths !== undefined ? body.packMonths : undefined,
         status: body.status,
         // Cycle restart anchor for legacy (no-enrollment) students; null clears it
         ...(body.cycleStartDate !== undefined && {

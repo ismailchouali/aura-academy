@@ -111,6 +111,7 @@ interface Student {
   packMonths?: number;
   isPackPaid?: boolean;
   nextDueDate?: string | null;
+  cycleStartDate?: string | null;
 }
 
 interface Service {
@@ -277,7 +278,7 @@ export function StudentsView() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // ── Cycle restart (returning student) state ─────────────────────────
-  const [restartTarget, setRestartTarget] = useState<{ id: string; label: string; current: string | null } | null>(null);
+  const [restartTarget, setRestartTarget] = useState<{ type: 'enrollment' | 'student'; id: string; label: string; current: string | null } | null>(null);
   const [restartDate, setRestartDate] = useState('');
   const [restartSaving, setRestartSaving] = useState(false);
 
@@ -594,6 +595,7 @@ export function StudentsView() {
     if (!enrollment.id) return;
     const label = enrollment.subject?.nameAr || enrollment.service?.nameAr || '';
     setRestartTarget({
+      type: 'enrollment',
       id: enrollment.id,
       label,
       current: enrollment.cycleStartDate || null,
@@ -605,24 +607,53 @@ export function StudentsView() {
     );
   };
 
+  // Legacy (no-enrollment) student: restart anchored on the student record itself
+  const openStudentRestartDialog = () => {
+    if (!editingStudent) return;
+    const lvl = editingStudent.level;
+    const label = [lvl?.subject?.nameAr, lvl?.nameAr].filter(Boolean).join(' — ');
+    setRestartTarget({
+      type: 'student',
+      id: editingStudent.id,
+      label,
+      current: editingStudent.cycleStartDate || null,
+    });
+    setRestartDate(
+      editingStudent.cycleStartDate
+        ? new Date(editingStudent.cycleStartDate).toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0]
+    );
+  };
+
   const handleSaveRestart = async (clear = false) => {
     if (!restartTarget) return;
     setRestartSaving(true);
     try {
-      const res = await fetch(`/api/enrollments/${restartTarget.id}`, {
+      const url = restartTarget.type === 'student'
+        ? `/api/students/${restartTarget.id}`
+        : `/api/enrollments/${restartTarget.id}`;
+      const res = await fetch(url, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cycleStartDate: clear ? null : (restartDate || null) }),
       });
       if (!res.ok) throw new Error();
       const updated = await res.json();
-      setEditEnrollments((prev) =>
-        prev.map((e) =>
-          e.id === restartTarget.id
-            ? { ...e, cycleStartDate: updated.cycleStartDate }
-            : e
-        )
-      );
+      if (restartTarget.type === 'student') {
+        setEditingStudent((prev) =>
+          prev && prev.id === restartTarget.id
+            ? { ...prev, cycleStartDate: updated.cycleStartDate }
+            : prev
+        );
+      } else {
+        setEditEnrollments((prev) =>
+          prev.map((e) =>
+            e.id === restartTarget.id
+              ? { ...e, cycleStartDate: updated.cycleStartDate }
+              : e
+          )
+        );
+      }
       toast.success(clear ? t.students.restartCleared : t.students.restartSaved);
       setRestartTarget(null);
       fetchStudents();
@@ -670,7 +701,44 @@ export function StudentsView() {
       }));
 
       if (allEnrollments.length === 0) {
-        toast.error(t.students.selectLevel);
+        // Legacy student (no enrollments): save personal info only, preserving
+        // their legacy level/teacher/fee and cycle-restart anchor untouched.
+        if (editingStudent.levelId) {
+          setSubmitting(true);
+          try {
+            const payload = {
+              fullName: form.fullName.trim(),
+              phone: form.phone || null,
+              parentName: form.parentName || null,
+              parentPhone: form.parentPhone || null,
+              status: editingStudent.status,
+              enrollmentDate: form.enrollmentDate || new Date().toISOString(),
+              levelId: editingStudent.levelId,
+              teacherId: editingStudent.teacherId ?? null,
+              monthlyFee: editingStudent.monthlyFee ?? 0,
+              packMonths: editingStudent.packMonths ?? 1,
+              ...(editingStudent.cycleStartDate !== undefined
+                ? { cycleStartDate: editingStudent.cycleStartDate }
+                : {}),
+            };
+            const res = await fetch(`/api/students/${editingStudent.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            });
+            if (!res.ok) throw new Error();
+            toast.success(t.common.updateSuccess);
+            setDialogOpen(false);
+            resetWizard();
+            fetchStudents();
+          } catch {
+            toast.error(t.common.saveError);
+          } finally {
+            setSubmitting(false);
+          }
+        } else {
+          toast.error(t.students.selectLevel);
+        }
         return;
       }
 
@@ -1458,10 +1526,57 @@ export function StudentsView() {
                   </Button>
                 </div>
                 {editEnrollments.length === 0 ? (
-                  <div className="text-center py-6 text-muted-foreground border border-dashed rounded-lg">
-                    <Layers className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                    <p className="text-sm">{t.students.noEnrollmentsYet}</p>
-                  </div>
+                  isAdmin && editingStudent?.levelId ? (
+                    /* Legacy student (no enrollments): data lives on the student record — show it with cycle restart */
+                    <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Badge variant="outline" className="gap-1 text-xs">
+                            <GraduationCap className="h-3 w-3" />
+                            {[editingStudent.level?.subject?.nameAr, editingStudent.level?.nameAr].filter(Boolean).join(' — ') || editingStudent.level?.name || '—'}
+                          </Badge>
+                          {editingStudent.teacher ? (
+                            <Badge variant="outline" className="gap-1 text-xs border-teal-300 text-teal-700">
+                              <UserCheck className="h-3 w-3" />
+                              {editingStudent.teacher.fullName}
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="gap-1 text-xs border-violet-300 text-violet-700">
+                              <UserMinus className="h-3 w-3" />
+                              {t.students.withoutTeacher}
+                            </Badge>
+                          )}
+                          {(editingStudent.monthlyFee ?? 0) > 0 && (
+                            <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100 text-xs">
+                              <Wallet className="h-3 w-3" />
+                              {(editingStudent.monthlyFee ?? 0).toLocaleString('ar-MA')} {t.common.dh}
+                            </Badge>
+                          )}
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 shrink-0 text-teal-600 hover:text-teal-700 hover:bg-teal-50"
+                          title={t.students.restartCycleTitle}
+                          onClick={openStudentRestartDialog}
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                      {editingStudent.cycleStartDate && (
+                        <Badge className="bg-teal-100 text-teal-700 border-teal-200 hover:bg-teal-100 text-xs gap-1">
+                          <RotateCcw className="h-3 w-3" />
+                          {t.students.cycleRestartedBadge} {new Date(editingStudent.cycleStartDate).toLocaleDateString('fr-FR')}
+                        </Badge>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 text-muted-foreground border border-dashed rounded-lg">
+                      <Layers className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                      <p className="text-sm">{t.students.noEnrollmentsYet}</p>
+                    </div>
+                  )
                 ) : (
                   <div className="space-y-2">
                     {editEnrollments.map((enr, idx) => renderEditEnrollmentCard(enr, idx))}

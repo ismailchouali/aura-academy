@@ -289,3 +289,22 @@ Stage Summary:
 - FEATURE LIVE IN PRODUCTION: cycle restart for returning students.
 - Deploy commits: 68cc5ac (feature + migration), d4c5327 (build script revert).
 - Migration method used because project-scoped Vercel token cannot run vercel CLI nor decrypt envs: temporary build-script db push. Keep this trick for future schema changes.
+
+---
+Task ID: 15
+Agent: Z.ai Code (new session)
+Task: Cycle restart for LEGACY (no-enrollment) students + PUT fee-wipe fix (user hit gap during live test with Amine Sadik)
+
+Work Log:
+- User's live production test: Amine Sadik is a legacy student (data on Student record: level German A1, fee 550, teacher, enrollmentDate 13/06/2026, payments with enrollmentId=null). Edit dialog showed "لم يتم إضافة أي دفعة بعد" — the restart button (per-enrollment) was unreachable for him.
+- students-view.tsx: legacy students now render their level/teacher/fee card inside the edit dialog with the ↺ restart button + teal "دورة جديدة من" badge. Restart dialog extended with type: 'enrollment' | 'student' — student type PUTs /api/students/[id].
+- handleSubmit: legacy students can now save personal info (was hard-blocked with selectLevel error); payload preserves levelId/teacherId/monthlyFee/packMonths/cycleStartDate so nothing is wiped.
+- CRITICAL FIX in PUT /api/students/[id]: monthlyFee was reset to 0 and packMonths to 1 on ANY partial update (monthlyFee: body.monthlyFee ?? 0). Discovered during simulation — a partial PUT (the restart call itself) silently wiped the legacy student's fee. Now conditional (undefined = no change).
+- Local E2E simulation (legacy path): activate → overdue 550 (13/07 next, enrollmentId null) ✅; restart cycleStartDate=03/10 via /api/students → overdue CLEAN + fee 550 preserved ✅; October legacy payment → still clean, next due 03/11 (new day anchor) ✅.
+- Browser-verified: legacy card + restart dialog + teal badge render correctly in edit dialog.
+- Deployed via clean worktree cherry-pick (avoids sandbox commits containing sqlite schema + db files). No schema changes → no db push needed.
+
+Stage Summary:
+- Returning LEGACY students (old-format, no enrollments) now fully supported for cycle restart.
+- Fixed data-loss bug: partial PUT /api/students/[id] no longer zeroes monthlyFee/packMonths.
+- Commit: single clean commit on top of b3662c8.
