@@ -1084,14 +1084,14 @@ export function StudentsView() {
               {enrollment.monthlyFee.toLocaleString('ar-MA')} {t.common.dh}
             </Badge>
           )}
-          {isAdmin && enrollment.cycleStartDate && (
+          {enrollment.cycleStartDate && (
             <Badge className="bg-teal-100 text-teal-700 border-teal-200 hover:bg-teal-100 text-xs gap-1">
               <RotateCcw className="h-3 w-3" />
               {t.students.cycleRestartedBadge} {new Date(enrollment.cycleStartDate).toLocaleDateString('fr-FR')}
             </Badge>
           )}
         </div>
-        {isAdmin && enrollment.id && (
+        {enrollment.id && (
           <Button
             type="button"
             variant="ghost"
@@ -1526,8 +1526,8 @@ export function StudentsView() {
                   </Button>
                 </div>
                 {editEnrollments.length === 0 ? (
-                  isAdmin && editingStudent?.levelId ? (
-                    /* Legacy student (no enrollments): data lives on the student record — show it with cycle restart */
+                  editingStudent?.levelId ? (
+                    /* Legacy student (no enrollments): data lives on the student record — show it with cycle restart (available to all staff) */
                     <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex flex-wrap items-center gap-1.5">
@@ -1546,7 +1546,7 @@ export function StudentsView() {
                               {t.students.withoutTeacher}
                             </Badge>
                           )}
-                          {(editingStudent.monthlyFee ?? 0) > 0 && (
+                          {isAdmin && (editingStudent.monthlyFee ?? 0) > 0 && (
                             <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100 text-xs">
                               <Wallet className="h-3 w-3" />
                               {(editingStudent.monthlyFee ?? 0).toLocaleString('ar-MA')} {t.common.dh}
