@@ -784,7 +784,7 @@ export function StudentsView() {
           subjectId: d.subjectId || null,
           levelId: d.levelId,
           teacherId: d.noTeacher ? null : (d.teacherId || null),
-          monthlyFee: isAdmin ? (parseFloat(d.monthlyFee) || 0) : 0,
+          monthlyFee: parseFloat(d.monthlyFee) || 0,
           packMonths: d.packMonths || 1,
           enrollmentDate: form.enrollmentDate || new Date().toISOString(),
         }));
@@ -1019,7 +1019,7 @@ export function StudentsView() {
               {draft.teacherName}
             </Badge>
           ) : null}
-          {isAdmin && draft.monthlyFee && parseFloat(draft.monthlyFee) > 0 && (
+          {draft.monthlyFee && parseFloat(draft.monthlyFee) > 0 && (
             <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100 text-xs">
               <Wallet className="h-3 w-3" />
               {parseFloat(draft.monthlyFee).toLocaleString('ar-MA')} {t.common.dh}
@@ -1078,7 +1078,7 @@ export function StudentsView() {
               {t.students.withoutTeacher}
             </Badge>
           )}
-          {isAdmin && enrollment.monthlyFee > 0 && (
+          {enrollment.monthlyFee > 0 && (
             <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100 text-xs">
               <Wallet className="h-3 w-3" />
               {enrollment.monthlyFee.toLocaleString('ar-MA')} {t.common.dh}
@@ -1546,7 +1546,7 @@ export function StudentsView() {
                               {t.students.withoutTeacher}
                             </Badge>
                           )}
-                          {isAdmin && (editingStudent.monthlyFee ?? 0) > 0 && (
+                          {(editingStudent.monthlyFee ?? 0) > 0 && (
                             <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100 text-xs">
                               <Wallet className="h-3 w-3" />
                               {(editingStudent.monthlyFee ?? 0).toLocaleString('ar-MA')} {t.common.dh}
@@ -1580,8 +1580,8 @@ export function StudentsView() {
                 ) : (
                   <div className="space-y-2">
                     {editEnrollments.map((enr, idx) => renderEditEnrollmentCard(enr, idx))}
-                    {/* Fee inputs for each enrollment (admin only) */}
-                    {isAdmin && editEnrollments.length > 0 && (
+                    {/* Fee inputs for each enrollment (all staff — secretary handles registration) */}
+                    {editEnrollments.length > 0 && (
                       <div className="space-y-3 pt-1">
                         <h4 className="text-sm font-semibold flex items-center gap-2">
                           <Wallet className="h-4 w-4 text-amber-600" />
@@ -1650,7 +1650,7 @@ export function StudentsView() {
                       </div>
                     )}
                     {/* Show total fee */}
-                    {isAdmin && editEnrollments.length > 1 && (
+                    {editEnrollments.length > 1 && (
                       <div className="flex items-center justify-end gap-2 pt-1">
                         <span className="text-sm text-muted-foreground">{t.students.totalFee}:</span>
                         <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100 font-medium">
@@ -1680,7 +1680,7 @@ export function StudentsView() {
                     renderDraftBadge(draft, idx, true)
                   )}
                   {/* Total fee */}
-                  {isAdmin && enrollmentsBeingAdded.length > 1 && (
+                  {enrollmentsBeingAdded.length > 1 && (
                     <div className="flex items-center justify-end gap-2 pt-1">
                       <span className="text-sm text-muted-foreground">{t.students.totalFee}:</span>
                       <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100 font-medium">
@@ -1694,8 +1694,8 @@ export function StudentsView() {
               </div>
             )}
 
-            {/* Monthly Fee for the LAST added enrollment (admin only) */}
-            {isAdmin && enrollmentsBeingAdded.length > 0 && (
+            {/* Monthly Fee for the LAST added enrollment (all staff — secretary handles registration) */}
+            {enrollmentsBeingAdded.length > 0 && (
               <div className="space-y-3">
                 <h4 className="text-sm font-semibold flex items-center gap-2">
                   <Wallet className="h-4 w-4 text-amber-600" />
