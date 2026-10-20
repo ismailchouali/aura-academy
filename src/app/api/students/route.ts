@@ -77,8 +77,45 @@ function calculateCoverage(
     year: number;
   }>,
   currentYM: number,
+  isRestart = false,
 ): { isPackPaid: boolean; nextDueDate: string | null } {
   const cycleDay = enrollmentDate.getDate();
+
+  // Restart-aware coverage (دورة جديدة): fully-paid payments buy consecutive
+  // months ENDING at the most recent payment's month (paymentDate). Months
+  // between the restart and the covered window stay wiped. This keeps a
+  // returning student who just paid clean until the following month.
+  if (isRestart) {
+    const paid = payments
+      .filter((p) => p.remainingAmount === 0)
+      .map((p) => ({
+        date: p.paymentDate
+          ? (p.paymentDate instanceof Date ? p.paymentDate : new Date(p.paymentDate))
+          : new Date(p.year, getMonthIndex(p.month), 1),
+        packMonths: p.packMonths || 1,
+      }))
+      .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+    if (paid.length > 0) {
+      const last = paid[paid.length - 1].date;
+      const endYM = last.getFullYear() * 12 + last.getMonth();
+      const total = Math.min(60, paid.reduce((s, p) => s + p.packMonths, 0));
+      const isPackPaid = currentYM <= endYM && currentYM > endYM - total;
+
+      let nextDueDate: string | null = null;
+      if (!isPackPaid) {
+        const dueYM = endYM + 1;
+        if (dueYM <= currentYM) {
+          const targetYear = Math.floor(dueYM / 12);
+          const targetMonth = dueYM % 12;
+          const effectiveDay = getEffectiveCycleDay(cycleDay, targetYear, targetMonth);
+          nextDueDate = `${String(effectiveDay).padStart(2, '0')}/${String(targetMonth + 1).padStart(2, '0')}/${targetYear}`;
+        }
+      }
+      return { isPackPaid, nextDueDate };
+    }
+    // No fully-paid payments in the new cycle → fall through to standard math
+  }
 
   const sortedPaid = payments
     .filter((p) => p.remainingAmount === 0)
@@ -207,7 +244,7 @@ export async function GET(request: NextRequest) {
               : new Date(enrollment.enrollmentDate);
           // Cycle restart (returning student): anchor + eligible payments for the new cycle
           const { anchor, cyclePayments } = resolveCycle(eDate, enrollment.cycleStartDate, enrollment.payments);
-          const coverage = calculateCoverage(anchor, cyclePayments, currentYM);
+          const coverage = calculateCoverage(anchor, cyclePayments, currentYM, Boolean(enrollment.cycleStartDate));
           return { ...enrollment, ...coverage };
         });
 
@@ -261,7 +298,7 @@ export async function GET(request: NextRequest) {
             : new Date();
           // Cycle restart (returning student): anchor + eligible payments for the new cycle
           const { anchor, cyclePayments } = resolveCycle(eDate, student.cycleStartDate, payments);
-          const coverage = calculateCoverage(anchor, cyclePayments, currentYM);
+          const coverage = calculateCoverage(anchor, cyclePayments, currentYM, Boolean(student.cycleStartDate));
           isPackPaid = coverage.isPackPaid;
           nextDueDate = coverage.nextDueDate;
         }

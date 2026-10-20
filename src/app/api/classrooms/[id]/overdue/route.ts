@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { cycleDateForYM, getRestartQueueEnd } from '@/lib/cycle-coverage';
 
 const MONTH_ORDER = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -281,23 +282,35 @@ export async function GET(
         : new Date(enrollment.enrollmentDate);
 
       // Cycle restart (returning student): anchor + eligible payments for the new cycle
+      const isRestart = Boolean(enrollment.cycleStartDate);
       const { anchor, cyclePayments } = resolveCycle(enrollmentDate, enrollment.cycleStartDate, payments);
       const cycleDay = anchor.getDate();
 
-      // Build covered months using queue-based Logic A
-      const { coveredMonths: coveredMonthsForDue } = buildCoverageSets(anchor, cyclePayments);
+      // Restart-aware coverage: payments buy consecutive months ENDING at the
+      // most recent payment's month, so a returning student who just paid is
+      // clean until the following month. Months before that stay wiped.
+      const restartQueue = isRestart ? getRestartQueueEnd(cyclePayments) : null;
+
+      // Build covered months using queue-based Logic A (restart uses its own rule)
+      const { coveredMonths: coveredMonthsForDue } = restartQueue
+        ? { coveredMonths: new Set<number>() }
+        : buildCoverageSets(anchor, cyclePayments);
 
       // Find first uncovered month using fixed cycle day
       let nextDueDateObj: Date | null = null;
-      for (let offset = 1; offset <= 60; offset++) {
-        const monthIndex = anchor.getMonth() + offset;
-        const targetYear = anchor.getFullYear() + Math.floor(monthIndex / 12);
-        const targetMonth = monthIndex % 12;
-        const monthYM = targetYear * 12 + targetMonth;
-        if (monthYM > currentYM) break;
-        if (!coveredMonthsForDue.has(monthYM)) {
-          nextDueDateObj = getCycleDate(targetYear, targetMonth, cycleDay);
-          break;
+      if (restartQueue) {
+        nextDueDateObj = cycleDateForYM(restartQueue.endYM + 1, cycleDay);
+      } else {
+        for (let offset = 1; offset <= 60; offset++) {
+          const monthIndex = anchor.getMonth() + offset;
+          const targetYear = anchor.getFullYear() + Math.floor(monthIndex / 12);
+          const targetMonth = monthIndex % 12;
+          const monthYM = targetYear * 12 + targetMonth;
+          if (monthYM > currentYM) break;
+          if (!coveredMonthsForDue.has(monthYM)) {
+            nextDueDateObj = getCycleDate(targetYear, targetMonth, cycleDay);
+            break;
+          }
         }
       }
 
@@ -374,7 +387,14 @@ export async function GET(
         });
 
         const latestPaid = sorted.find((p) => p.remainingAmount === 0);
-        if (latestPaid) {
+        if (restartQueue) {
+          // Restart: the single month right after the latest payment's month
+          // is the only one due — earlier months stay wiped.
+          if (nextDueDateObj && todayDate >= nextDueDateObj) {
+            totalOverdue += enrollment.monthlyFee;
+            maxMonthsOverdue = Math.max(maxMonthsOverdue, 1);
+          }
+        } else if (latestPaid) {
           let packOverdue = 0;
           let packMonthsExpired = 0;
           let lastOverdueMonthYM = -1;
@@ -451,21 +471,31 @@ export async function GET(
           : new Date(student.enrollmentDate);
 
         // Cycle restart (returning student): anchor + eligible payments for the new cycle
+        const isRestartLegacy = Boolean(student.cycleStartDate);
         const { anchor, cyclePayments } = resolveCycle(enrollmentDate, student.cycleStartDate, payments);
         const cycleDay = anchor.getDate();
 
-        const { coveredMonths: coveredMonthsForDue } = buildCoverageSets(anchor, cyclePayments);
+        // Restart-aware coverage (see enrollment loop above)
+        const restartQueueLegacy = isRestartLegacy ? getRestartQueueEnd(cyclePayments) : null;
+
+        const { coveredMonths: coveredMonthsForDue } = restartQueueLegacy
+          ? { coveredMonths: new Set<number>() }
+          : buildCoverageSets(anchor, cyclePayments);
 
         let nextDueDateObj: Date | null = null;
-        for (let offset = 1; offset <= 60; offset++) {
-          const monthIndex = anchor.getMonth() + offset;
-          const targetYear = anchor.getFullYear() + Math.floor(monthIndex / 12);
-          const targetMonth = monthIndex % 12;
-          const monthYM = targetYear * 12 + targetMonth;
-          if (monthYM > currentYM) break;
-          if (!coveredMonthsForDue.has(monthYM)) {
-            nextDueDateObj = getCycleDate(targetYear, targetMonth, cycleDay);
-            break;
+        if (restartQueueLegacy) {
+          nextDueDateObj = cycleDateForYM(restartQueueLegacy.endYM + 1, cycleDay);
+        } else {
+          for (let offset = 1; offset <= 60; offset++) {
+            const monthIndex = anchor.getMonth() + offset;
+            const targetYear = anchor.getFullYear() + Math.floor(monthIndex / 12);
+            const targetMonth = monthIndex % 12;
+            const monthYM = targetYear * 12 + targetMonth;
+            if (monthYM > currentYM) break;
+            if (!coveredMonthsForDue.has(monthYM)) {
+              nextDueDateObj = getCycleDate(targetYear, targetMonth, cycleDay);
+              break;
+            }
           }
         }
 
@@ -538,7 +568,14 @@ export async function GET(
           });
 
           const latestPaid = sorted.find((p) => p.remainingAmount === 0);
-          if (latestPaid) {
+          if (restartQueueLegacy) {
+            // Restart: the single month right after the latest payment's month
+            // is the only one due — earlier months stay wiped.
+            if (nextDueDateObj && todayDate >= nextDueDateObj) {
+              totalOverdue += student.monthlyFee;
+              maxMonthsOverdue = Math.max(maxMonthsOverdue, 1);
+            }
+          } else if (latestPaid) {
             let packOverdue = 0;
             let packMonthsExpired = 0;
             let lastOverdueMonthYM = -1;

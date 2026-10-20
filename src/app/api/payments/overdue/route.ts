@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { cycleDateForYM, getRestartQueueEnd } from '@/lib/cycle-coverage';
 
 const MONTH_ORDER = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -259,10 +260,20 @@ function calculateEnrollmentOverdue(
     : new Date(enrollment.enrollmentDate);
 
   // Cycle restart (returning student): anchor + eligible payments for the new cycle
+  const isRestart = Boolean(enrollment.cycleStartDate);
   const { anchor, cyclePayments } = resolveCycle(enrollmentDate, enrollment.cycleStartDate, payments);
 
+  // Restart-aware coverage: fully-paid payments buy consecutive months ENDING
+  // at the most recent payment's month (paymentDate). The next due is the
+  // month right after that, on the restart day — so a returning student who
+  // just paid (e.g. October) is clean until November. Months between the
+  // restart date and the covered window stay wiped (not charged).
+  const restartQueue = isRestart ? getRestartQueueEnd(cyclePayments) : null;
+
   // Day-level check
-  const nextDue = getNextDueDate(anchor, cyclePayments);
+  const nextDue = restartQueue
+    ? cycleDateForYM(restartQueue.endYM + 1, anchor.getDate())
+    : getNextDueDate(anchor, cyclePayments);
   if (nextDue && todayDate < nextDue) {
     return null;
   }
@@ -349,7 +360,30 @@ function calculateEnrollmentOverdue(
   let packMonthsExpired = 0;
   const latestPaid = sorted.find((p) => p.remainingAmount === 0);
 
-  if (latestPaid) {
+  if (restartQueue) {
+    // Restart: the single month right after the latest payment's month is the
+    // only one due — the restart wiped every month before the covered window.
+    if (nextDue && todayDate >= nextDue) {
+      packOverdue = enrollment.monthlyFee;
+      packMonthsExpired = 1;
+      maxMonthsOverdue = Math.max(maxMonthsOverdue, 1);
+
+      const dueYM = restartQueue.endYM + 1;
+      const endMonthIndex = dueYM % 12;
+      const endYear = Math.floor(dueYM / 12);
+      const endMonthName = MONTH_ORDER[endMonthIndex];
+
+      overduePayments.push({
+        id: `pack_expired_${restartQueue.latestPaidId}`,
+        month: endMonthName,
+        monthLabel: MONTH_LABELS[endMonthName] || endMonthName,
+        year: endYear,
+        remainingAmount: packOverdue,
+        monthsOverdue: 1,
+        type: 'expired_pack',
+      });
+    }
+  } else if (latestPaid) {
     const enrollmentDay = anchor.getDate();
     let lastOverdueMonthYM = -1;
 
@@ -402,7 +436,9 @@ function calculateEnrollmentOverdue(
   const totalOverdue = unpaidOverdue + packOverdue;
   if (totalOverdue <= 0) return null;
 
-  const nextDueDate = calculateNextDueDate(anchor, cyclePayments);
+  const nextDueDate = restartQueue
+    ? (nextDue ? formatDate(nextDue) : null)
+    : calculateNextDueDate(anchor, cyclePayments);
 
   return {
     studentId: student.id,
