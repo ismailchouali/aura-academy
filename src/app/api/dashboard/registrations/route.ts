@@ -49,6 +49,16 @@ export async function GET(request: Request) {
           },
         },
         teacher: true,
+        // Wizard-registered students keep their level/teacher on ENROLLMENTS
+        enrollments: {
+          include: {
+            service: true,
+            subject: true,
+            level: true,
+            teacher: true,
+          },
+          orderBy: { enrollmentDate: 'desc' },
+        },
       },
       orderBy: { enrollmentDate: 'desc' },
     });

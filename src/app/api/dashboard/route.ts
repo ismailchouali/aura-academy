@@ -113,7 +113,27 @@ export async function GET() {
               }
             },
             teacher: true,
+            // Wizard-registered students keep their level/teacher on ENROLLMENTS,
+            // not on the Student record — needed to display the level column.
+            enrollments: {
+              include: {
+                service: true,
+                subject: true,
+                level: true,
+                teacher: true,
+              },
+              orderBy: { enrollmentDate: 'desc' },
+            },
           }
+        },
+        // Payment directly tied to a specific enrollment (most precise source)
+        enrollment: {
+          include: {
+            service: true,
+            subject: true,
+            level: true,
+            teacher: true,
+          },
         },
       },
       orderBy: { createdAt: 'desc' },

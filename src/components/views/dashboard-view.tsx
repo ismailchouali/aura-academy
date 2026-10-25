@@ -40,6 +40,42 @@ import {
   User,
 } from 'lucide-react';
 
+type EnrollmentLike = {
+  status?: string;
+  service?: { nameAr: string } | null;
+  subject?: { nameAr: string } | null;
+  level?: { nameAr: string } | null;
+  teacher?: { fullName: string } | null;
+};
+
+/**
+ * Resolve service/level/teacher for display.
+ * Priority: payment's own enrollment → active enrollment → first enrollment → legacy Student.level/teacher.
+ * (Wizard-registered students keep level/teacher on their enrollments, not on the Student record.)
+ */
+function resolveEnrDisplay(
+  paymentEnrollment: EnrollmentLike | null | undefined,
+  student: {
+    level?: { nameAr: string; subject?: { nameAr: string } } | null;
+    teacher?: { fullName: string } | null;
+    enrollments?: EnrollmentLike[];
+  }
+) {
+  const enr =
+    paymentEnrollment ??
+    student.enrollments?.find((e) => e.status === 'active') ??
+    student.enrollments?.[0];
+  const subjectName =
+    enr?.subject?.nameAr ?? student.level?.subject?.nameAr ?? enr?.service?.nameAr ?? null;
+  const levelName = enr?.level?.nameAr ?? student.level?.nameAr ?? null;
+  const teacherName = enr?.teacher?.fullName ?? student.teacher?.fullName ?? null;
+  return { subjectName, levelName, teacherName };
+}
+
+function joinLevelLabel(subjectName: string | null, levelName: string | null) {
+  return [subjectName, levelName].filter(Boolean).join(' — ') || null;
+}
+
 interface DashboardData {
   totalStudents: number;
   activeStudents: number;
@@ -68,7 +104,9 @@ interface DashboardData {
         subject?: { nameAr: string; service?: { nameAr: string } };
       };
       teacher?: { fullName: string };
+      enrollments?: EnrollmentLike[];
     };
+    enrollment?: EnrollmentLike | null;
     amount: number;
     paidAmount: number;
     month: string;
@@ -173,6 +211,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
       monthlyFee: number;
       level?: { nameAr: string; subject?: { nameAr: string; service?: { nameAr: string } } };
       teacher?: { fullName: string };
+      enrollments?: EnrollmentLike[];
     }[];
     total: number;
     monthLabels: { value: number; count: number }[];
@@ -478,24 +517,26 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
               )}
               {/* Registrations list */}
               <div className="space-y-2 max-h-80 overflow-y-auto">
-                {registrations.students.map((student) => (
-                  <div key={student.id} className="flex items-center gap-3 p-2.5 rounded-lg border hover:bg-accent/50 transition-colors cursor-pointer" onClick={() => onNavigate('students')}>
-                    <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-xs shrink-0">
-                      {student.fullName.charAt(0)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{student.fullName}</p>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        {student.level && (
-                          <span>{student.level.subject?.nameAr} — {student.level.nameAr}</span>
-                        )}
+                {registrations.students.map((student) => {
+                  const { subjectName, levelName } = resolveEnrDisplay(null, student);
+                  const levelLabel = joinLevelLabel(subjectName, levelName);
+                  return (
+                    <div key={student.id} className="flex items-center gap-3 p-2.5 rounded-lg border hover:bg-accent/50 transition-colors cursor-pointer" onClick={() => onNavigate('students')}>
+                      <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-xs shrink-0">
+                        {student.fullName.charAt(0)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{student.fullName}</p>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          {levelLabel && <span className="truncate">{levelLabel}</span>}
+                        </div>
+                      </div>
+                      <div className="text-left shrink-0">
+                        <span className="text-xs text-muted-foreground">{fmtDate(student.enrollmentDate)}</span>
                       </div>
                     </div>
-                    <div className="text-left shrink-0">
-                      <span className="text-xs text-muted-foreground">{fmtDate(student.enrollmentDate)}</span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ) : (
@@ -540,39 +581,46 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.recentPayments.map((payment) => (
-                    <TableRow key={payment.id}>
-                      <TableCell>
-                        <div>
-                          <p className="font-medium text-sm">{payment.student.fullName}</p>
-                          {payment.student.teacher && (
-                            <p className="text-xs text-muted-foreground">{payment.student.teacher.fullName}</p>
+                  {data.recentPayments.map((payment) => {
+                    const { subjectName, levelName, teacherName } = resolveEnrDisplay(
+                      payment.enrollment,
+                      payment.student
+                    );
+                    const levelLabel = joinLevelLabel(subjectName, levelName);
+                    return (
+                      <TableRow key={payment.id}>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium text-sm">{payment.student.fullName}</p>
+                            {teacherName && (
+                              <p className="text-xs text-muted-foreground">{teacherName}</p>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell">
+                          {levelLabel ? (
+                            <span className="text-xs text-muted-foreground">{levelLabel}</span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground/50">—</span>
                           )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell">
-                        {payment.student.level && (
-                          <span className="text-xs text-muted-foreground">
-                            {payment.student.level.subject?.nameAr} — {payment.student.level.nameAr}
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <p className="font-semibold text-sm">
-                            {payment.paidAmount.toLocaleString()} <span className="text-xs font-normal text-muted-foreground">{t.common.currency}</span>
-                          </p>
-                          {payment.status === 'partial' && (
-                            <p className="text-xs text-amber-600">{t.dashboard.from} {payment.amount.toLocaleString()}</p>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        <span className="text-xs text-muted-foreground">{fmtDate(payment.createdAt)}</span>
-                      </TableCell>
-                      <TableCell>{statusBadge(payment.status)}</TableCell>
-                    </TableRow>
-                  ))}
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <p className="font-semibold text-sm">
+                              {payment.paidAmount.toLocaleString()} <span className="text-xs font-normal text-muted-foreground">{t.common.currency}</span>
+                            </p>
+                            {payment.status === 'partial' && (
+                              <p className="text-xs text-amber-600">{t.dashboard.from} {payment.amount.toLocaleString()}</p>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          <span className="text-xs text-muted-foreground">{fmtDate(payment.createdAt)}</span>
+                        </TableCell>
+                        <TableCell>{statusBadge(payment.status)}</TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
