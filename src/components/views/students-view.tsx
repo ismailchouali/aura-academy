@@ -260,6 +260,19 @@ export function StudentsView() {
   // Existing enrollments when editing
   const [editEnrollments, setEditEnrollments] = useState<Enrollment[]>([]);
 
+  // Index of an existing enrollment being EDITED via the sub-wizard (null = adding new)
+  const [editingEnrollmentIndex, setEditingEnrollmentIndex] = useState<number | null>(null);
+  // Legacy (no-enrollment) student: sub-wizard active + pending level/teacher change
+  const [editingLegacy, setEditingLegacy] = useState(false);
+  const [legacyEdit, setLegacyEdit] = useState<{
+    levelId: string;
+    levelNameAr: string;
+    subjectNameAr: string;
+    teacherId: string | null;
+    teacherName: string;
+    noTeacher: boolean;
+  } | null>(null);
+
   const [form, setForm] = useState<FormState>(initialForm);
   const [submitting, setSubmitting] = useState(false);
 
@@ -450,6 +463,9 @@ export function StudentsView() {
     setEditEnrollments([]);
     setForm({ ...initialForm });
     setEditingStudent(null);
+    setEditingEnrollmentIndex(null);
+    setEditingLegacy(false);
+    setLegacyEdit(null);
   }, []);
 
   const handleOpenDialog = (student?: Student) => {
@@ -538,11 +554,60 @@ export function StudentsView() {
     isPackPaid: false,
   });
 
+  // ── Finish editing an existing enrollment: rebuild from draft, keep identity/history ──
+  const replaceEditEnrollmentFromDraft = (idx: number, teacherId: string | null, teacherName: string, noTeacher: boolean) => {
+    setEditEnrollments((prev) =>
+      prev.map((en, i) => {
+        if (i !== idx) return en;
+        const rebuilt = buildEnrollmentFromDraft(currentDraft, teacherId, teacherName, noTeacher);
+        return {
+          ...rebuilt,
+          // Preserve identity + history of the original enrollment
+          // (same id → API updates the row in place → payments stay attached)
+          id: en.id,
+          studentId: en.studentId,
+          status: en.status,
+          enrollmentDate: en.enrollmentDate,
+          cycleStartDate: en.cycleStartDate,
+          isPackPaid: en.isPackPaid,
+          nextDueDate: en.nextDueDate,
+          payments: en.payments,
+        };
+      })
+    );
+    setEditingEnrollmentIndex(null);
+    setCurrentDraft(emptyDraft());
+    setWizardStep(5);
+  };
+
+  // ── Finish editing a LEGACY student's level/teacher (applied on save) ──
+  const finishLegacyEdit = (teacherId: string | null, teacherName: string, noTeacher: boolean) => {
+    setLegacyEdit({
+      levelId: currentDraft.levelId,
+      levelNameAr: currentDraft.levelNameAr,
+      subjectNameAr: currentDraft.subjectNameAr,
+      teacherId: noTeacher ? null : teacherId,
+      teacherName: noTeacher ? '' : teacherName,
+      noTeacher,
+    });
+    setEditingLegacy(false);
+    setCurrentDraft(emptyDraft());
+    setWizardStep(5);
+  };
+
   const handleSelectTeacher = (teacher: Teacher | null) => {
     const teacherId = teacher ? teacher.id : null;
     const teacherName = teacher ? teacher.fullName : '';
     const noTeacherFlag = !teacher;
 
+    if (editingStudent && editingLegacy) {
+      finishLegacyEdit(teacherId, teacherName, noTeacherFlag);
+      return;
+    }
+    if (editingStudent && editingEnrollmentIndex !== null) {
+      replaceEditEnrollmentFromDraft(editingEnrollmentIndex, teacherId, teacherName, noTeacherFlag);
+      return;
+    }
     if (editingStudent) {
       // Edit mode: add to editEnrollments
       const newEnrollment = buildEnrollmentFromDraft(currentDraft, teacherId, teacherName, noTeacherFlag);
@@ -556,6 +621,14 @@ export function StudentsView() {
   };
 
   const handleSkipTeacher = () => {
+    if (editingStudent && editingLegacy) {
+      finishLegacyEdit(null, '', true);
+      return;
+    }
+    if (editingStudent && editingEnrollmentIndex !== null) {
+      replaceEditEnrollmentFromDraft(editingEnrollmentIndex, null, '', true);
+      return;
+    }
     if (editingStudent) {
       // Edit mode: add to editEnrollments
       const newEnrollment = buildEnrollmentFromDraft(currentDraft, null, '', true);
@@ -671,10 +744,61 @@ export function StudentsView() {
       toast.error(t.students.selectLevel);
       return;
     }
+    if (editingLegacy) {
+      finishLegacyEdit(draft.noTeacher ? null : draft.teacherId, draft.teacherName, draft.noTeacher);
+      return;
+    }
+    if (editingEnrollmentIndex !== null) {
+      replaceEditEnrollmentFromDraft(editingEnrollmentIndex, draft.noTeacher ? null : draft.teacherId, draft.teacherName, draft.noTeacher);
+      return;
+    }
     const newEnrollment = buildEnrollmentFromDraft(draft, draft.noTeacher ? null : draft.teacherId, draft.teacherName, draft.noTeacher);
     setEditEnrollments((prev) => [...prev, newEnrollment]);
     setCurrentDraft(emptyDraft());
     setWizardStep(5);
+  };
+
+  // ── Edit an existing enrollment (change service/level/teacher) ──────
+  const openEditEnrollmentWizard = (enrollment: Enrollment, index: number) => {
+    setEditingEnrollmentIndex(index);
+    setEditingLegacy(false);
+    setCurrentDraft({
+      serviceId: enrollment.serviceId || '',
+      serviceNameAr: enrollment.service?.nameAr || '',
+      subjectId: enrollment.subjectId || '',
+      subjectNameAr: enrollment.subject?.nameAr || '',
+      levelId: enrollment.levelId || '',
+      levelNameAr: enrollment.level?.nameAr || '',
+      teacherId: enrollment.teacherId || null,
+      teacherName: enrollment.teacher?.fullName || '',
+      noTeacher: !enrollment.teacherId,
+      monthlyFee: String(enrollment.monthlyFee ?? ''),
+      packMonths: enrollment.packMonths || 1,
+    });
+    // Start at teacher selection (most common change); user can navigate back to change service/level
+    setWizardStep(4);
+  };
+
+  // ── Edit a LEGACY student's level/teacher (data lives on the student record) ──
+  const openEditLegacyWizard = () => {
+    if (!editingStudent?.levelId) return;
+    const lvl = editingStudent.level;
+    setEditingLegacy(true);
+    setEditingEnrollmentIndex(null);
+    setCurrentDraft({
+      serviceId: lvl?.subject?.service?.id || '',
+      serviceNameAr: lvl?.subject?.service?.nameAr || '',
+      subjectId: lvl?.subjectId || '',
+      subjectNameAr: lvl?.subject?.nameAr || '',
+      levelId: editingStudent.levelId || '',
+      levelNameAr: lvl?.nameAr || '',
+      teacherId: editingStudent.teacherId || null,
+      teacherName: editingStudent.teacher?.fullName || '',
+      noTeacher: !editingStudent.teacherId,
+      monthlyFee: String(editingStudent.monthlyFee ?? ''),
+      packMonths: editingStudent.packMonths || 1,
+    });
+    setWizardStep(4);
   };
 
   // ── Submit ─────────────────────────────────────────────────────────────
@@ -713,8 +837,11 @@ export function StudentsView() {
               parentPhone: form.parentPhone || null,
               status: editingStudent.status,
               enrollmentDate: form.enrollmentDate || new Date().toISOString(),
-              levelId: editingStudent.levelId,
-              teacherId: editingStudent.teacherId ?? null,
+              // Apply pending level/teacher change made via the edit pencil (legacy students)
+              levelId: legacyEdit?.levelId || editingStudent.levelId,
+              teacherId: legacyEdit
+                ? (legacyEdit.noTeacher ? null : legacyEdit.teacherId)
+                : (editingStudent.teacherId ?? null),
               monthlyFee: editingStudent.monthlyFee ?? 0,
               packMonths: editingStudent.packMonths ?? 1,
               ...(editingStudent.cycleStartDate !== undefined
@@ -1103,6 +1230,16 @@ export function StudentsView() {
             <RotateCcw className="h-3.5 w-3.5" />
           </Button>
         )}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 shrink-0 text-muted-foreground hover:text-teal-700 hover:bg-teal-50"
+          title={t.students.editEnrollment}
+          onClick={() => openEditEnrollmentWizard(enrollment, index)}
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </Button>
         <Button
           type="button"
           variant="ghost"
@@ -1517,6 +1654,8 @@ export function StudentsView() {
                     size="sm"
                     className="h-7 text-xs gap-1"
                     onClick={() => {
+                      setEditingEnrollmentIndex(null);
+                      setEditingLegacy(false);
                       setCurrentDraft(emptyDraft());
                       setWizardStep(1);
                     }}
@@ -1527,15 +1666,29 @@ export function StudentsView() {
                 </div>
                 {editEnrollments.length === 0 ? (
                   editingStudent?.levelId ? (
-                    /* Legacy student (no enrollments): data lives on the student record — show it with cycle restart (available to all staff) */
+                    /* Legacy student (no enrollments): data lives on the student record — show it with cycle restart + edit (available to all staff) */
                     <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex flex-wrap items-center gap-1.5">
                           <Badge variant="outline" className="gap-1 text-xs">
                             <GraduationCap className="h-3 w-3" />
-                            {[editingStudent.level?.subject?.nameAr, editingStudent.level?.nameAr].filter(Boolean).join(' — ') || editingStudent.level?.name || '—'}
+                            {legacyEdit
+                              ? [legacyEdit.subjectNameAr, legacyEdit.levelNameAr].filter(Boolean).join(' — ') || '—'
+                              : [editingStudent.level?.subject?.nameAr, editingStudent.level?.nameAr].filter(Boolean).join(' — ') || editingStudent.level?.name || '—'}
                           </Badge>
-                          {editingStudent.teacher ? (
+                          {legacyEdit ? (
+                            legacyEdit.noTeacher ? (
+                              <Badge variant="outline" className="gap-1 text-xs border-violet-300 text-violet-700">
+                                <UserMinus className="h-3 w-3" />
+                                {t.students.withoutTeacher}
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="gap-1 text-xs border-teal-300 text-teal-700">
+                                <UserCheck className="h-3 w-3" />
+                                {legacyEdit.teacherName}
+                              </Badge>
+                            )
+                          ) : editingStudent.teacher ? (
                             <Badge variant="outline" className="gap-1 text-xs border-teal-300 text-teal-700">
                               <UserCheck className="h-3 w-3" />
                               {editingStudent.teacher.fullName}
@@ -1552,17 +1705,35 @@ export function StudentsView() {
                               {(editingStudent.monthlyFee ?? 0).toLocaleString('ar-MA')} {t.common.dh}
                             </Badge>
                           )}
+                          {legacyEdit && (
+                            <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100 text-xs gap-1">
+                              <Pencil className="h-3 w-3" />
+                              {t.students.pendingSave}
+                            </Badge>
+                          )}
                         </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 shrink-0 text-teal-600 hover:text-teal-700 hover:bg-teal-50"
-                          title={t.students.restartCycleTitle}
-                          onClick={openStudentRestartDialog}
-                        >
-                          <RotateCcw className="h-3.5 w-3.5" />
-                        </Button>
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-teal-700 hover:bg-teal-50"
+                            title={t.students.editEnrollment}
+                            onClick={openEditLegacyWizard}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-teal-600 hover:text-teal-700 hover:bg-teal-50"
+                            title={t.students.restartCycleTitle}
+                            onClick={openStudentRestartDialog}
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </div>
                       {editingStudent.cycleStartDate && (
                         <Badge className="bg-teal-100 text-teal-700 border-teal-200 hover:bg-teal-100 text-xs gap-1">
@@ -2189,6 +2360,16 @@ export function StudentsView() {
 
           {/* Body - scrollable */}
           <div className="flex-1 overflow-y-auto px-8 pb-4 min-h-0">
+            {editingStudent && wizardStep < 5 && (
+              <div className="mt-4 mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 flex items-center gap-2">
+                <Pencil className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                <span className="text-xs text-amber-800 leading-relaxed">
+                  {(editingEnrollmentIndex !== null || editingLegacy)
+                    ? t.students.editEnrollmentBanner
+                    : t.students.addEnrollmentBanner}
+                </span>
+              </div>
+            )}
             {StepContent()}
           </div>
 
@@ -2233,6 +2414,8 @@ export function StudentsView() {
                       } else {
                         // Cancel sub-wizard, go back to step 5
                         setCurrentDraft(emptyDraft());
+                        setEditingEnrollmentIndex(null);
+                        setEditingLegacy(false);
                         setWizardStep(5);
                       }
                     }}
@@ -2295,7 +2478,8 @@ export function StudentsView() {
                       submitting ||
                       !form.fullName.trim() ||
                       (editingStudent
-                        ? editEnrollments.length === 0
+                        ? // Legacy students (no enrollments but levelId on the record) can also save
+                          editEnrollments.length === 0 && !editingStudent.levelId
                         : enrollmentsBeingAdded.length === 0)
                     }
                     className="gap-1"
