@@ -64,3 +64,44 @@ export function getRestartQueueEnd(
 
   return endYM === null ? null : { endYM, latestPaidId };
 }
+
+/**
+ * Find the latest FULLY-PAID payment (by paymentDate, falling back to the
+ * payment's month/year). The result anchors the next due date to the day the
+ * student ACTUALLY paid: paying on the 1st means the next due is the 1st of
+ * the following month — regardless of the enrollment/restart cycle day.
+ */
+export function getLatestPaidPayment(
+  payments: RestartCyclePayment[]
+): { date: Date; packMonths: number; id: string } | null {
+  let best: { date: Date; packMonths: number; id: string } | null = null;
+
+  for (const p of payments) {
+    if (p.remainingAmount !== 0) continue;
+    const d = p.paymentDate
+      ? (p.paymentDate instanceof Date ? p.paymentDate : new Date(p.paymentDate))
+      : new Date(p.year, Math.max(0, MONTH_ORDER.indexOf(p.month)), 1);
+    const id = p.id || '';
+    if (
+      !best ||
+      d.getTime() > best.date.getTime() ||
+      (d.getTime() === best.date.getTime() && id > best.id)
+    ) {
+      best = { date: d, packMonths: p.packMonths || 1, id };
+    }
+  }
+
+  return best;
+}
+
+/**
+ * Next due date anchored to a payment: paymentDate + packMonths months, with
+ * the payment's DAY preserved (clamped to the target month's length).
+ * E.g. paid Oct 1 (pack 1) → due Nov 1; paid May 31 → due Jun 30; 3-month
+ * pack paid Oct 1 → due Jan 1.
+ */
+export function nextDueFromLatestPaid(latest: { date: Date; packMonths: number }): Date {
+  const targetYM =
+    latest.date.getFullYear() * 12 + latest.date.getMonth() + Math.max(1, latest.packMonths);
+  return cycleDateForYM(targetYM, latest.date.getDate());
+}

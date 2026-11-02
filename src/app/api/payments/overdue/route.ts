@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { cycleDateForYM, getRestartQueueEnd } from '@/lib/cycle-coverage';
+import { cycleDateForYM, getLatestPaidPayment, getRestartQueueEnd, nextDueFromLatestPaid } from '@/lib/cycle-coverage';
 
 const MONTH_ORDER = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -270,10 +270,15 @@ function calculateEnrollmentOverdue(
   // restart date and the covered window stay wiped (not charged).
   const restartQueue = isRestart ? getRestartQueueEnd(cyclePayments) : null;
 
-  // Day-level check
-  const nextDue = restartQueue
-    ? cycleDateForYM(restartQueue.endYM + 1, anchor.getDate())
-    : getNextDueDate(anchor, cyclePayments);
+  // Payment-anchored next due: the latest fully-paid payment's paymentDate
+  // (+ packMonths) defines the next due date — paying on the 1st means due on
+  // the 1st of the following month, regardless of the enrollment/restart day.
+  const latestPaidInfo = getLatestPaidPayment(cyclePayments);
+  const nextDue = latestPaidInfo
+    ? nextDueFromLatestPaid(latestPaidInfo)
+    : restartQueue
+      ? cycleDateForYM(restartQueue.endYM + 1, anchor.getDate())
+      : getNextDueDate(anchor, cyclePayments);
   if (nextDue && todayDate < nextDue) {
     return null;
   }
@@ -384,7 +389,6 @@ function calculateEnrollmentOverdue(
       });
     }
   } else if (latestPaid) {
-    const enrollmentDay = anchor.getDate();
     let lastOverdueMonthYM = -1;
 
     for (let offset = 1; offset <= 48; offset++) {
@@ -395,9 +399,11 @@ function calculateEnrollmentOverdue(
 
       if (monthYM > currentYM) break;
 
+      // Payment-anchored gate: the current month counts only once its
+      // payment-anchored due date has arrived (show gate already guarantees
+      // today >= nextDue when there are fully-paid payments).
       if (monthYM === currentYM) {
-        const effectiveCycleDay = getEffectiveCycleDay(enrollmentDay, now.getFullYear(), now.getMonth());
-        if (todayDate.getDate() < effectiveCycleDay) {
+        if (nextDue && todayDate < nextDue) {
           break;
         }
       }
@@ -436,9 +442,7 @@ function calculateEnrollmentOverdue(
   const totalOverdue = unpaidOverdue + packOverdue;
   if (totalOverdue <= 0) return null;
 
-  const nextDueDate = restartQueue
-    ? (nextDue ? formatDate(nextDue) : null)
-    : calculateNextDueDate(anchor, cyclePayments);
+  const nextDueDate = nextDue ? formatDate(nextDue) : null;
 
   return {
     studentId: student.id,

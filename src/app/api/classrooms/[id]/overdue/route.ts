@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { cycleDateForYM, getRestartQueueEnd } from '@/lib/cycle-coverage';
+import { cycleDateForYM, getLatestPaidPayment, getRestartQueueEnd, nextDueFromLatestPaid } from '@/lib/cycle-coverage';
 
 const MONTH_ORDER = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -291,14 +291,20 @@ export async function GET(
       // clean until the following month. Months before that stay wiped.
       const restartQueue = isRestart ? getRestartQueueEnd(cyclePayments) : null;
 
+      // Payment-anchored next due: latest fully-paid paymentDate + packMonths.
+      // Paying on the 1st → due on the 1st of the following month.
+      const latestPaidInfo = getLatestPaidPayment(cyclePayments);
+
       // Build covered months using queue-based Logic A (restart uses its own rule)
-      const { coveredMonths: coveredMonthsForDue } = restartQueue
+      const { coveredMonths: coveredMonthsForDue } = restartQueue || latestPaidInfo
         ? { coveredMonths: new Set<number>() }
         : buildCoverageSets(anchor, cyclePayments);
 
       // Find first uncovered month using fixed cycle day
       let nextDueDateObj: Date | null = null;
-      if (restartQueue) {
+      if (latestPaidInfo) {
+        nextDueDateObj = nextDueFromLatestPaid(latestPaidInfo);
+      } else if (restartQueue) {
         nextDueDateObj = cycleDateForYM(restartQueue.endYM + 1, cycleDay);
       } else {
         for (let offset = 1; offset <= 60; offset++) {
@@ -407,9 +413,9 @@ export async function GET(
 
             if (monthYM > currentYM) break;
 
+            // Payment-anchored gate for the current month
             if (monthYM === currentYM) {
-              const effectiveCycleDay = getEffectiveCycleDay(cycleDay, now.getFullYear(), now.getMonth());
-              if (todayDate.getDate() < effectiveCycleDay) {
+              if (nextDueDateObj && todayDate < nextDueDateObj) {
                 break;
               }
             }
@@ -478,12 +484,17 @@ export async function GET(
         // Restart-aware coverage (see enrollment loop above)
         const restartQueueLegacy = isRestartLegacy ? getRestartQueueEnd(cyclePayments) : null;
 
-        const { coveredMonths: coveredMonthsForDue } = restartQueueLegacy
+        // Payment-anchored next due (see enrollment loop above)
+        const latestPaidInfoLegacy = getLatestPaidPayment(cyclePayments);
+
+        const { coveredMonths: coveredMonthsForDue } = restartQueueLegacy || latestPaidInfoLegacy
           ? { coveredMonths: new Set<number>() }
           : buildCoverageSets(anchor, cyclePayments);
 
         let nextDueDateObj: Date | null = null;
-        if (restartQueueLegacy) {
+        if (latestPaidInfoLegacy) {
+          nextDueDateObj = nextDueFromLatestPaid(latestPaidInfoLegacy);
+        } else if (restartQueueLegacy) {
           nextDueDateObj = cycleDateForYM(restartQueueLegacy.endYM + 1, cycleDay);
         } else {
           for (let offset = 1; offset <= 60; offset++) {
@@ -588,9 +599,9 @@ export async function GET(
 
               if (monthYM > currentYM) break;
 
+              // Payment-anchored gate for the current month
               if (monthYM === currentYM) {
-                const effectiveCycleDay = getEffectiveCycleDay(cycleDay, now.getFullYear(), now.getMonth());
-                if (todayDate.getDate() < effectiveCycleDay) {
+                if (nextDueDateObj && todayDate < nextDueDateObj) {
                   break;
                 }
               }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getLatestPaidPayment, nextDueFromLatestPaid } from '@/lib/cycle-coverage';
 
 const MONTH_ORDER = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -104,12 +105,12 @@ function calculateCoverage(
 
       let nextDueDate: string | null = null;
       if (!isPackPaid) {
-        const dueYM = endYM + 1;
+        // Payment-anchored: latest payment date + packMonths (day preserved).
+        // Paying on the 1st → next due on the 1st of the following month.
+        const due = nextDueFromLatestPaid(paid[paid.length - 1]);
+        const dueYM = due.getFullYear() * 12 + due.getMonth();
         if (dueYM <= currentYM) {
-          const targetYear = Math.floor(dueYM / 12);
-          const targetMonth = dueYM % 12;
-          const effectiveDay = getEffectiveCycleDay(cycleDay, targetYear, targetMonth);
-          nextDueDate = `${String(effectiveDay).padStart(2, '0')}/${String(targetMonth + 1).padStart(2, '0')}/${targetYear}`;
+          nextDueDate = `${String(due.getDate()).padStart(2, '0')}/${String(due.getMonth() + 1).padStart(2, '0')}/${due.getFullYear()}`;
         }
       }
       return { isPackPaid, nextDueDate };
@@ -142,19 +143,30 @@ function calculateCoverage(
   const isPackPaid = coveredMonths.has(currentYM);
 
   let nextDueDate: string | null = null;
-  for (let offset = 0; offset <= 60; offset++) {
-    const monthIdx = enrollmentDate.getMonth() + offset;
-    const targetYear = enrollmentDate.getFullYear() + Math.floor(monthIdx / 12);
-    const targetMonth = monthIdx % 12;
-    const monthYM = targetYear * 12 + targetMonth;
-    if (monthYM > currentYM) break;
-    if (!coveredMonths.has(monthYM)) {
-      const effectiveDay = getEffectiveCycleDay(cycleDay, targetYear, targetMonth);
-      const day = String(effectiveDay).padStart(2, '0');
-      const month = String(targetMonth + 1).padStart(2, '0');
-      const year = targetYear;
-      nextDueDate = `${day}/${month}/${year}`;
-      break;
+  // Payment-anchored next due when there are fully-paid payments; the
+  // enrollment-day scan only applies to students who never fully paid.
+  const latestPaidInfo = getLatestPaidPayment(payments);
+  if (latestPaidInfo) {
+    const due = nextDueFromLatestPaid(latestPaidInfo);
+    const dueYM = due.getFullYear() * 12 + due.getMonth();
+    if (dueYM <= currentYM) {
+      nextDueDate = `${String(due.getDate()).padStart(2, '0')}/${String(due.getMonth() + 1).padStart(2, '0')}/${due.getFullYear()}`;
+    }
+  } else {
+    for (let offset = 0; offset <= 60; offset++) {
+      const monthIdx = enrollmentDate.getMonth() + offset;
+      const targetYear = enrollmentDate.getFullYear() + Math.floor(monthIdx / 12);
+      const targetMonth = monthIdx % 12;
+      const monthYM = targetYear * 12 + targetMonth;
+      if (monthYM > currentYM) break;
+      if (!coveredMonths.has(monthYM)) {
+        const effectiveDay = getEffectiveCycleDay(cycleDay, targetYear, targetMonth);
+        const day = String(effectiveDay).padStart(2, '0');
+        const month = String(targetMonth + 1).padStart(2, '0');
+        const year = targetYear;
+        nextDueDate = `${day}/${month}/${year}`;
+        break;
+      }
     }
   }
 
