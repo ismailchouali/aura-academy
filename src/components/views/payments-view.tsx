@@ -65,7 +65,6 @@ import {
   GraduationCap,
 } from 'lucide-react';
 import { useT } from '@/hooks/use-translation';
-import { useAppStore } from '@/store/store';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -254,8 +253,6 @@ function TableSkeleton() {
 
 export function PaymentsView() {
   const t = useT();
-  const { userRole } = useAppStore();
-  const isAdmin = userRole === 'ADMIN';
 
   // ── Derived month data ──
   const MONTHS = useMemo(() =>
@@ -1138,8 +1135,7 @@ export function PaymentsView() {
         </div>
       </div>
 
-      {/* Summary Cards - Admin only */}
-      {isAdmin && (
+      {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card>
           <CardContent className="p-3 text-center">
@@ -1178,7 +1174,6 @@ export function PaymentsView() {
           </CardContent>
         </Card>
       </div>
-      )}
 
       {/* Filters */}
       <Card>
@@ -1319,8 +1314,6 @@ export function PaymentsView() {
                   <TableRow>
                     <TableHead className="text-right">{t.payments.studentCol}</TableHead>
                     <TableHead className="text-right">{t.payments.monthYearCol}</TableHead>
-                    {isAdmin && (
-                    <>
                     <TableHead className="text-right hidden md:table-cell">
                       {t.payments.amountCol}
                     </TableHead>
@@ -1333,8 +1326,6 @@ export function PaymentsView() {
                     <TableHead className="text-right hidden lg:table-cell">
                       {t.payments.discountCol}
                     </TableHead>
-                    </>
-                    )}
                     <TableHead className="text-right hidden lg:table-cell">
                       {t.payments.dateCol}
                     </TableHead>
@@ -1379,8 +1370,6 @@ export function PaymentsView() {
                           )}
                         </div>
                       </TableCell>
-                      {isAdmin && (
-                      <>
                       <TableCell className="text-right hidden md:table-cell font-medium">
                         {payment.amount.toLocaleString()}{' '}
                         <span className="text-xs font-normal">{t.common.dh}</span>
@@ -1403,8 +1392,6 @@ export function PaymentsView() {
                           <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
-                      </>
-                      )}
                       <TableCell className="text-right hidden lg:table-cell text-sm text-muted-foreground">
                         {payment.paymentDate
                           ? formatDate(payment.paymentDate)
@@ -1677,7 +1664,6 @@ export function PaymentsView() {
                             </span>
                           </div>
                         )}
-                        {isAdmin && (
                         <div className="sm:col-span-2">
                           <span className="text-muted-foreground">
                             {t.common.dh} ({new Date().getFullYear()}):{' '}
@@ -1686,7 +1672,6 @@ export function PaymentsView() {
                             {yearlyPaid.toLocaleString()} {t.common.dh}
                           </span>
                         </div>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -1778,9 +1763,7 @@ export function PaymentsView() {
                   <Wallet className="h-4 w-4 text-primary" />
                   {t.common.amount}
                 </h4>
-                <div className={`grid gap-3 ${isAdmin ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2 sm:grid-cols-2'}`}>
-                  {isAdmin && (
-                  <>
+                <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
                   <div className="space-y-1.5">
                     <Label htmlFor="amount">{t.payments.bonAmountDh} *</Label>
                     <Input
@@ -1843,48 +1826,8 @@ export function PaymentsView() {
                       </span>
                     </div>
                   </div>
-                  </>
-                  )}
-                  {!isAdmin && (
-                  <>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="amount">{t.payments.bonAmountDh} *</Label>
-                    <Input
-                      id="amount"
-                      type="number"
-                      min="0"
-                      value={formData.amount}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          amount: Number(e.target.value) || '',
-                        })
-                      }
-                      placeholder="0"
-                      dir="ltr"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="paidAmount">{t.payments.bonPaid} ({t.common.dh})</Label>
-                    <Input
-                      id="paidAmount"
-                      type="number"
-                      min="0"
-                      value={formData.paidAmount}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          paidAmount: Number(e.target.value) || '',
-                        })
-                      }
-                      placeholder="0"
-                      dir="ltr"
-                    />
-                  </div>
-                  </>
-                  )}
                 </div>
-                {isAdmin && discountValue > 0 && (
+                {discountValue > 0 && (
                   <div className="text-xs text-amber-600 bg-amber-50 rounded-md p-2">
                     {t.payments.bonAfterDiscount}:{' '}
                     <strong>{netAmount.toLocaleString()} {t.common.dh}</strong>

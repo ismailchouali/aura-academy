@@ -160,12 +160,12 @@ function getDays(t: ReturnType<typeof useT>) {
 }
 
 const SLOT_HEIGHT = 48;
-const FIRST_SLOT_MINUTES = 11 * 60; // 11:00 = 660 min
+const FIRST_SLOT_MINUTES = 10 * 60; // 10:00 = 600 min
 const TIME_COLUMN_WIDTH = 70;
 
 function generateTimeSlots(): string[] {
   const slots: string[] = [];
-  for (let h = 11; h <= 22; h++) {
+  for (let h = 10; h <= 22; h++) {
     slots.push(`${h.toString().padStart(2, '0')}:00`);
     if (h < 22) {
       slots.push(`${h.toString().padStart(2, '0')}:30`);
